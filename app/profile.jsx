@@ -177,22 +177,7 @@ const HomePage = () => {
           </View>
         </View>
 
-        {/* Additional content can go here */}
-        <View style={styles.additionalContent}>
-          <Text style={styles.sectionTitle}>Recent Activities</Text>
-          <View style={styles.activityItem}>
-            <Text style={styles.activityText}>• Planned trip to Paris</Text>
-            <Text style={styles.activityTime}>2 hours ago</Text>
-          </View>
-          <View style={styles.activityItem}>
-            <Text style={styles.activityText}>• Booked hotel in Tokyo</Text>
-            <Text style={styles.activityTime}>1 day ago</Text>
-          </View>
-          <View style={styles.activityItem}>
-            <Text style={styles.activityText}>• Shared travel itinerary</Text>
-            <Text style={styles.activityTime}>3 days ago</Text>
-          </View>
-        </View>
+        
       </View>
 
       {/* Bottom Navigation */}
