@@ -16,6 +16,8 @@ const PlanPage = () => {
         <Text style={styles.title}>Trip Plan</Text>
         <Text>Plan will be displayed here.</Text>
         <Text>More details about the travel plan can be added here.</Text>
+        <Text>Plan to your Plan Stantion !</Text>
+        <button>See More</button>
       </View>
     </View>
   );
