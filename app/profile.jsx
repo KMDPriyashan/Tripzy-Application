@@ -1,10 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-// Note: ScrollView is added here to make the content scrollable when cards are added
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supabase } from '../lib/supabase';
-
-
 
 // Data for the six cards
 const cardsData = [
@@ -15,7 +12,6 @@ const cardsData = [
   { name: 'Budget', icon: '💰', target: '/app-pages/plan' }, 
   { name: 'Settings', icon: '⚙️', target: '/app-pages/settings' }, 
 ];
-
 
 const HomePage = () => {
   const router = useRouter();
@@ -58,20 +54,18 @@ const HomePage = () => {
       if (error) {
         console.error('Logout error:', error);
       } else {
-        // Redirection handled by onAuthStateChange listener, but also explicitly navigate
         router.replace('/loginpage'); 
       }
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
-  
+
   const handleCardPress = (targetPath) => {
     if (targetPath) {
       router.push(targetPath);
     }
   };
-
 
   if (loading) {
     return (
@@ -84,20 +78,6 @@ const HomePage = () => {
         </View>
         <View style={styles.loadingContent}>
           <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-        {/* Bottom Navigation */}
-        <View style={styles.bottomNav}>
-          {['Home', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
-            <TouchableOpacity 
-              key={tab} 
-              style={[styles.navItem, activeTab === tab && styles.navItemActive]}
-              onPress={() => handleTabPress(tab)}
-            >
-              <Text style={[styles.navText, activeTab === tab && styles.navTextActive]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
         </View>
       </View>
     );
@@ -121,21 +101,6 @@ const HomePage = () => {
             <Text style={styles.loginButtonText}>Go to Login</Text>
           </TouchableOpacity>
         </View>
-        {/* Bottom Navigation */}
-        <View style={styles.bottomNav}>
-          {['Home', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
-            <TouchableOpacity 
-              key={tab} 
-              style={[styles.navItem, activeTab === tab && styles.navItemActive]}
-              onPress={() => handleTabPress(tab)}
-              disabled={tab !== 'Home'} // Disable navigation if not logged in
-            >
-              <Text style={[styles.navText, activeTab === tab && styles.navTextActive]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
       </View>
     );
   }
@@ -154,7 +119,7 @@ const HomePage = () => {
       <ScrollView style={styles.scrollViewContent}>
         <View style={styles.content}>
           <Text style={styles.welcomeText}>
-            Welcome ! , {user.user_metadata?.full_name || 'Traveler'}! 🎉
+            Welcome, {user.user_metadata?.full_name || 'Traveler'}! 🎉
           </Text>
           <Text style={styles.emailText}>
             {user.email}
@@ -173,26 +138,8 @@ const HomePage = () => {
               </TouchableOpacity>
             ))}
           </View>
-
-          
-
         </View>
       </ScrollView>
-
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        {['Home', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
-          <TouchableOpacity 
-            key={tab} 
-            style={[styles.navItem, activeTab === tab && styles.navItemActive]}
-            onPress={() => handleTabPress(tab)}
-          >
-            <Text style={[styles.navText, activeTab === tab && styles.navTextActive]}>
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
     </View>
   );
 };
@@ -274,10 +221,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 30, 
+    marginBottom: 30,
   },
-  
-  // --- New Card Styles ---
   cardsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -285,7 +230,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
-    width: '30%', 
+    width: '30%',
     backgroundColor: '#f9f9f9',
     borderRadius: 12,
     padding: 15,
@@ -307,61 +252,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     color: '#333',
-  },
-  // --- End New Card Styles ---
-  
-  additionalContent: {
-    marginTop: 30,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000000',
-    marginBottom: 15,
-  },
-  activityItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  activityText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#999',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-    marginBottom: 55,
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginHorizontal: 2,
-  },
-  navItemActive: {
-    backgroundColor: '#000000',
-  },
-  navText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#666',
-  },
-  navTextActive: {
-    color: '#ffffff',
-    fontWeight: '600',
   },
 });
 

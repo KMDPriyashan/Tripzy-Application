@@ -1,5 +1,6 @@
+
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const PlanPage = () => {
   const router = useRouter();
@@ -12,7 +13,7 @@ const PlanPage = () => {
           <Text style={styles.backButton}>Back</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.content}>
+      <ScrollView style={styles.content}>
         <Text style={styles.title}>Trip Plan</Text>
         <Text>Plan will be displayed here.</Text>
         <Text>More details about the travel plan can be added here.</Text>
@@ -20,7 +21,8 @@ const PlanPage = () => {
         <TouchableOpacity style={styles.seeMoreButton}>
           <Text style={styles.seeMoreButtonText}>See More</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
+     
     </View>
   );
 };

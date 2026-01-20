@@ -1,9 +1,10 @@
+
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const feedPage = () => {
   const router = useRouter();
-
+  
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -12,10 +13,11 @@ const feedPage = () => {
           <Text style={styles.backButton}>Back</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.content}>
+      <ScrollView style={styles.content}>
         <Text style={styles.title}>Feed</Text>
         <Text>Feed will be displayed here.</Text>
-      </View>
+      </ScrollView>
+      
     </View>
   );
 };

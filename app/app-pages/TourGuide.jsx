@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const TourGuidePage = () => {
   const router = useRouter();
@@ -12,10 +12,11 @@ const TourGuidePage = () => {
           <Text style={styles.backButton}>Back</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.content}>
+      <ScrollView style={styles.content}>
         <Text style={styles.title}>Tour Guide</Text>
         <Text>Tour Guide will be displayed here.</Text>
-      </View>
+      </ScrollView>
+      
     </View>
   );
 };

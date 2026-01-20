@@ -1,5 +1,6 @@
+
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const mapPage = () => {
   const router = useRouter();
@@ -12,10 +13,11 @@ const mapPage = () => {
           <Text style={styles.backButton}>Back</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.content}>
+      <ScrollView style={styles.content}>
         <Text style={styles.title}>Map Enhance</Text>
         <Text>Map Enhance will be displayed here.</Text>
-      </View>
+      </ScrollView>
+      
     </View>
   );
 };

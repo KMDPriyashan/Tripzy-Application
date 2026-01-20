@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { ImageBackground, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+
 const Index = () => {
     const router = useRouter(); // Correct hook and function call
 
@@ -36,6 +37,7 @@ const Index = () => {
                     </TouchableOpacity>
                 </View>
             </View>
+            
         </ImageBackground>
     );
 };
