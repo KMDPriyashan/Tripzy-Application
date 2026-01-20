@@ -1,13 +1,28 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+// Note: ScrollView is added here to make the content scrollable when cards are added
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supabase } from '../lib/supabase';
+
+
+
+// Data for the six cards
+const cardsData = [
+  { name: 'Feed', icon: '📰', target: '/app-pages/feed' },
+  { name: 'Tour Guide', icon: '🗺️', target: '/app-pages/TourGuide' },
+  { name: 'Travel Plan', icon: '📅', target: '/app-pages/plan' },
+  { name: 'Location Map', icon: '📍', target: '/app-pages/map' },
+  { name: 'Budget', icon: '💰', target: '/app-pages/plan' }, 
+  { name: 'Settings', icon: '⚙️', target: '/app-pages/settings' }, 
+];
+
 
 const HomePage = () => {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('Home');
+  // Default to 'Home' which is the current page, not 'Profile'
+  const [activeTab, setActiveTab] = useState('Home'); 
 
   useEffect(() => {
     // Check if user is logged in
@@ -45,7 +60,8 @@ const HomePage = () => {
       if (error) {
         console.error('Logout error:', error);
       } else {
-        router.replace('/loginpage');
+        // Redirection handled by onAuthStateChange listener, but also explicitly navigate
+        router.replace('/loginpage'); 
       }
     } catch (error) {
       console.error('Logout error:', error);
@@ -72,10 +88,20 @@ const HomePage = () => {
       case 'Location':
         router.push('/app-pages/map');
         break;
+      case 'Profile': // Assuming Profile is a separate route
+        router.push('/app-pages/profile'); 
+        break;
       default:
         break;
     }
   };
+  
+  const handleCardPress = (targetPath) => {
+    if (targetPath) {
+      router.push(targetPath);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -91,7 +117,7 @@ const HomePage = () => {
         </View>
         {/* Bottom Navigation */}
         <View style={styles.bottomNav}>
-          {['Profile', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
+          {['Home', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
             <TouchableOpacity 
               key={tab} 
               style={[styles.navItem, activeTab === tab && styles.navItemActive]}
@@ -112,8 +138,8 @@ const HomePage = () => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Home</Text>
-          <TouchableOpacity style={styles.logoutButtonTop} onPress={handleLogout}>
-            <Text style={styles.logoutButtonTopText}>Logout</Text>
+          <TouchableOpacity style={styles.logoutButtonTop} onPress={() => router.push('/loginpage')}>
+            <Text style={styles.logoutButtonTopText}>Login</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.content}>
@@ -127,11 +153,12 @@ const HomePage = () => {
         </View>
         {/* Bottom Navigation */}
         <View style={styles.bottomNav}>
-          {['Profile', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
+          {['Home', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
             <TouchableOpacity 
               key={tab} 
               style={[styles.navItem, activeTab === tab && styles.navItemActive]}
               onPress={() => handleTabPress(tab)}
+              disabled={tab !== 'Home'} // Disable navigation if not logged in
             >
               <Text style={[styles.navText, activeTab === tab && styles.navTextActive]}>
                 {tab}
@@ -153,36 +180,38 @@ const HomePage = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Main Content */}
-      <View style={styles.content}>
-        <Text style={styles.welcomeText}>
-          Welcome, {user.user_metadata?.full_name || 'Traveler'}! 🎉
-        </Text>
-        <Text style={styles.emailText}>
-          {user.email}
-        </Text>
-        
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>5</Text>
-            <Text style={styles.statLabel}>Trips Planned</Text>
+      {/* Main Content (Wrapped in ScrollView) */}
+      <ScrollView style={styles.scrollViewContent}>
+        <View style={styles.content}>
+          <Text style={styles.welcomeText}>
+            Welcome ! , {user.user_metadata?.full_name || 'Traveler'}! 🎉
+          </Text>
+          <Text style={styles.emailText}>
+            {user.email}
+          </Text>
+          
+          {/* Feature Cards */}
+          <View style={styles.cardsContainer}>
+            {cardsData.map((card) => (
+              <TouchableOpacity
+                key={card.name}
+                style={styles.card}
+                onPress={() => handleCardPress(card.target)}
+              >
+                <Text style={styles.cardIcon}>{card.icon}</Text>
+                <Text style={styles.cardText}>{card.name}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>12</Text>
-            <Text style={styles.statLabel}>Destinations</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statNumber}>3</Text>
-            <Text style={styles.statLabel}>Upcoming</Text>
-          </View>
-        </View>
 
-        
-      </View>
+          
+
+        </View>
+      </ScrollView>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        {['Profile', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
+        {['Home', 'Feed', 'TourGuide', 'TravelPlan', 'Location'].map((tab) => (
           <TouchableOpacity 
             key={tab} 
             style={[styles.navItem, activeTab === tab && styles.navItemActive]}
@@ -230,8 +259,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  content: {
+  scrollViewContent: {
     flex: 1,
+  },
+  content: {
     padding: 20,
   },
   loadingContent: {
@@ -273,38 +304,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: 30, 
   },
-  statsContainer: {
+  
+  // --- New Card Styles ---
+  cardsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 40,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  statCard: {
+  card: {
+    width: '30%', 
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 15,
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    padding: 20,
-    borderRadius: 10,
-    minWidth: 80,
+    justifyContent: 'center',
+    marginBottom: 15,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 3,
   },
-  statNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#000000',
+  cardIcon: {
+    fontSize: 30,
+    marginBottom: 5,
   },
-  statLabel: {
+  cardText: {
     fontSize: 12,
-    color: '#666',
-    marginTop: 5,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#333',
   },
+  // --- End New Card Styles ---
+  
   additionalContent: {
     marginTop: 30,
   },

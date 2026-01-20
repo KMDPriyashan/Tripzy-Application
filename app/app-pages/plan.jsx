@@ -17,7 +17,9 @@ const PlanPage = () => {
         <Text>Plan will be displayed here.</Text>
         <Text>More details about the travel plan can be added here.</Text>
         <Text>Plan to your Plan Stantion !</Text>
-        <button>See More</button>
+        <TouchableOpacity style={styles.seeMoreButton}>
+          <Text style={styles.seeMoreButtonText}>See More</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -56,6 +58,17 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
+  },
+  seeMoreButton: {
+    marginTop: 20,
+    backgroundColor: '#000000',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 5,
+  },
+  seeMoreButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
   },
 });
 
