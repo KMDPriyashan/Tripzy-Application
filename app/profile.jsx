@@ -21,8 +21,6 @@ const HomePage = () => {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Default to 'Home' which is the current page, not 'Profile'
-  const [activeTab, setActiveTab] = useState('Home'); 
 
   useEffect(() => {
     // Check if user is logged in
@@ -65,34 +63,6 @@ const HomePage = () => {
       }
     } catch (error) {
       console.error('Logout error:', error);
-    }
-  };
-
-  const handleTabPress = (tabName) => {
-    setActiveTab(tabName);
-    
-    // Navigation logic for each tab
-    switch(tabName) {
-      case 'Home':
-        // Already on home page, no navigation needed
-        break;
-      case 'Feed':
-        router.push('/app-pages/feed');
-        break;
-      case 'TourGuide':
-        router.push('/app-pages/TourGuide');
-        break;
-      case 'TravelPlan':
-        router.push('/app-pages/plan');
-        break;
-      case 'Location':
-        router.push('/app-pages/map');
-        break;
-      case 'Profile': // Assuming Profile is a separate route
-        router.push('/app-pages/profile'); 
-        break;
-      default:
-        break;
     }
   };
   
