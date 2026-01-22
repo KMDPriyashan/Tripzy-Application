@@ -87,7 +87,7 @@ const HomePage = () => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Home</Text>
+          <Text style={styles.headerTitle}>Tripzy</Text>
           <TouchableOpacity style={styles.logoutButtonTop} onPress={() => router.push('/loginpage')}>
             <Text style={styles.logoutButtonTopText}>Login</Text>
           </TouchableOpacity>
@@ -116,28 +116,29 @@ const HomePage = () => {
       </View>
 
       {/* Main Content (Wrapped in ScrollView) */}
-      <ScrollView style={styles.scrollViewContent}>
-        <View style={styles.content}>
-          <Text style={styles.welcomeText}>
-            Welcome, {user.user_metadata?.full_name || 'Traveler'}! 🎉
-          </Text>
-          <Text style={styles.emailText}>
-            {user.email}
-          </Text>
-          
-          {/* Feature Cards */}
-          <View style={styles.cardsContainer}>
-            {cardsData.map((card) => (
-              <TouchableOpacity
-                key={card.name}
-                style={styles.card}
-                onPress={() => handleCardPress(card.target)}
-              >
-                <Text style={styles.cardIcon}>{card.icon}</Text>
-                <Text style={styles.cardText}>{card.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+      >
+        <Text style={styles.welcomeText}>
+          Welcome, {user.user_metadata?.full_name || 'Traveler'}! 🎉
+        </Text>
+        <Text style={styles.emailText}>
+          {user.email}
+        </Text>
+        
+        {/* Feature Cards */}
+        <View style={styles.cardsContainer}>
+          {cardsData.map((card) => (
+            <TouchableOpacity
+              key={card.name}
+              style={styles.card}
+              onPress={() => handleCardPress(card.target)}
+            >
+              <Text style={styles.cardIcon}>{card.icon}</Text>
+              <Text style={styles.cardText}>{card.name}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </ScrollView>
     </View>
@@ -176,11 +177,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  scrollViewContent: {
+  scrollView: {
     flex: 1,
   },
-  content: {
+  scrollViewContent: {
     padding: 20,
+    alignItems: 'center',
   },
   loadingContent: {
     flex: 1,
@@ -228,20 +230,23 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 20,
+    width: '100%',
   },
   card: {
-    width: '30%',
+    width: '45%',
+    height: 150,
     backgroundColor: '#f9f9f9',
     borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 20,
+    margin: 5,
     marginBottom: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardIcon: {
     fontSize: 30,

@@ -13,7 +13,7 @@ const PlanPage = () => {
           <Text style={styles.backButton}>Back</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Trip Plan</Text>
         <Text>Plan will be displayed here.</Text>
         <Text>More details about the travel plan can be added here.</Text>
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     color: '#007AFF',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

@@ -12,7 +12,7 @@ const TourGuidePage = () => {
           <Text style={styles.backButton}>Back</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView style={styles.content}>
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Tour Guide</Text>
         <Text>Tour Guide will be displayed here.</Text>
       </ScrollView>
@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     color: '#007AFF',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
