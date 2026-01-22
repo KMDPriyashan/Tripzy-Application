@@ -3,14 +3,22 @@ import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { supabase } from '../lib/supabase';
 
-// Data for the six cards
-const cardsData = [
+// Data for the feature cards
+const featureCardsData = [
+  { name: 'Trip Planning', description: 'Plan your journey with ease by our Trip Planner.', icon: '📅', target: '/app-pages/plan' },
+  { name: 'Travel Map', description: 'Map your travels. Nourish your soul.', icon: '🗺️', target: '/app-pages/map' },
+  { name: 'Weather', description: 'Check Your Journey as Previous.', icon: '⛅', target: '/app-pages/weather' },
+  { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TourGuide' },
+  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/community' },
+];
+
+// Data for the bottom navigation
+const navItems = [
+  { name: 'Home', icon: '🏠', target: null },
+  { name: 'Map', icon: '🗺️', target: '/app-pages/map' },
   { name: 'Feed', icon: '📰', target: '/app-pages/feed' },
-  { name: 'Tour Guide', icon: '🗺️', target: '/app-pages/TourGuide' },
-  { name: 'Travel Plan', icon: '📅', target: '/app-pages/plan' },
-  { name: 'Location Map', icon: '📍', target: '/app-pages/map' },
-  { name: 'Budget', icon: '💰', target: '/app-pages/plan' }, 
-  { name: 'Settings', icon: '⚙️', target: '/app-pages/settings' }, 
+  { name: 'Group', icon: '👥', target: '/app-pages/community' },
+  { name: 'Profile', icon: '👤', target: '/app-pages/profile' },
 ];
 
 const HomePage = () => {
@@ -21,7 +29,7 @@ const HomePage = () => {
   useEffect(() => {
     // Check if user is logged in
     getCurrentUser();
-    
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -54,14 +62,20 @@ const HomePage = () => {
       if (error) {
         console.error('Logout error:', error);
       } else {
-        router.replace('/loginpage'); 
+        router.replace('/loginpage');
       }
     } catch (error) {
       console.error('Logout error:', error);
     }
   };
 
-  const handleCardPress = (targetPath) => {
+  const handleFeaturePress = (targetPath) => {
+    if (targetPath) {
+      router.push(targetPath);
+    }
+  };
+
+  const handleNavPress = (targetPath) => {
     if (targetPath) {
       router.push(targetPath);
     }
@@ -70,12 +84,6 @@ const HomePage = () => {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Tripzy</Text>
-          <TouchableOpacity style={styles.logoutButtonTop} disabled>
-            <Text style={styles.logoutButtonTopText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
         <View style={styles.loadingContent}>
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
@@ -86,16 +94,10 @@ const HomePage = () => {
   if (!user) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Tripzy</Text>
-          <TouchableOpacity style={styles.logoutButtonTop} onPress={() => router.push('/loginpage')}>
-            <Text style={styles.logoutButtonTopText}>Login</Text>
-          </TouchableOpacity>
-        </View>
         <View style={styles.content}>
           <Text style={styles.notAuthText}>Not authenticated</Text>
-          <TouchableOpacity 
-            style={styles.loginButton} 
+          <TouchableOpacity
+            style={styles.loginButton}
             onPress={() => router.push('/loginpage')}
           >
             <Text style={styles.loginButtonText}>Go to Login</Text>
@@ -107,40 +109,59 @@ const HomePage = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header with Logout Button */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Tripzy</Text>
-        <TouchableOpacity style={styles.logoutButtonTop} onPress={handleLogout}>
-          <Text style={styles.logoutButtonTopText}>Logout</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Main Content (Wrapped in ScrollView) */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
       >
-        <Text style={styles.welcomeText}>
-          Welcome, {user.user_metadata?.full_name || 'Traveler'}! 🎉
-        </Text>
-        <Text style={styles.emailText}>
-          {user.email}
-        </Text>
-        
+        {/* Header Section */}
+        <View style={styles.headerSection}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.appTitle}>Tripzy</Text>
+            <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/app-pages/profile')}>
+              <Text style={styles.profileIcon}>👤</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.tagline}>Travel Light. Feel Deep.</Text>
+          <Text style={styles.subTagline}>A gentle, poetic invitation to begin the journey.</Text>
+
+          <Text style={styles.welcomeText}>
+            Welcome back, {user.user_metadata?.full_name || 'Traveler'}! 🌍
+          </Text>
+        </View>
+
         {/* Feature Cards */}
-        <View style={styles.cardsContainer}>
-          {cardsData.map((card) => (
+        <View style={styles.featuresContainer}>
+          {featureCardsData.map((feature, index) => (
             <TouchableOpacity
-              key={card.name}
-              style={styles.card}
-              onPress={() => handleCardPress(card.target)}
+              key={feature.name}
+              style={styles.featureCard}
+              onPress={() => handleFeaturePress(feature.target)}
             >
-              <Text style={styles.cardIcon}>{card.icon}</Text>
-              <Text style={styles.cardText}>{card.name}</Text>
+              <View style={styles.featureIconContainer}>
+                <Text style={styles.featureIcon}>{feature.icon}</Text>
+              </View>
+              <Text style={styles.featureTitle}>{feature.name}</Text>
+              <Text style={styles.featureDescription}>{feature.description}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        {navItems.map((item) => (
+          <TouchableOpacity
+            key={item.name}
+            style={styles.navItem}
+            onPress={() => handleNavPress(item.target)}
+          >
+            <Text style={styles.navIcon}>{item.icon}</Text>
+            <Text style={styles.navText}>{item.name}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 };
@@ -148,46 +169,146 @@ const HomePage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#ffffff',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000000',
-  },
-  logoutButtonTop: {
-    backgroundColor: '#000000',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  logoutButtonTopText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+    backgroundColor: '#f8f9fa',
   },
   scrollView: {
     flex: 1,
   },
   scrollViewContent: {
-    padding: 20,
+    paddingBottom: 90, // Space for bottom navigation
+  },
+  headerSection: {
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 30,
+    backgroundColor: '#ffffff',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  headerTextContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 16,
+  },
+  appTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileIcon: {
+    fontSize: 20,
+  },
+  tagline: {
+    fontSize: 32,
+    fontWeight: '300',
+    color: '#1a1a1a',
+    marginBottom: 8,
+    lineHeight: 38,
+  },
+  subTagline: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 24,
+    lineHeight: 22,
+    fontStyle: 'italic',
+  },
+  welcomeText: {
+    fontSize: 18,
+    color: '#444',
+    fontWeight: '500',
+  },
+  featuresContainer: {
+    paddingHorizontal: 20,
+  },
+  featureCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  featureIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  featureIcon: {
+    fontSize: 24,
+  },
+  featureTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  featureDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  navIcon: {
+    fontSize: 22,
+    marginBottom: 4,
+  },
+  navText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
   },
   loadingContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f8f9fa',
   },
   loadingText: {
     fontSize: 16,
@@ -200,63 +321,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   loginButton: {
-    backgroundColor: '#000000',
+    backgroundColor: '#1a1a1a',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 6,
+    borderRadius: 8,
     alignSelf: 'center',
   },
   loginButtonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  welcomeText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    textAlign: 'center',
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  emailText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 30,
-  },
-  cardsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    width: '100%',
-  },
-  card: {
-    width: '45%',
-    height: 150,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 12,
-    padding: 20,
-    margin: 5,
-    marginBottom: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardIcon: {
-    fontSize: 30,
-    marginBottom: 5,
-  },
-  cardText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-    color: '#333',
   },
 });
 
