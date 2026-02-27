@@ -127,7 +127,7 @@ const PlanPage = () => {
       >
         {/* Main Title Section */}
         <View style={styles.titleSection}>
-          <Text style={styles.mainTitle}>Plan Your Perfect Getaway</Text>
+          <Text style={styles.mainTitle}>Plan Your Perfect Getaway !</Text>
           <Text style={styles.subtitle}>
             Start organizing your dream trip with ease—choose destinations, set dates, and customize every detail
           </Text>
