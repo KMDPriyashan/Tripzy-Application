@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "scheme": "tripzyapplication",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -14,7 +13,6 @@
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
