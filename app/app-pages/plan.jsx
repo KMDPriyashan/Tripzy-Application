@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Dimensions, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -227,7 +228,7 @@ const PlanPage = () => {
         {/* Create Itinerary Button */}
         <TouchableOpacity 
           style={styles.createButton}
-          onPress={() => router.push('/app-pages/create-itinerary')}
+          onPress={() => router.push('/app-pages/createPlan')}
         >
           <Text style={styles.createButtonText}>+ Create Itinerary</Text>
         </TouchableOpacity>
