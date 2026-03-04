@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -17,6 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CreatePlan = () => {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  
   const [destination, setDestination] = useState('');
   const [postCaption, setPostCaption] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
@@ -29,6 +31,7 @@ const CreatePlan = () => {
   const [currentStatus, setCurrentStatus] = useState('Planned');
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showPackingModal, setShowPackingModal] = useState(false);
+  const [selectedPackingItems, setSelectedPackingItems] = useState([]);
   const [budgetEstimate, setBudgetEstimate] = useState({
     accommodation: '',
     transportation: '',
@@ -38,6 +41,25 @@ const CreatePlan = () => {
     total: 0
   });
   const [packingList, setPackingList] = useState([]);
+
+  // Check for selected items from packing list page
+  useEffect(() => {
+    if (params.selectedPackingItems) {
+      try {
+        const items = JSON.parse(params.selectedPackingItems);
+        setSelectedPackingItems(items);
+        
+        // Show success message with count
+        Alert.alert(
+          'Items Added', 
+          `${items.length} item${items.length > 1 ? 's' : ''} added to your packing list!`,
+          [{ text: 'OK' }]
+        );
+      } catch (e) {
+        console.error('Error parsing packing items', e);
+      }
+    }
+  }, [params.selectedPackingItems]);
 
   const pickImage = async () => {
     // Request permission first
@@ -49,7 +71,7 @@ const CreatePlan = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], // Fixed: changed from MediaTypeOptions.Images
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
@@ -74,40 +96,7 @@ const CreatePlan = () => {
   };
 
   const generatePackingChecklist = () => {
-    // Generate packing list based on destination and duration
-    const baseItems = [
-      'Passport/ID',
-      'Travel documents',
-      'Phone charger',
-      'Power bank',
-      'First aid kit',
-    ];
-
-    const clothingItems = [
-      'T-shirts',
-      'Pants/Jeans',
-      'Underwear',
-      'Socks',
-      'Sleepwear',
-    ];
-
-    const toiletries = [
-      'Toothbrush',
-      'Toothpaste',
-      'Shampoo',
-      'Soap',
-      'Deodorant',
-    ];
-
-    const destinationSpecific = destination.toLowerCase().includes('beach') 
-      ? ['Swimsuit', 'Sunscreen', 'Beach towel', 'Flip flops']
-      : destination.toLowerCase().includes('mountain')
-      ? ['Hiking boots', 'Jacket', 'Warm clothes', 'Raincoat']
-      : [];
-
-    const completeList = [...baseItems, ...clothingItems, ...toiletries, ...destinationSpecific];
-    setPackingList(completeList);
-    setShowPackingModal(true);
+    router.push('/app-pages/packingList');
   };
 
   const savePlan = () => {
@@ -124,6 +113,7 @@ const CreatePlan = () => {
       currentStatus,
       budgetEstimate,
       packingList,
+      selectedPackingItems,
       image: selectedImage
     };
     
@@ -320,12 +310,53 @@ const CreatePlan = () => {
             />
           </View>
 
+          {/* Selected Packing Items Indicator */}
+          {selectedPackingItems.length > 0 && (
+            <View style={styles.selectedItemsContainer}>
+              <View style={styles.selectedItemsHeader}>
+                <Text style={styles.selectedItemsTitle}>Packing Items Selected</Text>
+                <TouchableOpacity 
+                  onPress={() => setSelectedPackingItems([])}
+                  style={styles.clearButton}
+                >
+                  <Text style={styles.clearButtonText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.selectedItemsBadges}>
+                {selectedPackingItems.map((item, index) => (
+                  <View key={index} style={styles.selectedItemBadge}>
+                    <Text style={styles.selectedItemBadgeText}>✓</Text>
+                  </View>
+                ))}
+              </View>
+              <Text style={styles.selectedItemsCount}>
+                {selectedPackingItems.length} item{selectedPackingItems.length > 1 ? 's' : ''} ready for your trip
+              </Text>
+              <TouchableOpacity 
+                style={styles.viewSelectedButton}
+                onPress={() => {
+                  Alert.alert(
+                    'Selected Packing Items',
+                    selectedPackingItems.join('\n• '),
+                    [{ text: 'OK' }]
+                  );
+                }}
+              >
+                <Text style={styles.viewSelectedButtonText}>View Selected Items</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Generate Packing Checklist Button */}
           <TouchableOpacity 
             style={styles.generateButton}
             onPress={generatePackingChecklist}
           >
-            <Text style={styles.generateButtonText}>Generate Packing Checklist</Text>
+            <Text style={styles.generateButtonText}>
+              {selectedPackingItems.length > 0 
+                ? 'Update Packing Checklist' 
+                : 'Generate Packing Checklist'}
+            </Text>
           </TouchableOpacity>
 
           {/* Planning */}
@@ -668,6 +699,71 @@ const styles = StyleSheet.create({
   checklistText: {
     fontSize: 16,
     color: '#333',
+  },
+  // New styles for selected packing items
+  selectedItemsContainer: {
+    backgroundColor: '#f0f8ff',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  selectedItemsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  selectedItemsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  clearButton: {
+    padding: 5,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: '#FF6B6B',
+    fontWeight: '500',
+  },
+  selectedItemsBadges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+  },
+  selectedItemBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#34C759',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  selectedItemBadgeText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  selectedItemsCount: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+    marginBottom: 10,
+  },
+  viewSelectedButton: {
+    backgroundColor: '#007AFF',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  viewSelectedButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 
