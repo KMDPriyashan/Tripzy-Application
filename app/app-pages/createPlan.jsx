@@ -41,8 +41,12 @@ const CreatePlan = () => {
     total: 0
   });
   const [packingList, setPackingList] = useState([]);
+  
+  // New state for budget summary
+  const [showBudgetSummary, setShowBudgetSummary] = useState(false);
+  const [budgetBreakdown, setBudgetBreakdown] = useState(null);
 
-  // Check for selected items from packing list page
+  // Check for selected items from packing list page and budget data
   useEffect(() => {
     if (params.selectedPackingItems) {
       try {
@@ -59,7 +63,34 @@ const CreatePlan = () => {
         console.error('Error parsing packing items', e);
       }
     }
-  }, [params.selectedPackingItems]);
+
+    // Handle budget data
+    if (params.budgetData) {
+      try {
+        const budgetData = JSON.parse(params.budgetData);
+        setBudgetBreakdown(budgetData);
+        setShowBudgetSummary(true);
+        
+        // Update the simple budget estimate fields
+        setBudgetEstimate({
+          accommodation: budgetData.accommodation.cost.toString(),
+          transportation: budgetData.transport.cost.toString(),
+          food: budgetData.food.cost.toString(),
+          activities: budgetData.activities.cost.toString(),
+          miscellaneous: '0',
+          total: budgetData.total
+        });
+        
+        Alert.alert(
+          'Budget Calculated', 
+          `Total Estimated Budget: $${budgetData.total.toFixed(2)}`,
+          [{ text: 'OK' }]
+        );
+      } catch (e) {
+        console.error('Error parsing budget data', e);
+      }
+    }
+  }, [params.selectedPackingItems, params.budgetData]);
 
   const pickImage = async () => {
     // Request permission first
@@ -112,6 +143,7 @@ const CreatePlan = () => {
       tripNotes,
       currentStatus,
       budgetEstimate,
+      budgetBreakdown,
       packingList,
       selectedPackingItems,
       image: selectedImage
@@ -387,16 +419,110 @@ const CreatePlan = () => {
             </View>
           </View>
 
-          {/* Budget Estimate */}
+          {/* Budget Estimate - Updated to navigate to new budget page */}
           <View style={styles.budgetContainer}>
             <Text style={styles.label}>Estimate your Budget Plan</Text>
             <TouchableOpacity 
               style={styles.estimateButton}
-              onPress={() => setShowBudgetModal(true)}
+              onPress={() => router.push('/app-pages/budgetEstimate')}
             >
               <Text style={styles.estimateButtonText}>Estimate</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Budget Summary - Shows when budget is calculated */}
+          {showBudgetSummary && budgetBreakdown && (
+            <View style={styles.budgetSummaryContainer}>
+              <View style={styles.budgetSummaryHeader}>
+                <Text style={styles.budgetSummaryTitle}>Your Budget Summary</Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setShowBudgetSummary(false);
+                    setBudgetBreakdown(null);
+                  }}
+                  style={styles.editBudgetButton}
+                >
+                  <Text style={styles.editBudgetButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Budget Style Badge */}
+              <View style={styles.budgetStyleBadge}>
+                <Text style={styles.budgetStyleBadgeText}>
+                  {budgetBreakdown.budgetStyle.charAt(0).toUpperCase() + budgetBreakdown.budgetStyle.slice(1)} Style
+                </Text>
+              </View>
+
+              {/* Trip Details Summary */}
+              <View style={styles.budgetDetailsGrid}>
+                <View style={styles.budgetDetailItem}>
+                  <Text style={styles.budgetDetailLabel}>Destination</Text>
+                  <Text style={styles.budgetDetailValue}>{budgetBreakdown.destination || 'Not set'}</Text>
+                </View>
+                <View style={styles.budgetDetailItem}>
+                  <Text style={styles.budgetDetailLabel}>Duration</Text>
+                  <Text style={styles.budgetDetailValue}>{budgetBreakdown.duration || '0'} days</Text>
+                </View>
+                <View style={styles.budgetDetailItem}>
+                  <Text style={styles.budgetDetailLabel}>Group Size</Text>
+                  <Text style={styles.budgetDetailValue}>{budgetBreakdown.groupSize}</Text>
+                </View>
+              </View>
+
+              {/* Cost Breakdown */}
+              <View style={styles.costBreakdown}>
+                <View style={styles.costItem}>
+                  <View style={styles.costItemLeft}>
+                    <View style={[styles.costDot, { backgroundColor: '#FF6B6B' }]} />
+                    <Text style={styles.costItemLabel}>Transport</Text>
+                  </View>
+                  <View style={styles.costItemRight}>
+                    <Text style={styles.costItemOption}>{budgetBreakdown.transport.option}</Text>
+                    <Text style={styles.costItemValue}>${budgetBreakdown.transport.cost}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.costItem}>
+                  <View style={styles.costItemLeft}>
+                    <View style={[styles.costDot, { backgroundColor: '#34C759' }]} />
+                    <Text style={styles.costItemLabel}>Accommodation</Text>
+                  </View>
+                  <View style={styles.costItemRight}>
+                    <Text style={styles.costItemOption}>{budgetBreakdown.accommodation.option}</Text>
+                    <Text style={styles.costItemValue}>${budgetBreakdown.accommodation.cost}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.costItem}>
+                  <View style={styles.costItemLeft}>
+                    <View style={[styles.costDot, { backgroundColor: '#007AFF' }]} />
+                    <Text style={styles.costItemLabel}>Food</Text>
+                  </View>
+                  <View style={styles.costItemRight}>
+                    <Text style={styles.costItemOption}>{budgetBreakdown.food.option}</Text>
+                    <Text style={styles.costItemValue}>${budgetBreakdown.food.cost}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.costItem}>
+                  <View style={styles.costItemLeft}>
+                    <View style={[styles.costDot, { backgroundColor: '#FF9500' }]} />
+                    <Text style={styles.costItemLabel}>Activities</Text>
+                  </View>
+                  <View style={styles.costItemRight}>
+                    <Text style={styles.costItemOption}>{budgetBreakdown.activities.option}</Text>
+                    <Text style={styles.costItemValue}>${budgetBreakdown.activities.cost}</Text>
+                  </View>
+                </View>
+
+                {/* Total */}
+                <View style={styles.totalContainer}>
+                  <Text style={styles.totalLabel}>Total Estimated Budget</Text>
+                  <Text style={styles.totalValue}>${budgetBreakdown.total.toFixed(2)}</Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* Current Status */}
           <View style={styles.inputGroup}>
@@ -700,7 +826,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  // New styles for selected packing items
+  // Styles for selected packing items
   selectedItemsContainer: {
     backgroundColor: '#f0f8ff',
     padding: 15,
@@ -764,6 +890,129 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '500',
+  },
+  // New styles for budget summary
+  budgetSummaryContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  budgetSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  budgetSummaryTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  editBudgetButton: {
+    padding: 5,
+  },
+  editBudgetButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  budgetStyleBadge: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  budgetStyleBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  budgetDetailsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  budgetDetailItem: {
+    alignItems: 'center',
+  },
+  budgetDetailLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+  },
+  budgetDetailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  costBreakdown: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+  },
+  costItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  costItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  costDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  costItemLabel: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  costItemRight: {
+    alignItems: 'flex-end',
+  },
+  costItemOption: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  costItemValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#007AFF',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#007AFF',
   },
 });
 
