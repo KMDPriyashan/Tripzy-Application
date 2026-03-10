@@ -23,6 +23,17 @@ const MyItineraries = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Bottom navigation items
+  const navItems = [
+    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: '/' },
+    { name: 'Map', icon: 'map-outline', activeIcon: 'map', route: '/app-pages/map' },
+    { name: 'Feed', icon: 'newspaper-outline', activeIcon: 'newspaper', route: '/app-pages/feed' },
+    { name: 'Group', icon: 'people-outline', activeIcon: 'people', route: '/app-pages/TourGuide' },
+    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: '/auth/profile' },
+  ];
+
+  const [activeTab, setActiveTab] = useState('Home');
+
   // Load itineraries when screen comes into focus
   useFocusEffect(
     useCallback(() => {
@@ -91,7 +102,7 @@ const MyItineraries = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'Date not set';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
   };
 
   const getStatusColor = (status) => {
@@ -103,6 +114,13 @@ const MyItineraries = () => {
     }
   };
 
+  const handleNavPress = (route, tabName) => {
+    setActiveTab(tabName);
+    if (route) {
+      router.push(route);
+    }
+  };
+
   const ItineraryCard = ({ item }) => (
     <TouchableOpacity 
       style={styles.card}
@@ -111,12 +129,12 @@ const MyItineraries = () => {
         setModalVisible(true);
       }}
     >
-      {/* Card Header */}
+      {/* Card Header with Emoji and Delete Button */}
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
-          <Ionicons name="location-outline" size={20} color="#007AFF" />
+          <Text style={styles.cardHeaderEmoji}>🏠️</Text>
           <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.destination || 'Untitled Trip'}
+            {item.destination || 'Annual Office Trip'}
           </Text>
         </View>
         <TouchableOpacity 
@@ -136,71 +154,59 @@ const MyItineraries = () => {
         </View>
       )}
 
-      {/* Card Content */}
-      <View style={styles.cardContent}>
-        <View style={styles.cardDateRow}>
-          <Ionicons name="calendar-outline" size={14} color="#666" />
-          <Text style={styles.cardDate}>
-            {formatDate(item.startDate)} - {formatDate(item.endDate)}
-          </Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.currentStatus) }]}>
-            <Text style={styles.statusText}>{item.currentStatus || 'Planned'}</Text>
-          </View>
+      {/* Date */}
+      <Text style={styles.cardDate}>
+        {formatDate(item.startDate || '12th of October')}
+      </Text>
+
+      {/* Location Title */}
+      <Text style={styles.cardLocationTitle}>
+        {item.planningLocation || 'Ravana Waterfall'}
+      </Text>
+
+      {/* Full Address */}
+      <Text style={styles.cardAddress} numberOfLines={2}>
+        {item.province || 'Ravana Falls, Ella-Wellawaya Road, Ella, Uva Province, Sri Lanka'}
+      </Text>
+
+      {/* Start Time Row */}
+      <View style={styles.startTimeRow}>
+        <Text style={styles.startTimeLabel}>Start By :</Text>
+        <Text style={styles.startTimeValue}>{item.startedTime || '7.00 A.M'}</Text>
+      </View>
+
+      {/* Status Badge (if exists) */}
+      {item.currentStatus && (
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.currentStatus) }]}>
+          <Text style={styles.statusText}>{item.currentStatus}</Text>
         </View>
+      )}
 
-        <Text style={styles.cardLocation} numberOfLines={1}>
-          {item.planningLocation || 'Location not set'}
-          {item.province ? `, ${item.province}` : ''}
-        </Text>
+      {/* Request/Approve Button */}
+      <TouchableOpacity style={styles.requestButton}>
+        <Text style={styles.requestButtonText}>Request for Travel Guide</Text>
+      </TouchableOpacity>
 
-        <View style={styles.cardFooter}>
-          <View style={styles.cardFooterLeft}>
-            <View style={styles.cardStats}>
-              <Ionicons name="time-outline" size={14} color="#666" />
-              <Text style={styles.cardStatsText}>
-                {item.startedTime || 'Time not set'}
-              </Text>
-            </View>
-            <View style={styles.cardStats}>
-              <Ionicons name="wallet-outline" size={14} color="#666" />
-              <Text style={styles.cardStatsText}>
-                ${item.budgetEstimate?.total || 0}
-              </Text>
-            </View>
-          </View>
-          
-          <TouchableOpacity 
-            style={styles.shareButton}
-            onPress={() => handleShare(item)}
-          >
-            <Ionicons name="share-outline" size={16} color="#007AFF" />
-          </TouchableOpacity>
+      {/* Stats Row */}
+      <View style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Ionicons name="heart-outline" size={18} color="#FF6B6B" />
+          <Text style={styles.statText}>1.2k React</Text>
         </View>
-
-        {/* Tags */}
-        <View style={styles.tagsContainer}>
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>Travel Guide</Text>
-          </View>
-          {item.selectedPackingItems?.length > 0 && (
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>Packing Ready</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Ionicons name="heart-outline" size={16} color="#666" />
-            <Text style={styles.statText}>1.2k</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Ionicons name="chatbubble-outline" size={16} color="#666" />
-            <Text style={styles.statText}>1.75k</Text>
-          </View>
+        <View style={styles.statItem}>
+          <Ionicons name="chatbubble-outline" size={18} color="#4A90E2" />
+          <Text style={styles.statText}>1.75k Comment</Text>
         </View>
       </View>
+
+      {/* Divider */}
+      <View style={styles.divider} />
+
+      {/* WhatsApp Connect */}
+      <TouchableOpacity style={styles.whatsappContainer} onPress={() => handleShare(item)}>
+        <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+        <Text style={styles.whatsappText}>Connect to the WhatsApp</Text>
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 
@@ -351,7 +357,7 @@ const MyItineraries = () => {
 
                   {/* Action Buttons */}
                   <View style={styles.actionButtons}>
-                    <TouchableOpacity style={styles.whatsappButton}>
+                    <TouchableOpacity style={styles.whatsappButton} onPress={() => handleShare(selectedItinerary)}>
                       <Ionicons name="logo-whatsapp" size={18} color="#fff" />
                       <Text style={styles.whatsappButtonText}>Connect to WhatsApp</Text>
                     </TouchableOpacity>
@@ -384,7 +390,7 @@ const MyItineraries = () => {
       </Text>
       <TouchableOpacity 
         style={styles.emptyButton}
-        onPress={() => router.push('/Trip plan pages/createPlan')}
+        onPress={() => router.push('/app-pages/createPlan')}
       >
         <Ionicons name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.emptyButtonText}>Create Your First Plan</Text>
@@ -393,76 +399,119 @@ const MyItineraries = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ItineraryDetailModal />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>Welcome to Your</Text>
-          <Text style={styles.headerTitle}>Travel Planner</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => router.push('/app-pages/createPlan')}
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollViewContent}
         >
-          <Ionicons name="add" size={28} color="#fff" />
-        </TouchableOpacity>
+          {/* Header with Add Button */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.welcomeText}>Welcome to Your</Text>
+              <Text style={styles.headerTitle}>Travel Planner</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={() => router.push('/app-pages/createPlan')}
+            >
+              <Ionicons name="add" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Subtitle */}
+          <Text style={styles.subtitle}>
+            Start your journey by creating, organizing, and exploring your perfect trip.
+          </Text>
+
+          {/* Section Header */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Itineraries</Text>
+            <Text style={styles.sectionSubtitle}>
+              Time to map out the voyage — one bold step at a time 🚶‍♀️
+            </Text>
+          </View>
+
+          {/* Category Tags */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsScroll}>
+            <View style={styles.tagsWrapper}>
+              <TouchableOpacity style={[styles.categoryTag, styles.categoryTagActive]}>
+                <Text style={[styles.categoryTagText, styles.categoryTagTextActive]}>waterfall</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.categoryTag}>
+                <Text style={styles.categoryTagText}>Beach</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.categoryTag}>
+                <Text style={styles.categoryTagText}>Adventure</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.categoryTag}>
+                <Text style={styles.categoryTagText}>Mountain</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.categoryTag}>
+                <Text style={styles.categoryTagText}>City</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+
+          {/* Itineraries List */}
+          <FlatList
+            data={itineraries}
+            renderItem={({ item }) => <ItineraryCard item={item} />}
+            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            ListEmptyComponent={EmptyState}
+            scrollEnabled={false} // Disable scrolling inside FlatList since parent ScrollView handles it
+          />
+        </ScrollView>
+      </SafeAreaView>
+
+      {/* Detail Modal */}
+      <ItineraryDetailModal />
+
+      {/* Bottom Navigation */}
+      <View style={styles.bottomNav}>
+        {navItems.map((item) => (
+          <TouchableOpacity
+            key={item.name}
+            style={styles.navItem}
+            onPress={() => handleNavPress(item.route, item.name)}
+          >
+            <Ionicons 
+              name={activeTab === item.name ? item.activeIcon : item.icon} 
+              size={24} 
+              color={activeTab === item.name ? '#007AFF' : '#8E8E93'} 
+            />
+            <Text style={[
+              styles.navText, 
+              activeTab === item.name && styles.navTextActive
+            ]}>
+              {item.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-
-      {/* Subtitle */}
-      <Text style={styles.subtitle}>
-        Start your journey by creating, organizing, and exploring your perfect trip.
-      </Text>
-
-      {/* Section Header */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>My Itineraries</Text>
-        <Text style={styles.sectionSubtitle}>
-          Time to map out the voyage — one bold step at a time 🚶‍♀️
-        </Text>
-      </View>
-
-      {/* Category Tags */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsScroll}>
-        <View style={styles.tagsWrapper}>
-          <TouchableOpacity style={styles.categoryTag}>
-            <Text style={styles.categoryTagText}>All</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.categoryTag, styles.categoryTagActive]}>
-            <Text style={[styles.categoryTagText, styles.categoryTagTextActive]}>Beach</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.categoryTag}>
-            <Text style={styles.categoryTagText}>Adventure</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.categoryTag}>
-            <Text style={styles.categoryTagText}>Mountain</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.categoryTag}>
-            <Text style={styles.categoryTagText}>City</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-
-      {/* Itineraries List */}
-      <FlatList
-        data={itineraries}
-        renderItem={({ item }) => <ItineraryCard item={item} />}
-        keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshing={refreshing}
-        onRefresh={handleRefresh}
-        ListEmptyComponent={EmptyState}
-      />
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    paddingBottom: 100,
   },
   header: {
     flexDirection: 'row',
@@ -474,12 +523,13 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
+    marginBottom: 4,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#333',
+    color: '#000000',
   },
   addButton: {
     width: 48,
@@ -496,7 +546,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
     paddingHorizontal: 20,
     marginBottom: 30,
     lineHeight: 20,
@@ -508,13 +558,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#333',
+    color: '#000000',
     marginBottom: 5,
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
+    color: '#666666',
   },
   tagsScroll: {
     paddingHorizontal: 20,
@@ -527,52 +576,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#F2F2F7',
     marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
   categoryTagActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#E8F1FF',
   },
   categoryTagText: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
+    fontWeight: '500',
   },
   categoryTagTextActive: {
-    color: '#fff',
+    color: '#007AFF',
   },
   listContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingTop: 0,
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 4,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    marginBottom: 12,
   },
   cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
+  cardHeaderEmoji: {
+    fontSize: 18,
+    marginRight: 8,
+  },
   cardTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
-    marginLeft: 8,
+    color: '#000000',
     flex: 1,
   },
   deleteButton: {
@@ -581,87 +634,74 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: 180,
+    borderRadius: 8,
+    marginBottom: 12,
     backgroundColor: '#f5f5f5',
   },
   placeholderImage: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cardContent: {
-    padding: 15,
+  cardDate: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 8,
   },
-  cardDateRow: {
+  cardLocationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000000',
+    marginBottom: 4,
+  },
+  cardAddress: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  startTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
-  cardDate: {
-    fontSize: 13,
-    color: '#666',
-    marginLeft: 4,
-    flex: 1,
+  startTimeLabel: {
+    fontSize: 14,
+    color: '#666666',
+    marginRight: 4,
+  },
+  startTimeValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
-    marginLeft: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
   },
   statusText: {
     fontSize: 10,
     color: '#fff',
     fontWeight: '500',
   },
-  cardLocation: {
+  requestButton: {
+    backgroundColor: '#F2F2F7',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  requestButtonText: {
     fontSize: 14,
-    color: '#333',
-    marginBottom: 12,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardFooterLeft: {
-    flexDirection: 'row',
-  },
-  cardStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  cardStatsText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  shareButton: {
-    padding: 5,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  tag: {
-    backgroundColor: '#f0f8ff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  tagText: {
-    fontSize: 10,
     color: '#007AFF',
     fontWeight: '500',
   },
   statsRow: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    paddingTop: 12,
+    marginBottom: 12,
   },
   statItem: {
     flexDirection: 'row',
@@ -669,28 +709,43 @@ const styles = StyleSheet.create({
     marginRight: 20,
   },
   statText: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 13,
+    color: '#666666',
     marginLeft: 4,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
+    marginBottom: 12,
+  },
+  whatsappContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  whatsappText: {
+    fontSize: 14,
+    color: '#25D366',
+    fontWeight: '500',
+    marginLeft: 8,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 20,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: '#000000',
     marginTop: 20,
     marginBottom: 10,
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
     textAlign: 'center',
     marginBottom: 20,
-    paddingHorizontal: 40,
   },
   emptyButton: {
     flexDirection: 'row',
@@ -701,7 +756,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 8,
@@ -906,6 +961,33 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  navItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  navTextActive: {
+    color: '#007AFF',
+    fontWeight: '500',
   },
 });
 
