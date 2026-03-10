@@ -1,22 +1,22 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const PackingList = () => {
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const [tripType, setTripType] = useState('');
-  const [duration, setDuration] = useState('');
-  const [groupSize, setGroupSize] = useState('');
+  const params = useLocalSearchParams(); // Move this to the top level
+  const [tripType, setTripType] = useState(params.savedTripType || '');
+  const [duration, setDuration] = useState(params.savedDuration || '');
+  const [groupSize, setGroupSize] = useState(params.savedGroupSize || '');
   const [packingItems, setPackingItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState({});
   const [newItem, setNewItem] = useState('');
@@ -162,12 +162,27 @@ const PackingList = () => {
       return;
     }
 
-    // Navigate back to create plan with selected items
+    // Navigate back to create plan with selected items AND saved form state
     router.push({
       pathname: '/app-pages/createPlan',
       params: { 
         selectedPackingItems: JSON.stringify(itemsToAdd),
-        fromPackingList: 'true'
+        fromPackingList: 'true',
+        // Pass back all the saved form data from createPlan
+        savedDestination: params.savedDestination,
+        savedPostCaption: params.savedPostCaption,
+        savedSelectedImage: params.savedSelectedImage,
+        savedPlanningLocation: params.savedPlanningLocation,
+        savedStartedTime: params.savedStartedTime,
+        savedProvince: params.savedProvince,
+        savedStartDate: params.savedStartDate,
+        savedEndDate: params.savedEndDate,
+        savedTripNotes: params.savedTripNotes,
+        savedCurrentStatus: params.savedCurrentStatus,
+        savedSelectedPackingItems: params.savedSelectedPackingItems,
+        savedBudgetEstimate: params.savedBudgetEstimate,
+        savedShowBudgetSummary: params.savedShowBudgetSummary,
+        savedBudgetBreakdown: params.savedBudgetBreakdown
       }
     });
   };
