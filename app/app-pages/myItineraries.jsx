@@ -3,25 +3,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Image,
-    Modal,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  FlatList,
+  Image,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const MyItineraries = () => {
   const router = useRouter();
   const [itineraries, setItineraries] = useState([]);
+  const [filteredItineraries, setFilteredItineraries] = useState([]);
   const [selectedItinerary, setSelectedItinerary] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Bottom navigation items
   const navItems = [
@@ -47,15 +50,32 @@ const MyItineraries = () => {
       if (savedPlans) {
         const plans = JSON.parse(savedPlans);
         setItineraries(plans);
+        setFilteredItineraries(plans);
       }
     } catch (error) {
       console.error('Error loading itineraries:', error);
     }
   };
 
+  // Search function
+  const handleSearch = (text) => {
+    setSearchQuery(text);
+    if (text.trim() === '') {
+      setFilteredItineraries(itineraries);
+    } else {
+      const filtered = itineraries.filter(item => 
+        (item.destination && item.destination.toLowerCase().includes(text.toLowerCase())) ||
+        (item.planningLocation && item.planningLocation.toLowerCase().includes(text.toLowerCase())) ||
+        (item.province && item.province.toLowerCase().includes(text.toLowerCase()))
+      );
+      setFilteredItineraries(filtered);
+    }
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadItineraries();
+    setSearchQuery('');
     setRefreshing(false);
   };
 
@@ -73,6 +93,7 @@ const MyItineraries = () => {
               const updatedItineraries = itineraries.filter(item => item.id !== id);
               await AsyncStorage.setItem('travelPlans', JSON.stringify(updatedItineraries));
               setItineraries(updatedItineraries);
+              setFilteredItineraries(updatedItineraries);
               Alert.alert('Success', 'Itinerary deleted successfully');
             } catch (error) {
               console.error('Error deleting itinerary:', error);
@@ -406,11 +427,33 @@ const MyItineraries = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollViewContent}
         >
-          {/* Header with Add Button */}
+          {/* Centered Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.welcomeText}>Welcome to Your</Text>
-              <Text style={styles.headerTitle}>Travel Planner</Text>
+            <Text style={styles.welcomeText}>Welcome to Your</Text>
+            <Text style={styles.headerTitle}>Creative Travel Planner</Text>
+          </View>
+
+          {/* Centered Subtitle */}
+          <Text style={styles.subtitle}>
+            Start your journey by creating, organizing, and exploring your perfect trip with your Anyone !.
+          </Text>
+
+          {/* Search Bar and Add Button */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={20} color="#8E8E93" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search destinations, locations..."
+                placeholderTextColor="#8E8E93"
+                value={searchQuery}
+                onChangeText={handleSearch}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => handleSearch('')}>
+                  <Ionicons name="close-circle" size={18} color="#8E8E93" />
+                </TouchableOpacity>
+              )}
             </View>
             <TouchableOpacity 
               style={styles.addButton}
@@ -420,10 +463,12 @@ const MyItineraries = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Subtitle */}
-          <Text style={styles.subtitle}>
-            Start your journey by creating, organizing, and exploring your perfect trip.
-          </Text>
+          {/* Search Results Count (optional) */}
+          {searchQuery.length > 0 && (
+            <Text style={styles.searchResultText}>
+              Found {filteredItineraries.length} result{filteredItineraries.length !== 1 ? 's' : ''}
+            </Text>
+          )}
 
           {/* Section Header */}
           <View style={styles.sectionHeader}>
@@ -456,14 +501,22 @@ const MyItineraries = () => {
 
           {/* Itineraries List */}
           <FlatList
-            data={itineraries}
+            data={filteredItineraries}
             renderItem={({ item }) => <ItineraryCard item={item} />}
             keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            ListEmptyComponent={EmptyState}
+            ListEmptyComponent={searchQuery.length > 0 ? 
+              () => (
+                <View style={styles.noResultsContainer}>
+                  <Ionicons name="search-outline" size={50} color="#ccc" />
+                  <Text style={styles.noResultsText}>No results found for "{searchQuery}"</Text>
+                </View>
+              ) : 
+              EmptyState
+            }
             scrollEnabled={false} // Disable scrolling inside FlatList since parent ScrollView handles it
           />
         </ScrollView>
@@ -514,8 +567,6 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 20,
@@ -525,11 +576,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666666',
     marginBottom: 4,
+    textAlign: 'center',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
     color: '#000000',
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 8,
+    color: '#000000',
+    paddingVertical: 0,
   },
   addButton: {
     width: 48,
@@ -544,12 +630,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  subtitle: {
+  searchResultText: {
     fontSize: 14,
     color: '#666666',
     paddingHorizontal: 20,
-    marginBottom: 30,
-    lineHeight: 20,
+    marginBottom: 10,
+    fontStyle: 'italic',
   },
   sectionHeader: {
     paddingHorizontal: 20,
@@ -760,6 +846,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginLeft: 8,
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: '#666666',
+    marginTop: 10,
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
