@@ -228,7 +228,7 @@ const PlanPage = () => {
         {/* Create Itinerary Button */}
         <TouchableOpacity 
           style={styles.createButton}
-          onPress={() => router.push('/app-pages/createPlan')}
+          onPress={() => router.replace('/Tabs')}
         >
           <Text style={styles.createButtonText}>+ Create Itinerary</Text>
         </TouchableOpacity>
