@@ -1,5 +1,6 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Image,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 
 export default function CreateStory() {
+  const router = useRouter();
   const [image, setImage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -176,7 +178,10 @@ export default function CreateStory() {
 
             <TouchableOpacity
               style={styles.publishButton}
-              onPress={() => setModalVisible(false)}
+              onPress={() => {
+                setModalVisible(false);
+                router.push("/app-pages/feed/?uploading=true");
+              }}
             >
               <Text style={styles.publishText}>Publish your story</Text>
             </TouchableOpacity>
