@@ -1,22 +1,25 @@
-export const posts = [
+export const users = [
   {
-    id: "1",
-    user: "Dulash Priyashan",
-    location: "Mareena Beach, Sri Lanka",
-    image: "https://picsum.photos/600",
-    caption: "Every journey begins with a story 🌍",
-    likes: 1200,
-    comments: 320,
-    privacy: "public",
+    id: 1,
+    name: "Navodya",
+    avatar: "https://randomuser.me/api/portraits/women/1.jpg",
   },
   {
-    id: "2",
-    user: "Inu Jayasinghe",
-    location: "Ella, Sri Lanka",
-    image: "https://picsum.photos/601",
-    caption: "Mountain vibes ⛰️",
-    likes: 800,
-    comments: 100,
-    privacy: "private",
+    id: 2,
+    name: "Skay_Duvi",
+    avatar: "https://randomuser.me/api/portraits/women/2.jpg",
+  },
+];
+
+export const posts = [
+  {
+    id: 1,
+    user: "Dulash Priyashan",
+    location: "Mareena – Beach",
+    image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
+    description: "We're heading out on a group adventure...",
+    reacts: "1.2k",
+    comments: "1.7k",
+    shares: "1.7k",
   },
 ];

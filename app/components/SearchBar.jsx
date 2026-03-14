@@ -1,17 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { StyleSheet, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function SearchBar() {
+  const router = useRouter();
   return (
     <View style={styles.container}>
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color="gray" />
 
-        <TextInput placeholder="Search Any Things" style={styles.input} />
+        <TextInput placeholder="Search" style={styles.input} />
       </View>
 
-      <TouchableOpacity style={styles.addBtn}>
-        <Ionicons name="add" size={22} color="#fff" />
+      <TouchableOpacity onPress={() => router.push("/CreateStory")}>
+        <Ionicons name="add-circle" size={32} color="black" />
       </TouchableOpacity>
     </View>
   );
