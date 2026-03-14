@@ -1,61 +1,33 @@
+import { FlatList, StyleSheet, View } from "react-native";
+import FeedCard from "../components/FeedCard";
+import Header from "../components/Header";
+import SearchBar from "../components/SearchBar";
+import StoryList from "../components/StoryList";
+import { posts } from "../data/posts";
 
-import { useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const feedPage = () => {
-  const router = useRouter();
-  
+export default function Feed() {
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Feed</Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backButton}>Back</Text>
-        </TouchableOpacity>
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Feed</Text>
-        <Text>Feed will be displayed here.</Text>
-      </ScrollView>
-      
+      <Header />
+
+      <SearchBar />
+
+      <StoryList />
+
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => <FeedCard post={item} />}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  backButton: {
-    fontSize: 16,
-    color: '#007AFF',
-  },
-  content: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    backgroundColor: "#fff",
+    padding: 15,
   },
 });
-
-export default feedPage;
