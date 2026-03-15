@@ -122,8 +122,28 @@ const MyItineraries = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Date not set';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long' });
+    
+    // Try to parse the date
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      
+      const day = date.getDate();
+      const month = date.toLocaleString('default', { month: 'long' });
+      return `${day}${getDaySuffix(day)} of ${month}`;
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const getDaySuffix = (day) => {
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
   };
 
   const getStatusColor = (status) => {
@@ -142,22 +162,92 @@ const MyItineraries = () => {
     }
   };
 
-  const ItineraryCard = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => {
-        setSelectedItinerary(item);
-        setModalVisible(true);
-      }}
-    >
-      {/* Card Header with Emoji and Delete Button */}
-      <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderLeft}>
-          <Text style={styles.cardHeaderEmoji}>🏠️</Text>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.destination || 'Annual Office Trip'}
+  const ItineraryCard = ({ item }) => {
+    // Format the date nicely
+    const formattedDate = formatDate(item.startDate);
+    
+    // Get emoji based on destination or use default
+    const getEmoji = () => {
+      const dest = (item.destination || '').toLowerCase();
+      if (dest.includes('beach')) return '🏖️';
+      if (dest.includes('mountain')) return '⛰️';
+      if (dest.includes('waterfall')) return '🌊';
+      if (dest.includes('city')) return '🏙️';
+      if (dest.includes('adventure')) return '🧗';
+      return '🏠️';
+    };
+
+    return (
+      <View style={styles.card}>
+        {/* Card Content - Clickable */}
+        <TouchableOpacity 
+          style={styles.cardContent}
+          onPress={() => {
+            setSelectedItinerary(item);
+            setModalVisible(true);
+          }}
+          activeOpacity={0.7}
+        >
+          {/* Date and Emoji Header */}
+          <View style={styles.cardDateHeader}>
+            <Text style={styles.cardDate}>
+              {formattedDate}
+            </Text>
+            <Text style={styles.cardHeaderEmoji}>{getEmoji()}</Text>
+          </View>
+
+          {/* Location Title */}
+          <Text style={styles.cardLocationTitle}>
+            {item.planningLocation || 'Bopath Alla Waterfall'}
           </Text>
+
+          {/* Full Address */}
+          <Text style={styles.cardAddress} numberOfLines={2}>
+            {item.province || 'Agalwatte village, Kuruwita, in the Ratnapura District of Sri Lanka.'}
+          </Text>
+
+          {/* Start Time Row */}
+          <View style={styles.startTimeRow}>
+            <Text style={styles.startTimeLabel}>Start By :</Text>
+            <Text style={styles.startTimeValue}>{item.startedTime || '6.00 A.M'}</Text>
+          </View>
+
+          {/* Approve Button */}
+          <TouchableOpacity style={styles.approveButton}>
+            <Text style={styles.approveButtonText}>Approve the Travel Guide</Text>
+          </TouchableOpacity>
+
+          {/* See More Button */}
+          <TouchableOpacity 
+            style={styles.seeMoreButton}
+            onPress={() => {
+              setSelectedItinerary(item);
+              setModalVisible(true);
+            }}
+          >
+            <Text style={styles.seeMoreButtonText}>See More</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Ionicons name="heart-outline" size={18} color="#FF6B6B" />
+            <Text style={styles.statText}>1.2 k Reps</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="chatbubble-outline" size={18} color="#4A90E2" />
+            <Text style={styles.statText}>1.75 k Comments</Text>
+          </View>
         </View>
+
+        {/* WhatsApp Connect */}
+        <TouchableOpacity style={styles.whatsappContainer} onPress={() => handleShare(item)}>
+          <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+          <Text style={styles.whatsappText}>Connect to the WhatsApp</Text>
+        </TouchableOpacity>
+
+        {/* Delete Button (overlay) */}
         <TouchableOpacity 
           onPress={() => handleDeleteItinerary(item.id)}
           style={styles.deleteButton}
@@ -165,71 +255,8 @@ const MyItineraries = () => {
           <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
         </TouchableOpacity>
       </View>
-
-      {/* Card Image */}
-      {item.image ? (
-        <Image source={{ uri: item.image }} style={styles.cardImage} />
-      ) : (
-        <View style={[styles.cardImage, styles.placeholderImage]}>
-          <Ionicons name="image-outline" size={40} color="#ccc" />
-        </View>
-      )}
-
-      {/* Date */}
-      <Text style={styles.cardDate}>
-        {formatDate(item.startDate || '12th of October')}
-      </Text>
-
-      {/* Location Title */}
-      <Text style={styles.cardLocationTitle}>
-        {item.planningLocation || 'Ravana Waterfall'}
-      </Text>
-
-      {/* Full Address */}
-      <Text style={styles.cardAddress} numberOfLines={2}>
-        {item.province || 'Ravana Falls, Ella-Wellawaya Road, Ella, Uva Province, Sri Lanka'}
-      </Text>
-
-      {/* Start Time Row */}
-      <View style={styles.startTimeRow}>
-        <Text style={styles.startTimeLabel}>Start By :</Text>
-        <Text style={styles.startTimeValue}>{item.startedTime || '7.00 A.M'}</Text>
-      </View>
-
-      {/* Status Badge (if exists) */}
-      {item.currentStatus && (
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.currentStatus) }]}>
-          <Text style={styles.statusText}>{item.currentStatus}</Text>
-        </View>
-      )}
-
-      {/* Request/Approve Button */}
-      <TouchableOpacity style={styles.requestButton}>
-        <Text style={styles.requestButtonText}>Request for Travel Guide</Text>
-      </TouchableOpacity>
-
-      {/* Stats Row */}
-      <View style={styles.statsRow}>
-        <View style={styles.statItem}>
-          <Ionicons name="heart-outline" size={18} color="#FF6B6B" />
-          <Text style={styles.statText}>1.2k React</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Ionicons name="chatbubble-outline" size={18} color="#4A90E2" />
-          <Text style={styles.statText}>1.75k Comment</Text>
-        </View>
-      </View>
-
-      {/* Divider */}
-      <View style={styles.divider} />
-
-      {/* WhatsApp Connect */}
-      <TouchableOpacity style={styles.whatsappContainer} onPress={() => handleShare(item)}>
-        <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-        <Text style={styles.whatsappText}>Connect to the WhatsApp</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const ItineraryDetailModal = () => (
     <Modal
@@ -517,7 +544,7 @@ const MyItineraries = () => {
               ) : 
               EmptyState
             }
-            scrollEnabled={false} // Disable scrolling inside FlatList since parent ScrollView handles it
+            scrollEnabled={false}
           />
         </ScrollView>
       </SafeAreaView>
@@ -692,63 +719,41 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    position: 'relative',
   },
-  cardHeader: {
+  cardContent: {
+    width: '100%',
+  },
+  cardDateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  cardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  cardHeaderEmoji: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    flex: 1,
-  },
-  deleteButton: {
-    padding: 5,
-  },
-  cardImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: '#f5f5f5',
-  },
-  placeholderImage: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   cardDate: {
     fontSize: 14,
     color: '#666666',
-    marginBottom: 8,
+    fontWeight: '500',
+  },
+  cardHeaderEmoji: {
+    fontSize: 20,
   },
   cardLocationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#000000',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   cardAddress: {
     fontSize: 13,
     color: '#8E8E93',
-    marginBottom: 8,
+    marginBottom: 12,
     lineHeight: 18,
   },
   startTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
   },
   startTimeLabel: {
     fontSize: 14,
@@ -760,34 +765,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#007AFF',
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-  },
-  statusText: {
-    fontSize: 10,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  requestButton: {
+  approveButton: {
     backgroundColor: '#F2F2F7',
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
     alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  approveButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  seeMoreButton: {
     marginBottom: 16,
   },
-  requestButtonText: {
+  seeMoreButtonText: {
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   statsRow: {
     flexDirection: 'row',
     marginBottom: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: 12,
   },
   statItem: {
     flexDirection: 'row',
@@ -799,11 +804,6 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginLeft: 4,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#F0F0F0',
-    marginBottom: 12,
-  },
   whatsappContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -813,6 +813,13 @@ const styles = StyleSheet.create({
     color: '#25D366',
     fontWeight: '500',
     marginLeft: 8,
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    padding: 5,
   },
   emptyContainer: {
     alignItems: 'center',
