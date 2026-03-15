@@ -199,6 +199,13 @@ export default function CreateStory() {
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setModalVisible(false)}
+            >
+              <Text style={styles.closeText}>✕</Text>
+            </TouchableOpacity>
+
             <View style={styles.userRow}>
               <Image
                 source={require("../../assets/images/default-avatar.png")}
@@ -241,6 +248,12 @@ export default function CreateStory() {
       <Modal visible={showSuccessModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setModalType(null)}
+            >
+              <Text style={styles.closeText}>✕</Text>
+            </TouchableOpacity>
             <Text
               style={{
                 color: "#2b8aa3",
