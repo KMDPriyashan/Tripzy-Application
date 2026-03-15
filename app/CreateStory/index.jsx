@@ -1,7 +1,7 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Image,
   Modal,
@@ -12,15 +12,35 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { savePost, updatePost } from "../utils/postStorage";
 
 export default function CreateStory() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+
   const [image, setImage] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+
+  const [postId, setPostId] = useState(null); // For updates
+  const [isUpdate, setIsUpdate] = useState(false); // Determines mode
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  // Pre-fill data if editing
+  useEffect(() => {
+    if (params?.id && params?.data) {
+      const postData = JSON.parse(params.data); // Feed should pass post as JSON string
+      setTitle(postData.title || "");
+      setDescription(postData.description || "");
+      setLocation(postData.location || "");
+      setImage(postData.image || null);
+      setPostId(postData.id);
+      setIsUpdate(true);
+    }
+  }, [params]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -34,6 +54,48 @@ export default function CreateStory() {
     }
   };
 
+  const handleSaveStory = async () => {
+    if (!title && !description && !image) {
+      alert("Please add a title, description, or image!");
+      return;
+    }
+
+    if (isUpdate) {
+      // Update existing post
+      const updatedPost = {
+        id: postId,
+        user: "Inu Jayasinghe",
+        image,
+        title,
+        description,
+        location,
+        reacts: 0,
+        comments: 0,
+        shares: 0,
+      };
+
+      await updatePost(updatedPost);
+      setModalVisible(false);
+      setShowSuccessModal(true);
+    } else {
+      // Create new post
+      const newPost = {
+        id: Date.now(),
+        user: "Inu Jayasinghe",
+        image,
+        title,
+        description,
+        location,
+        reacts: 0,
+        comments: 0,
+        shares: 0,
+      };
+      await savePost(newPost);
+      setModalVisible(false);
+      router.push("/app-pages/feed/?uploading=true");
+    }
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
@@ -41,7 +103,6 @@ export default function CreateStory() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {/* Top Image */}
         <Image
           source={
             image
@@ -52,19 +113,15 @@ export default function CreateStory() {
           resizeMode="cover"
         />
 
-        {/* Headings */}
         <Text style={styles.mainTitle}>Wander & Discover</Text>
         <Text style={styles.subTitle}>Every journey begins with a story</Text>
 
-        {/* Form */}
         <View style={styles.form}>
           <TextInput
             placeholder="Caption"
             placeholderTextColor="#aaa"
             style={styles.input}
           />
-
-          {/*Upload Image */}
           <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
             <Ionicons name="image-outline" size={24} color="white" />
             <Text style={styles.uploadText}>Upload your image</Text>
@@ -121,7 +178,6 @@ export default function CreateStory() {
               <Ionicons name="add" size={24} color="white" />
             </TouchableOpacity>
           </View>
-
           <View style={styles.warning}>
             <MaterialIcons name="warning" size={24} color="orange" />
             <Text style={styles.warningText}>Please enter one by one</Text>
@@ -133,30 +189,26 @@ export default function CreateStory() {
           onPress={() => setModalVisible(true)}
         >
           <Ionicons name="send" size={24} color="white" />
-          <Text style={styles.submitText}>Create Story</Text>
+          <Text style={styles.submitText}>
+            {isUpdate ? "Update Story" : "Create Story"}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* POPUP MODAL */}
-
+      {/* Preview Modal */}
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            {/* User Info */}
             <View style={styles.userRow}>
               <Image
                 source={require("../../assets/images/default-avatar.png")}
-                /*After creating profile page use this - source={{ uri: user.profileImage }}*/
                 style={styles.profilePic}
               />
-
               <View>
                 <Text style={styles.username}>Inu Jayasinghe</Text>
                 <Text style={styles.descText}>{description}</Text>
               </View>
             </View>
-
-            {/* Story Preview Box */}
 
             <View style={styles.storyBox}>
               <Image
@@ -167,23 +219,56 @@ export default function CreateStory() {
                 }
                 style={styles.storyImage}
               />
-
               <View style={{ marginLeft: 10 }}>
                 <Text style={styles.storyTitle}>{title}</Text>
                 <Text style={styles.storyLocation}>{location}</Text>
               </View>
             </View>
 
-            {/* Publish Button */}
-
             <TouchableOpacity
               style={styles.publishButton}
+              onPress={handleSaveStory}
+            >
+              <Text style={styles.publishText}>
+                {isUpdate ? "Update Story" : "Publish your story"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/*Update successfull msg*/}
+      <Modal visible={showSuccessModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text
+              style={{
+                color: "#2b8aa3",
+                fontSize: 18,
+                fontWeight: "bold",
+                textAlign: "center",
+                marginBottom: 10,
+              }}
+            >
+              Updated Successfully
+            </Text>
+            <Text
+              style={{ textAlign: "center", color: "#555", marginBottom: 20 }}
+            >
+              Your story has been updated!
+            </Text>
+            <TouchableOpacity
+              style={{ alignSelf: "flex-end" }}
               onPress={() => {
-                setModalVisible(false);
+                setShowSuccessModal(false);
                 router.push("/app-pages/feed/?uploading=true");
               }}
             >
-              <Text style={styles.publishText}>Publish your story</Text>
+              <Text
+                style={{ fontWeight: "bold", fontSize: 16, color: "black" }}
+              >
+                OK
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
