@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing';
 import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
+  Dimensions,
   FlatList,
   Image,
   Modal,
@@ -18,6 +19,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ViewShot from 'react-native-view-shot';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MyItineraries = () => {
   const router = useRouter();
@@ -126,7 +129,7 @@ const MyItineraries = () => {
       // Capture the view as an image
       const uri = await viewShotRef.current.capture({
         format: 'png',
-        quality: 0.9,
+        quality: 0.95,
         result: 'tmpfile',
       });
 
@@ -139,7 +142,7 @@ const MyItineraries = () => {
         await Sharing.shareAsync(uri, {
           mimeType: 'image/png',
           dialogTitle: `Share my trip to ${sharingItinerary.destination}`,
-          UTI: 'image.png', // for iOS
+          UTI: 'image.png',
         });
       } else {
         // Fallback to text sharing if sharing not available
@@ -272,7 +275,7 @@ ${packingText}
     }
   };
 
-  // Share Modal Component
+  // Updated Share Modal Component with better image layout
   const ShareModal = () => (
     <Modal
       animationType="fade"
@@ -287,78 +290,89 @@ ${packingText}
           
           {/* Hidden view that gets captured */}
           {sharingItinerary && (
-            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }}>
+            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.95 }}>
               <View style={styles.shareCard}>
-                {/* Background Image */}
+                {/* Full Screen Background Image */}
                 {sharingItinerary.image ? (
                   <Image 
                     source={{ uri: sharingItinerary.image }} 
                     style={styles.shareBackgroundImage}
-                    blurRadius={3}
+                    resizeMode="cover"
                   />
                 ) : (
-                  <View style={[styles.shareBackgroundImage, styles.sharePlaceholderBackground]} />
+                  <View style={[styles.shareBackgroundImage, styles.sharePlaceholderBackground]}>
+                    <Ionicons name="image-outline" size={60} color="#fff" />
+                  </View>
                 )}
                 
-                {/* Dark Overlay for better text readability */}
-                <View style={styles.shareOverlay} />
+                {/* Gradient Overlay for better text readability */}
+                <View style={styles.shareGradient} />
                 
-                {/* Content */}
+                {/* Content Container */}
                 <View style={styles.shareContent}>
-                  {/* Header with Emoji */}
-                  <View style={styles.shareHeader}>
-                    <Text style={styles.shareDate}>
-                      {formatDate(sharingItinerary.startDate)}
-                    </Text>
-                    <Text style={styles.shareEmoji}>
-                      {getEmojiForDestination(sharingItinerary.destination)}
-                    </Text>
-                  </View>
-
-                  {/* Destination */}
-                  <Text style={styles.shareDestination}>
-                    {sharingItinerary.planningLocation || 'Amazing Destination'}
-                  </Text>
-                  
-                  {/* Location */}
-                  <Text style={styles.shareLocation}>
-                    {sharingItinerary.province || 'Sri Lanka'}
-                  </Text>
-
-                  {/* Time */}
-                  <View style={styles.shareTimeRow}>
-                    <Text style={styles.shareTimeLabel}>Start By:</Text>
-                    <Text style={styles.shareTimeValue}>
-                      {sharingItinerary.startedTime || '6.00 A.M'}
-                    </Text>
-                  </View>
-
-                  {/* Divider */}
-                  <View style={styles.shareDivider} />
-
-                  {/* Stats */}
-                  <View style={styles.shareStats}>
-                    <View style={styles.shareStat}>
-                      <Ionicons name="heart" size={20} color="#FF6B6B" />
-                      <Text style={styles.shareStatText}>1.2k</Text>
+                  {/* Top Section with Date and Emoji */}
+                  <View style={styles.shareTopSection}>
+                    <View style={styles.shareDateBadge}>
+                      <Ionicons name="calendar" size={14} color="#fff" />
+                      <Text style={styles.shareDate}>
+                        {formatDate(sharingItinerary.startDate)}
+                      </Text>
                     </View>
-                    <View style={styles.shareStat}>
-                      <Ionicons name="chatbubble" size={20} color="#4A90E2" />
-                      <Text style={styles.shareStatText}>1.75k</Text>
+                    <View style={styles.shareEmojiBadge}>
+                      <Text style={styles.shareEmoji}>
+                        {getEmojiForDestination(sharingItinerary.destination)}
+                      </Text>
                     </View>
                   </View>
 
-                  {/* Caption (if exists) */}
-                  {sharingItinerary.postCaption && (
-                    <Text style={styles.shareCaption} numberOfLines={2}>
-                      "{sharingItinerary.postCaption}"
+                  {/* Main Content - Centered */}
+                  <View style={styles.shareMainContent}>
+                    <Text style={styles.shareDestination}>
+                      {sharingItinerary.planningLocation || 'Amazing Destination'}
                     </Text>
-                  )}
+                    
+                    <Text style={styles.shareLocation}>
+                      <Ionicons name="location" size={14} color="#FFD700" /> {sharingItinerary.province || 'Sri Lanka'}
+                    </Text>
 
-                  {/* App Branding */}
-                  <View style={styles.shareBranding}>
-                    <Text style={styles.shareBrandingText}>Travel Planner</Text>
-                    <Text style={styles.shareBrandingSub}>Plan Your Perfect Journey</Text>
+                    <View style={styles.shareTimeBadge}>
+                      <Ionicons name="time" size={14} color="#FFD700" />
+                      <Text style={styles.shareTimeLabel}> Starts at </Text>
+                      <Text style={styles.shareTimeValue}>
+                        {sharingItinerary.startedTime || '6.00 A.M'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Bottom Section with Stats and Caption */}
+                  <View style={styles.shareBottomSection}>
+                    {/* Stats Row */}
+                    <View style={styles.shareStats}>
+                      <View style={styles.shareStat}>
+                        <Ionicons name="heart" size={16} color="#FF6B6B" />
+                        <Text style={styles.shareStatText}>1.2k</Text>
+                      </View>
+                      <View style={styles.shareStat}>
+                        <Ionicons name="chatbubble" size={16} color="#4A90E2" />
+                        <Text style={styles.shareStatText}>1.75k</Text>
+                      </View>
+                    </View>
+
+                    {/* Caption (if exists) */}
+                    {sharingItinerary.postCaption && (
+                      <View style={styles.shareCaptionContainer}>
+                        <Text style={styles.shareCaptionLabel}>Caption</Text>
+                        <Text style={styles.shareCaption} numberOfLines={2}>
+                          "{sharingItinerary.postCaption}"
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* App Branding */}
+                    <View style={styles.shareBranding}>
+                      <Text style={styles.shareBrandingText}>Travel Planner</Text>
+                      <Text style={styles.shareBrandingSub}>Plan Your Perfect Journey</Text>
+                    </View>
                   </View>
                 </View>
               </View>
@@ -1375,8 +1389,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   shareCard: {
-    width: 300,
-    height: 400,
+    width: SCREEN_WIDTH * 0.8,
+    height: SCREEN_WIDTH * 1.2,
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
@@ -1392,125 +1406,137 @@ const styles = StyleSheet.create({
   },
   sharePlaceholderBackground: {
     backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  shareOverlay: {
+  shareGradient: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   shareContent: {
     flex: 1,
     padding: 20,
     justifyContent: 'space-between',
   },
-  shareHeader: {
+  shareTopSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  shareDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
   shareDate: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    marginLeft: 4,
+  },
+  shareEmojiBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shareEmoji: {
-    fontSize: 30,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontSize: 22,
+  },
+  shareMainContent: {
+    alignItems: 'center',
   },
   shareDestination: {
     color: '#fff',
     fontSize: 28,
     fontWeight: '700',
-    marginTop: 'auto',
+    textAlign: 'center',
+    marginBottom: 8,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
   shareLocation: {
     color: '#fff',
-    fontSize: 16,
-    marginBottom: 10,
+    fontSize: 14,
+    marginBottom: 12,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  shareTimeRow: {
+  shareTimeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 25,
   },
   shareTimeLabel: {
     color: '#fff',
-    fontSize: 14,
-    marginRight: 5,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    fontSize: 12,
+    marginHorizontal: 2,
   },
   shareTimeValue: {
     color: '#FFD700',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
-  shareDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginBottom: 15,
+  shareBottomSection: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 15,
+    padding: 15,
   },
   shareStats: {
     flexDirection: 'row',
-    marginBottom: 15,
+    justifyContent: 'space-around',
+    marginBottom: 12,
   },
   shareStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 20,
   },
   shareStatText: {
     color: '#fff',
     fontSize: 14,
     marginLeft: 5,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+  },
+  shareCaptionContainer: {
+    marginBottom: 12,
+  },
+  shareCaptionLabel: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 10,
+    marginBottom: 2,
   },
   shareCaption: {
     color: '#fff',
     fontSize: 12,
     fontStyle: 'italic',
-    marginBottom: 15,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
   shareBranding: {
     alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    paddingTop: 12,
   },
   shareBrandingText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
   },
   shareBrandingSub: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 10,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 });
 
