@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import * as Sharing from 'expo-sharing';
+import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -16,6 +17,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ViewShot from 'react-native-view-shot';
 
 const MyItineraries = () => {
   const router = useRouter();
@@ -25,6 +27,9 @@ const MyItineraries = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [sharingItinerary, setSharingItinerary] = useState(null);
+  const viewShotRef = useRef(null);
 
   // Bottom navigation items
   const navItems = [
@@ -104,26 +109,131 @@ const MyItineraries = () => {
     );
   };
 
+  // Enhanced share function with image capture
   const handleShare = async (itinerary) => {
-    try {
-      const message = `Check out my trip to ${itinerary.destination}!\n\n` +
-        `📍 From: ${itinerary.startDate} to ${itinerary.endDate}\n` +
-        `💰 Budget: $${itinerary.budgetEstimate?.total || 0}\n` +
-        `📍 Location: ${itinerary.planningLocation}, ${itinerary.province}`;
+    setSharingItinerary(itinerary);
+    setShareModalVisible(true);
+  };
 
-      await Share.share({
-        message,
-        title: `My Trip to ${itinerary.destination}`,
+  const captureAndShare = async () => {
+    try {
+      if (!viewShotRef.current) {
+        Alert.alert('Error', 'Could not capture image');
+        setShareModalVisible(false);
+        return;
+      }
+
+      // Capture the view as an image
+      const uri = await viewShotRef.current.capture({
+        format: 'png',
+        quality: 0.9,
+        result: 'tmpfile',
       });
+
+      setShareModalVisible(false);
+
+      // Check if sharing is available
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: `Share my trip to ${sharingItinerary.destination}`,
+          UTI: 'image.png', // for iOS
+        });
+      } else {
+        // Fallback to text sharing if sharing not available
+        const message = await generateShareMessage(sharingItinerary);
+        await Share.share({
+          message,
+          title: `My Trip to ${sharingItinerary.destination || 'Amazing Destination'}`,
+        });
+      }
     } catch (error) {
-      console.error('Error sharing:', error);
+      console.error('Error sharing image:', error);
+      Alert.alert('Error', 'Failed to share. Please try again.');
+      setShareModalVisible(false);
     }
+  };
+
+  // Generate text message fallback
+  const generateShareMessage = async (itinerary) => {
+    const startDate = formatDate(itinerary.startDate);
+    const endDate = formatDate(itinerary.endDate);
+    
+    const getTypeEmoji = () => {
+      const dest = (itinerary.destination || '').toLowerCase();
+      if (dest.includes('beach')) return '🏖️';
+      if (dest.includes('mountain')) return '⛰️';
+      if (dest.includes('waterfall')) return '🌊';
+      if (dest.includes('city')) return '🏙️';
+      if (dest.includes('adventure')) return '🧗';
+      return '✈️';
+    };
+
+    let budgetText = '';
+    if (itinerary.budgetBreakdown) {
+      budgetText = `
+💰 BUDGET BREAKDOWN:
+• Transport: $${itinerary.budgetBreakdown.transport?.cost || 0}
+• Accommodation: $${itinerary.budgetBreakdown.accommodation?.cost || 0}
+• Food: $${itinerary.budgetBreakdown.food?.cost || 0}
+• Activities: $${itinerary.budgetBreakdown.activities?.cost || 0}
+━━━━━━━━━━━━━━━━━━━━
+• TOTAL: $${itinerary.budgetBreakdown.total?.toFixed(2) || 0}`;
+    }
+
+    let packingText = '';
+    if (itinerary.selectedPackingItems && itinerary.selectedPackingItems.length > 0) {
+      const items = itinerary.selectedPackingItems.slice(0, 5).join(' • ');
+      packingText = `
+🎒 PACKING ESSENTIALS:
+${items}${itinerary.selectedPackingItems.length > 5 ? ` +${itinerary.selectedPackingItems.length - 5} more` : ''}`;
+    }
+
+    const getStatusEmoji = (status) => {
+      switch (status?.toLowerCase()) {
+        case 'planned': return '📅';
+        case 'in progress': return '🔄';
+        case 'completed': return '✅';
+        default: return '📍';
+      }
+    };
+
+    return `
+━━━━━━━━━━━━━━━━━━━━
+   ${getTypeEmoji()}  TRAVEL ADVENTURE  ${getTypeEmoji()}
+━━━━━━━━━━━━━━━━━━━━
+
+📍 ${itinerary.destination?.toUpperCase() || 'EXCITING DESTINATION'}
+
+${itinerary.planningLocation ? `✨ ${itinerary.planningLocation}` : ''}
+${itinerary.province ? `📍 ${itinerary.province}` : ''}
+
+━━━━━━━━━━━━━━━━━━━━
+📅 TRIP DETAILS:
+━━━━━━━━━━━━━━━━━━━━
+• Start: ${startDate} ${itinerary.startedTime ? `at ${itinerary.startedTime}` : ''}
+• End:   ${endDate}
+• Status: ${getStatusEmoji(itinerary.currentStatus)} ${itinerary.currentStatus || 'Planned'}
+
+${itinerary.postCaption ? `
+💭 "${itinerary.postCaption}"
+` : ''}
+${budgetText}
+${packingText}
+
+━━━━━━━━━━━━━━━━━━━━
+✨ Plan your own adventure with Travel Planner!
+📱 Download the app and start your journey today!
+━━━━━━━━━━━━━━━━━━━━
+
+#TravelPlanner #Adventure #${itinerary.destination?.replace(/\s+/g, '') || 'Travel'} #Wanderlust`;
   };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Date not set';
     
-    // Try to parse the date
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return dateString;
@@ -162,11 +272,130 @@ const MyItineraries = () => {
     }
   };
 
+  // Share Modal Component
+  const ShareModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={shareModalVisible}
+      onRequestClose={() => setShareModalVisible(false)}
+    >
+      <View style={styles.shareModalOverlay}>
+        <View style={styles.shareModalContent}>
+          <Text style={styles.shareModalTitle}>Creating Share Image...</Text>
+          <Text style={styles.shareModalSubtitle}>Please wait a moment</Text>
+          
+          {/* Hidden view that gets captured */}
+          {sharingItinerary && (
+            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }}>
+              <View style={styles.shareCard}>
+                {/* Background Image */}
+                {sharingItinerary.image ? (
+                  <Image 
+                    source={{ uri: sharingItinerary.image }} 
+                    style={styles.shareBackgroundImage}
+                    blurRadius={3}
+                  />
+                ) : (
+                  <View style={[styles.shareBackgroundImage, styles.sharePlaceholderBackground]} />
+                )}
+                
+                {/* Dark Overlay for better text readability */}
+                <View style={styles.shareOverlay} />
+                
+                {/* Content */}
+                <View style={styles.shareContent}>
+                  {/* Header with Emoji */}
+                  <View style={styles.shareHeader}>
+                    <Text style={styles.shareDate}>
+                      {formatDate(sharingItinerary.startDate)}
+                    </Text>
+                    <Text style={styles.shareEmoji}>
+                      {getEmojiForDestination(sharingItinerary.destination)}
+                    </Text>
+                  </View>
+
+                  {/* Destination */}
+                  <Text style={styles.shareDestination}>
+                    {sharingItinerary.planningLocation || 'Amazing Destination'}
+                  </Text>
+                  
+                  {/* Location */}
+                  <Text style={styles.shareLocation}>
+                    {sharingItinerary.province || 'Sri Lanka'}
+                  </Text>
+
+                  {/* Time */}
+                  <View style={styles.shareTimeRow}>
+                    <Text style={styles.shareTimeLabel}>Start By:</Text>
+                    <Text style={styles.shareTimeValue}>
+                      {sharingItinerary.startedTime || '6.00 A.M'}
+                    </Text>
+                  </View>
+
+                  {/* Divider */}
+                  <View style={styles.shareDivider} />
+
+                  {/* Stats */}
+                  <View style={styles.shareStats}>
+                    <View style={styles.shareStat}>
+                      <Ionicons name="heart" size={20} color="#FF6B6B" />
+                      <Text style={styles.shareStatText}>1.2k</Text>
+                    </View>
+                    <View style={styles.shareStat}>
+                      <Ionicons name="chatbubble" size={20} color="#4A90E2" />
+                      <Text style={styles.shareStatText}>1.75k</Text>
+                    </View>
+                  </View>
+
+                  {/* Caption (if exists) */}
+                  {sharingItinerary.postCaption && (
+                    <Text style={styles.shareCaption} numberOfLines={2}>
+                      "{sharingItinerary.postCaption}"
+                    </Text>
+                  )}
+
+                  {/* App Branding */}
+                  <View style={styles.shareBranding}>
+                    <Text style={styles.shareBrandingText}>Travel Planner</Text>
+                    <Text style={styles.shareBrandingSub}>Plan Your Perfect Journey</Text>
+                  </View>
+                </View>
+              </View>
+            </ViewShot>
+          )}
+
+          <TouchableOpacity 
+            style={styles.shareModalButton}
+            onPress={captureAndShare}
+          >
+            <Text style={styles.shareModalButtonText}>Continue Sharing</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.shareModalCancel}
+            onPress={() => setShareModalVisible(false)}
+          >
+            <Text style={styles.shareModalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const getEmojiForDestination = (destination) => {
+    const dest = (destination || '').toLowerCase();
+    if (dest.includes('beach')) return '🏖️';
+    if (dest.includes('mountain')) return '⛰️';
+    if (dest.includes('waterfall')) return '🌊';
+    if (dest.includes('city')) return '🏙️';
+    if (dest.includes('adventure')) return '🧗';
+    return '✈️';
+  };
+
   const ItineraryCard = ({ item }) => {
-    // Format the date nicely
     const formattedDate = formatDate(item.startDate);
     
-    // Get emoji based on destination or use default
     const getEmoji = () => {
       const dest = (item.destination || '').toLowerCase();
       if (dest.includes('beach')) return '🏖️';
@@ -241,10 +470,13 @@ const MyItineraries = () => {
           </View>
         </View>
 
-        {/* WhatsApp Connect */}
-        <TouchableOpacity style={styles.whatsappContainer} onPress={() => handleShare(item)}>
-          <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
-          <Text style={styles.whatsappText}>Connect to the WhatsApp</Text>
+        {/* Share Button - Updated to use image sharing */}
+        <TouchableOpacity 
+          style={styles.whatsappContainer} 
+          onPress={() => handleShare(item)}
+        >
+          <Ionicons name="share-social" size={20} color="#25D366" />
+          <Text style={styles.whatsappText}>Share This Adventure</Text>
         </TouchableOpacity>
 
         {/* Delete Button (overlay) */}
@@ -406,8 +638,8 @@ const MyItineraries = () => {
                   {/* Action Buttons */}
                   <View style={styles.actionButtons}>
                     <TouchableOpacity style={styles.whatsappButton} onPress={() => handleShare(selectedItinerary)}>
-                      <Ionicons name="logo-whatsapp" size={18} color="#fff" />
-                      <Text style={styles.whatsappButtonText}>Connect to WhatsApp</Text>
+                      <Ionicons name="share-social" size={18} color="#fff" />
+                      <Text style={styles.whatsappButtonText}>Share This Adventure</Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity 
@@ -551,6 +783,9 @@ const MyItineraries = () => {
 
       {/* Detail Modal */}
       <ItineraryDetailModal />
+
+      {/* Share Modal */}
+      <ShareModal />
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
@@ -1092,6 +1327,190 @@ const styles = StyleSheet.create({
   navTextActive: {
     color: '#007AFF',
     fontWeight: '500',
+  },
+  // Share Modal Styles
+  shareModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    alignItems: 'center',
+  },
+  shareModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 10,
+  },
+  shareModalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  shareModalButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    marginBottom: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  shareModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  shareModalCancel: {
+    paddingVertical: 10,
+  },
+  shareModalCancelText: {
+    color: '#999',
+    fontSize: 14,
+  },
+  shareCard: {
+    width: 300,
+    height: 400,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  shareBackgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  sharePlaceholderBackground: {
+    backgroundColor: '#4A90E2',
+  },
+  shareOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  shareContent: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  shareHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  shareDate: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareEmoji: {
+    fontSize: 30,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareDestination: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '700',
+    marginTop: 'auto',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  shareLocation: {
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  shareTimeLabel: {
+    color: '#fff',
+    fontSize: 14,
+    marginRight: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareTimeValue: {
+    color: '#FFD700',
+    fontSize: 16,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    marginBottom: 15,
+  },
+  shareStats: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  shareStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  shareStatText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 5,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareCaption: {
+    color: '#fff',
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 15,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareBranding: {
+    alignItems: 'center',
+  },
+  shareBrandingText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  shareBrandingSub: {
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
 
