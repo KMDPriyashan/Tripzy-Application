@@ -1,14 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   Image,
   Modal,
+  PanResponder,
   ScrollView,
   Share,
   StyleSheet,
@@ -24,6 +26,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MyItineraries = () => {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [itineraries, setItineraries] = useState([]);
   const [filteredItineraries, setFilteredItineraries] = useState([]);
   const [selectedItinerary, setSelectedItinerary] = useState(null);
@@ -32,6 +35,11 @@ const MyItineraries = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [sharingItinerary, setSharingItinerary] = useState(null);
+  const [highlightedPlanId, setHighlightedPlanId] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const timeoutRef = useRef(null);
   const viewShotRef = useRef(null);
 
   // Bottom navigation items
@@ -44,6 +52,40 @@ const MyItineraries = () => {
   ];
 
   const [activeTab, setActiveTab] = useState('Home');
+
+  // Pan responder for swipe to dismiss notification
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy < 0) {
+          slideAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy < -50) {
+          dismissNotification();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  // Check for highlighted plan from notification
+  useEffect(() => {
+    if (params.highlightPlan) {
+      setHighlightedPlanId(params.highlightPlan);
+      // Auto remove highlight after 3 seconds
+      setTimeout(() => {
+        setHighlightedPlanId(null);
+      }, 3000);
+    }
+  }, [params.highlightPlan]);
 
   // Load itineraries when screen comes into focus
   useFocusEffect(
@@ -62,6 +104,71 @@ const MyItineraries = () => {
       }
     } catch (error) {
       console.error('Error loading itineraries:', error);
+    }
+  };
+
+  // Show notification function
+  const showNotification = (type, title, message, data = {}) => {
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    setNotification({ type, title, message, data });
+    setNotificationVisible(true);
+
+    // Animate in
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+
+    // Auto dismiss after 5 seconds
+    timeoutRef.current = setTimeout(() => {
+      dismissNotification();
+    }, 5000);
+  };
+
+  const dismissNotification = () => {
+    Animated.timing(slideAnim, {
+      toValue: -100,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setNotificationVisible(false);
+      setNotification(null);
+    });
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+  };
+
+  const handleNotificationPress = () => {
+    if (notification?.data?.planId) {
+      dismissNotification();
+      // Highlight the plan
+      setHighlightedPlanId(notification.data.planId);
+      // Scroll to the plan (you can implement scrolling later)
+      setTimeout(() => {
+        setHighlightedPlanId(null);
+      }, 3000);
+    }
+  };
+
+  const getIconForType = (type) => {
+    switch (type) {
+      case 'success':
+        return { name: 'checkmark-circle', color: '#4CAF50' };
+      case 'plan':
+        return { name: 'map', color: '#007AFF' };
+      case 'budget':
+        return { name: 'wallet', color: '#FF9800' };
+      case 'packing':
+        return { name: 'bag', color: '#9C27B0' };
+      default:
+        return { name: 'notifications', color: '#007AFF' };
     }
   };
 
@@ -144,6 +251,14 @@ const MyItineraries = () => {
           dialogTitle: `Share my trip to ${sharingItinerary.destination}`,
           UTI: 'image.png',
         });
+        
+        // Show success notification
+        showNotification(
+          'success',
+          'Shared Successfully! 📤',
+          `Your trip to ${sharingItinerary.destination} has been shared`,
+          { planId: sharingItinerary.id }
+        );
       } else {
         // Fallback to text sharing if sharing not available
         const message = await generateShareMessage(sharingItinerary);
@@ -409,6 +524,7 @@ ${packingText}
 
   const ItineraryCard = ({ item }) => {
     const formattedDate = formatDate(item.startDate);
+    const isHighlighted = item.id === highlightedPlanId;
     
     const getEmoji = () => {
       const dest = (item.destination || '').toLowerCase();
@@ -421,7 +537,7 @@ ${packingText}
     };
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, isHighlighted && styles.highlightedCard]}>
         {/* Card Content - Clickable */}
         <TouchableOpacity 
           style={styles.cardContent}
@@ -694,6 +810,46 @@ ${packingText}
 
   return (
     <View style={styles.container}>
+      {/* Notification Component */}
+      {notificationVisible && notification && (
+        <Animated.View
+          style={[
+            styles.notificationContainer,
+            {
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+          {...panResponder.panHandlers}
+        >
+          <TouchableOpacity
+            style={styles.notificationContent}
+            onPress={handleNotificationPress}
+            activeOpacity={0.9}
+          >
+            <View style={[styles.notificationIcon, { backgroundColor: getIconForType(notification.type).color + '20' }]}>
+              <Ionicons 
+                name={getIconForType(notification.type).name} 
+                size={24} 
+                color={getIconForType(notification.type).color} 
+              />
+            </View>
+            
+            <View style={styles.notificationTextContainer}>
+              <Text style={styles.notificationTitle} numberOfLines={1}>
+                {notification.title}
+              </Text>
+              <Text style={styles.notificationMessage} numberOfLines={2}>
+                {notification.message}
+              </Text>
+            </View>
+
+            <TouchableOpacity onPress={dismissNotification} style={styles.notificationClose}>
+              <Ionicons name="close" size={20} color="#999" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       <SafeAreaView style={styles.safeArea}>
         <ScrollView 
           style={styles.scrollView}
@@ -969,6 +1125,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
     position: 'relative',
+  },
+  highlightedCard: {
+    borderColor: '#007AFF',
+    borderWidth: 2,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   cardContent: {
     width: '100%',
@@ -1341,6 +1505,55 @@ const styles = StyleSheet.create({
   navTextActive: {
     color: '#007AFF',
     fontWeight: '500',
+  },
+  // Notification Styles
+  notificationContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    paddingTop: 50,
+    paddingHorizontal: 16,
+  },
+  notificationContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  notificationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  notificationTextContainer: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  notificationMessage: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  notificationClose: {
+    padding: 6,
   },
   // Share Modal Styles
   shareModalOverlay: {

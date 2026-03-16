@@ -17,10 +17,12 @@ import {
 import 'react-native-get-random-values';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
+import { useNotification } from './context/NotificationContext.js'; // Add this import
 
 const CreatePlan = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { showNotification } = useNotification(); // Add this line
 
   // Initialize state with saved data from params if available
   const [destination, setDestination] = useState(params.savedDestination || '');
@@ -146,10 +148,12 @@ const CreatePlan = () => {
           total: budgetData.total
         });
 
-        Alert.alert(
-          'Budget Calculated',
-          `Total Estimated Budget: $${budgetData.total.toFixed(2)}`,
-          [{ text: 'OK' }]
+        // Show budget notification
+        showNotification(
+          'budget',
+          'Budget Calculated! 💰',
+          `Your trip budget is estimated at $${budgetData.total.toFixed(2)}`,
+          { budgetData }
         );
       } catch (e) {
         console.error('Error parsing budget data', e);
@@ -162,10 +166,11 @@ const CreatePlan = () => {
         const items = JSON.parse(params.selectedPackingItems);
         setSelectedPackingItems(items);
 
-        Alert.alert(
-          'Items Added',
-          `${items.length} item${items.length > 1 ? 's' : ''} added to your packing list!`,
-          [{ text: 'OK' }]
+        showNotification(
+          'packing',
+          'Packing List Ready! 🎒',
+          `${items.length} item${items.length > 1 ? 's' : ''} added to your packing list`,
+          { itemCount: items.length }
         );
       } catch (e) {
         console.error('Error parsing packing items', e);
@@ -191,6 +196,11 @@ const CreatePlan = () => {
 
     if (!result.canceled) {
       setSelectedImage(result.assets[0].uri);
+      showNotification(
+        'success',
+        'Image Selected 📸',
+        'Your image has been added to the plan'
+      );
     }
   };
 
@@ -204,7 +214,13 @@ const CreatePlan = () => {
     const total = accommodation + transportation + food + activities + miscellaneous;
     setBudgetEstimate({ ...budgetEstimate, total });
     setShowBudgetModal(false);
-    Alert.alert('Budget Calculated', `Total Estimated Budget: $${total.toFixed(2)}`);
+    
+    showNotification(
+      'budget',
+      'Budget Calculated! 💰',
+      `Total: $${total.toFixed(2)}`,
+      { total }
+    );
   };
 
   const savePlan = async () => {
@@ -250,6 +266,14 @@ const CreatePlan = () => {
       await AsyncStorage.setItem('travelPlans', JSON.stringify(plans));
 
       console.log('Saving plan:', planData);
+
+      // Show success notification
+      showNotification(
+        'plan',
+        'Plan Created! ✨',
+        `Your trip to ${destination} has been saved`,
+        { planId, destination }
+      );
 
       Alert.alert(
         'Success',
