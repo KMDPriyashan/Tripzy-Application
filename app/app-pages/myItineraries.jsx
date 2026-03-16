@@ -194,6 +194,36 @@ const MyItineraries = () => {
     setRefreshing(false);
   };
 
+  // Update function - navigate to createPlan with existing data
+  const handleUpdateItinerary = (item) => {
+    // Prepare the data to pass to createPlan
+    const planData = {
+      savedDestination: item.destination,
+      savedPostCaption: item.postCaption,
+      savedSelectedImage: item.image,
+      savedPlanningLocation: item.planningLocation,
+      savedStartedTime: item.startedTime,
+      savedProvince: item.province,
+      savedStartDate: item.startDate,
+      savedEndDate: item.endDate,
+      savedTripNotes: item.tripNotes,
+      savedCurrentStatus: item.currentStatus,
+      savedSelectedPackingItems: JSON.stringify(item.selectedPackingItems || []),
+      savedBudgetEstimate: JSON.stringify(item.budgetEstimate || {}),
+      savedShowBudgetSummary: item.budgetBreakdown ? 'true' : 'false',
+      savedBudgetBreakdown: JSON.stringify(item.budgetBreakdown || null),
+      isUpdating: 'true',
+      planId: item.id
+    };
+
+    // Navigate to createPlan with the data
+    router.push({
+      pathname: '/app-pages/createPlan',
+      params: planData
+    });
+  };
+
+  // Delete function
   const handleDeleteItinerary = (id) => {
     Alert.alert(
       'Delete Itinerary',
@@ -210,6 +240,14 @@ const MyItineraries = () => {
               setItineraries(updatedItineraries);
               setFilteredItineraries(updatedItineraries);
               Alert.alert('Success', 'Itinerary deleted successfully');
+              
+              // Show notification
+              showNotification(
+                'success',
+                'Deleted Successfully 🗑️',
+                'The itinerary has been removed',
+                {}
+              );
             } catch (error) {
               console.error('Error deleting itinerary:', error);
             }
@@ -600,22 +638,32 @@ ${packingText}
           </View>
         </View>
 
-        {/* Share Button - Updated to use image sharing */}
-        <TouchableOpacity 
-          style={styles.whatsappContainer} 
-          onPress={() => handleShare(item)}
-        >
-          <Ionicons name="share-social" size={20} color="#25D366" />
-          <Text style={styles.whatsappText}>Share This Adventure</Text>
-        </TouchableOpacity>
+        {/* Action Buttons Row */}
+        <View style={styles.actionButtonsRow}>
+          {/* Update Button */}
+          <TouchableOpacity 
+            style={styles.updateButton}
+            onPress={() => handleUpdateItinerary(item)}
+          >
+            <Text style={styles.updateButtonText}>UPDATE</Text>
+          </TouchableOpacity>
 
-        {/* Delete Button (overlay) */}
-        <TouchableOpacity 
-          onPress={() => handleDeleteItinerary(item.id)}
-          style={styles.deleteButton}
-        >
-          <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
-        </TouchableOpacity>
+          {/* Share Button */}
+          <TouchableOpacity 
+            style={styles.shareButton}
+            onPress={() => handleShare(item)}
+          >
+            <Text style={styles.shareButtonText}>SHARE</Text>
+          </TouchableOpacity>
+
+          {/* Delete Button */}
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={() => handleDeleteItinerary(item.id)}
+          >
+            <Text style={styles.deleteButtonText}>DELETE</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   };
@@ -1124,7 +1172,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
-    position: 'relative',
   },
   highlightedCard: {
     borderColor: '#007AFF',
@@ -1202,7 +1249,7 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: 16,
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
     paddingTop: 12,
@@ -1217,22 +1264,52 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginLeft: 4,
   },
-  whatsappContainer: {
+  actionButtonsRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  updateButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginRight: 6,
     alignItems: 'center',
   },
-  whatsappText: {
-    fontSize: 14,
-    color: '#25D366',
-    fontWeight: '500',
-    marginLeft: 8,
+  updateButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  shareButton: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginHorizontal: 3,
+    alignItems: 'center',
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   deleteButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    zIndex: 10,
-    padding: 5,
+    flex: 1,
+    backgroundColor: '#FF6B6B',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginLeft: 6,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
