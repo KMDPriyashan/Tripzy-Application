@@ -8,8 +8,8 @@ export default function RootLayout() {
         {/* Your existing stack screens */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/loginpage" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+        <Stack.Screen name="loginpage" options={{ headerShown: false }} />
+        <Stack.Screen name="signup" options={{ headerShown: false }} />
         <Stack.Screen name="tabs" options={{ headerShown: false }} />
         <Stack.Screen name="app-pages/TourGuide" options={{ headerShown: false }} />
         <Stack.Screen name="app-pages/map" options={{ headerShown: false }} />
