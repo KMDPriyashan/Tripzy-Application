@@ -102,15 +102,16 @@ const TourGuidePage = () => {
     // Show success message or navigate
   };
 
+  const handleFindBooking = () => {
+    // Navigate to Tour Guide Profile page
+    router.push('/app-pages/TGprofile');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* Header without back button */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Easy Guide Booking</Text>
-        <View style={{ width: 24 }} />
+        
       </View>
 
       <ScrollView 
@@ -151,7 +152,10 @@ const TourGuidePage = () => {
           <Text style={styles.blackInfoText}>
             You should quickly find a tour guide and book after reviewing their profile.
           </Text>
-          <TouchableOpacity style={styles.findBookingButton}>
+          <TouchableOpacity 
+            style={styles.findBookingButton}
+            onPress={handleFindBooking}
+          >
             <Text style={styles.findBookingButtonText}>Find Booking</Text>
           </TouchableOpacity>
         </View>
@@ -266,21 +270,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingTop: 45,
+    paddingBottom: 10,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
-  },
-  backButton: {
-    padding: 4,
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#333',
   },
   scrollView: {
@@ -299,11 +299,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#333',
     marginBottom: 8,
+    textAlign: 'center',
   },
   heroSubtitle: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#fff',

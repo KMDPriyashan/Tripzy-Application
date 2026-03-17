@@ -15,6 +15,7 @@ export default function RootLayout() {
         <Stack.Screen name="app-pages/map" options={{ headerShown: false }} />
         <Stack.Screen name="app-pages/feed" options={{ headerShown: false }} />
         <Stack.Screen name="app-pages/plan" options={{ headerShown: false }} />
+        <Stack.Screen name="app-pages/TGprofile" options={{ headerShown: false }} />
         
 
         <Stack.Screen

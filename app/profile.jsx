@@ -124,6 +124,8 @@ const HomePage = () => {
             </TouchableOpacity>
           </View>
 
+        
+
           <Text style={styles.tagline}>Travel Light. Feel Deep.</Text>
           <Text style={styles.subTagline}>A gentle, poetic invitation to begin the journey.</Text>
 
