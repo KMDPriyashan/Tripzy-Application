@@ -1,16 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const TourGuideProfilePage = () => {
@@ -73,9 +75,16 @@ const TourGuideProfilePage = () => {
     setSpecialNotes(newNotes);
   };
 
-  const handleSubmit = () => {
-    // Handle profile submission
-    console.log('Profile Data:', {
+  const handleSubmit = async () => {
+    // Validate required fields
+    if (!fullName.trim()) {
+      Alert.alert('Error', 'Please enter your full name');
+      return;
+    }
+
+    // Create profile data object
+    const profileData = {
+      id: Date.now().toString(),
       fullName,
       image: selectedImage,
       province,
@@ -84,16 +93,48 @@ const TourGuideProfilePage = () => {
       languages,
       isTourGuide,
       travelModeTags,
-      specialNotes
-    });
-    // Show success message or navigate
+      specialNotes,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      // Get existing profiles
+      const existingProfiles = await AsyncStorage.getItem('tourGuideProfiles');
+      const profiles = existingProfiles ? JSON.parse(existingProfiles) : [];
+      
+      // Add new profile
+      profiles.push(profileData);
+      
+      // Save back to storage
+      await AsyncStorage.setItem('tourGuideProfiles', JSON.stringify(profiles));
+      
+      Alert.alert(
+        'Success',
+        'Your profile has been created!',
+        [
+          {
+            text: 'View All Guides',
+            onPress: () => {
+              router.push('/app-pages/TourGuideList');
+            }
+          },
+          {
+            text: 'Create Another',
+            style: 'cancel'
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header without back button */}
       <View style={styles.header}>
-         
+        <Text style={styles.headerTitle}>Tour Guide Profile</Text>
       </View>
 
       <ScrollView 
@@ -127,13 +168,9 @@ const TourGuideProfilePage = () => {
             ) : (
               <>
                 <Ionicons name="cloud-upload-outline" size={40} color="#007AFF" />
-                <Text style={styles.uploadText}>Drag and drop here</Text>
+                <Text style={styles.uploadText}>Tap to upload image</Text>
               </>
             )}
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.submitButton}>
-            <Text style={styles.submitButtonText}>Submit</Text>
           </TouchableOpacity>
         </View>
 
