@@ -14,6 +14,8 @@ export default function RootLayout() {
       <Stack.Screen name="app-pages/TourGuideProfile" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/TourGuideList" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/TourGuideCard" options={{ headerShown: false }} />
+      <Stack.Screen name="app-pages/TourGuide" options={{ headerShown: false }} />
+      <Stack.Screen name="app-pages/TGprofile" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/createPlan" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/myItineraries" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/budgetEstimate" options={{ headerShown: false }} />

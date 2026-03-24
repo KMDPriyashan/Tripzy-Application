@@ -104,7 +104,7 @@ const TourGuidePage = () => {
 
   const handleFindBooking = () => {
     // Navigate to Tour Guide Profile page
-    router.push('/app-pages/TGprofile');
+    router.push('/app-pages/TourGuideList');
   };
 
   return (

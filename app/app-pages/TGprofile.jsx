@@ -1,8 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Image,
@@ -14,9 +13,11 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { supabase } from '../../lib/supabase';
 
 const TourGuideProfilePage = () => {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [fullName, setFullName] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [province, setProvince] = useState('');
@@ -28,6 +29,81 @@ const TourGuideProfilePage = () => {
   const [currentTag, setCurrentTag] = useState('');
   const [specialNotes, setSpecialNotes] = useState([]);
   const [currentNote, setCurrentNote] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [existingProfileId, setExistingProfileId] = useState(null);
+
+  useEffect(() => {
+    loadCurrentUser();
+    if (params.profileId) {
+      loadExistingProfile(params.profileId);
+    }
+  }, []);
+
+  const loadCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+      if (user) {
+        checkExistingProfile(user.id);
+      }
+    } catch (error) {
+      console.error('Error loading user:', error);
+    }
+  };
+
+  const checkExistingProfile = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('tour_guides')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (data && !error) {
+        setIsEditing(true);
+        setExistingProfileId(data.id);
+        setFullName(data.full_name || '');
+        setSelectedImage(data.image);
+        setProvince(data.province || '');
+        setExperience(data.experience || '');
+        setDescription(data.description || '');
+        setLanguages(data.languages || '');
+        setIsTourGuide(data.is_tour_guide || false);
+        setTravelModeTags(data.travel_mode_tags || []);
+        setSpecialNotes(data.special_notes || []);
+      }
+    } catch (error) {
+      console.error('Error checking existing profile:', error);
+    }
+  };
+
+  const loadExistingProfile = async (profileId) => {
+    try {
+      const { data, error } = await supabase
+        .from('tour_guides')
+        .select('*')
+        .eq('id', profileId)
+        .single();
+
+      if (data && !error) {
+        setFullName(data.full_name || '');
+        setSelectedImage(data.image);
+        setProvince(data.province || '');
+        setExperience(data.experience || '');
+        setDescription(data.description || '');
+        setLanguages(data.languages || '');
+        setIsTourGuide(data.is_tour_guide || false);
+        setTravelModeTags(data.travel_mode_tags || []);
+        setSpecialNotes(data.special_notes || []);
+        setIsEditing(true);
+        setExistingProfileId(data.id);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -40,8 +116,8 @@ const TourGuideProfilePage = () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
+      aspect: [1, 1],
+      quality: 0.7,
     });
 
     if (!result.canceled) {
@@ -76,65 +152,78 @@ const TourGuideProfilePage = () => {
   };
 
   const handleSubmit = async () => {
-    // Validate required fields
     if (!fullName.trim()) {
       Alert.alert('Error', 'Please enter your full name');
       return;
     }
 
-    // Create profile data object
-    const profileData = {
-      id: Date.now().toString(),
-      fullName,
-      image: selectedImage,
-      province,
-      experience,
-      description,
-      languages,
-      isTourGuide,
-      travelModeTags,
-      specialNotes,
-      createdAt: new Date().toISOString(),
-    };
+    if (!currentUser) {
+      Alert.alert('Error', 'Please login first');
+      return;
+    }
+
+    setLoading(true);
 
     try {
-      // Get existing profiles
-      const existingProfiles = await AsyncStorage.getItem('tourGuideProfiles');
-      const profiles = existingProfiles ? JSON.parse(existingProfiles) : [];
-      
-      // Add new profile
-      profiles.push(profileData);
-      
-      // Save back to storage
-      await AsyncStorage.setItem('tourGuideProfiles', JSON.stringify(profiles));
-      
+      // Create profile data object - store image URI directly in database
+      const profileData = {
+        user_id: currentUser.id,
+        user_email: currentUser.email,
+        user_name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0],
+        full_name: fullName,
+        image: selectedImage, // Store local image URI
+        province: province || null,
+        experience: experience || null,
+        description: description || null,
+        languages: languages || null,
+        is_tour_guide: isTourGuide,
+        travel_mode_tags: travelModeTags,
+        special_notes: specialNotes,
+        updated_at: new Date().toISOString(),
+      };
+
+      let result;
+      if (isEditing && existingProfileId) {
+        // Update existing profile
+        result = await supabase
+          .from('tour_guides')
+          .update(profileData)
+          .eq('id', existingProfileId);
+      } else {
+        // Create new profile
+        result = await supabase
+          .from('tour_guides')
+          .insert([profileData]);
+      }
+
+      if (result.error) throw result.error;
+
       Alert.alert(
         'Success',
-        'Your profile has been created!',
+        isEditing ? 'Your profile has been updated!' : 'Your profile has been created!',
         [
           {
             text: 'View All Guides',
-            onPress: () => {
-              router.push('/app-pages/TourGuideList');
-            }
-          },
-          {
-            text: 'Create Another',
-            style: 'cancel'
+            onPress: () => router.push('/app-pages/TourGuideList')
           }
         ]
       );
     } catch (error) {
       console.error('Error saving profile:', error);
       Alert.alert('Error', 'Failed to save profile. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header without back button */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Tour Guide Profile</Text>
+        <View style={{ width: 24 }} />
       </View>
 
       <ScrollView 
@@ -142,7 +231,6 @@ const TourGuideProfilePage = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollViewContent}
       >
-        {/* Hero Section */}
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>Tour Guide Profile</Text>
           <Text style={styles.heroSubtitle}>
@@ -150,7 +238,6 @@ const TourGuideProfilePage = () => {
           </Text>
         </View>
 
-        {/* Full Name and Image Section */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Full Name</Text>
           <TextInput
@@ -174,7 +261,6 @@ const TourGuideProfilePage = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Location and Details Section */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Location</Text>
           <TextInput
@@ -225,7 +311,6 @@ const TourGuideProfilePage = () => {
           </View>
         </View>
 
-        {/* Travel Mode Tags Section */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Travel Mode Tags</Text>
           <Text style={styles.subLabel}>Please One by one enter</Text>
@@ -243,7 +328,6 @@ const TourGuideProfilePage = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Display Tags */}
           <View style={styles.tagsContainer}>
             {travelModeTags.map((tag, index) => (
               <View key={index} style={styles.tag}>
@@ -256,7 +340,6 @@ const TourGuideProfilePage = () => {
           </View>
         </View>
 
-        {/* Special Notes Section */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Special Notes</Text>
           <Text style={styles.subLabel}>Entire Special note one by one enter.</Text>
@@ -274,7 +357,6 @@ const TourGuideProfilePage = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Display Notes */}
           <View style={styles.notesContainer}>
             {specialNotes.map((note, index) => (
               <View key={index} style={styles.noteItem}>
@@ -287,9 +369,14 @@ const TourGuideProfilePage = () => {
           </View>
         </View>
 
-        {/* Update Profile Button */}
-        <TouchableOpacity style={styles.updateButton} onPress={handleSubmit}>
-          <Text style={styles.updateButtonText}>Update your Profile</Text>
+        <TouchableOpacity 
+          style={[styles.updateButton, loading && styles.updateButtonDisabled]} 
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          <Text style={styles.updateButtonText}>
+            {loading ? 'Saving...' : (isEditing ? 'Update Profile' : 'Create Profile')}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -302,17 +389,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 15,
+    paddingVertical: 15,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
-    alignItems: 'center',
+  },
+  backButton: {
+    padding: 4,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#333',
   },
   scrollView: {
@@ -396,6 +487,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#f0f8ff',
     marginBottom: 20,
+    minHeight: 150,
   },
   uploadText: {
     fontSize: 14,
@@ -404,20 +496,8 @@ const styles = StyleSheet.create({
   },
   previewImage: {
     width: '100%',
-    height: 200,
+    height: 150,
     borderRadius: 8,
-  },
-  submitButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   checkboxContainer: {
     flexDirection: 'row',
@@ -508,6 +588,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
     marginBottom: 20,
+  },
+  updateButtonDisabled: {
+    backgroundColor: '#666',
+    opacity: 0.6,
   },
   updateButtonText: {
     color: '#fff',

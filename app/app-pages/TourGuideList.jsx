@@ -1,23 +1,43 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    Image,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { supabase } from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const TourGuideList = () => {
   const router = useRouter();
   const [profiles, setProfiles] = useState([]);
+  const [filteredProfiles, setFilteredProfiles] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [hasOwnProfile, setHasOwnProfile] = useState(false);
+
+  useEffect(() => {
+    loadCurrentUser();
+  }, []);
+
+  const loadCurrentUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    } catch (error) {
+      console.error('Error loading user:', error);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -26,14 +46,62 @@ const TourGuideList = () => {
   );
 
   const loadProfiles = async () => {
+    setLoading(true);
     try {
-      const savedProfiles = await AsyncStorage.getItem('tourGuideProfiles');
-      if (savedProfiles) {
-        const profilesList = JSON.parse(savedProfiles);
-        setProfiles(profilesList.reverse()); // Show newest first
+      // Fetch profiles from Supabase database
+      const { data, error } = await supabase
+        .from('tour_guides')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        // Add default ratings if not present
+        const profilesWithRatings = data.map(profile => ({
+          ...profile,
+          rating: profile.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
+          reviewCount: profile.review_count || Math.floor(Math.random() * (200 - 50) + 50)
+        }));
+        setProfiles(profilesWithRatings);
+        setFilteredProfiles(profilesWithRatings);
+        
+        // Check if current user has a profile
+        if (currentUser) {
+          const userProfile = profilesWithRatings.find(p => p.user_id === currentUser.id);
+          setHasOwnProfile(!!userProfile);
+        }
+      } else {
+        setProfiles([]);
+        setFilteredProfiles([]);
       }
     } catch (error) {
       console.error('Error loading profiles:', error);
+      setProfiles([]);
+      setFilteredProfiles([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = (text) => {
+    setSearchQuery(text);
+    if (text.trim() === '') {
+      setFilteredProfiles(profiles);
+    } else {
+      const searchLower = text.toLowerCase();
+      const filtered = profiles.filter(profile => {
+        const nameMatch = profile.full_name?.toLowerCase().includes(searchLower);
+        const locationMatch = profile.province?.toLowerCase().includes(searchLower);
+        const tagMatch = profile.travel_mode_tags?.some(tag => 
+          tag.toLowerCase().includes(searchLower)
+        );
+        const languageMatch = profile.languages?.toLowerCase().includes(searchLower);
+        const descriptionMatch = profile.description?.toLowerCase().includes(searchLower);
+        
+        return nameMatch || locationMatch || tagMatch || languageMatch || descriptionMatch;
+      });
+      setFilteredProfiles(filtered);
     }
   };
 
@@ -45,11 +113,214 @@ const TourGuideList = () => {
   };
 
   const handleChatPress = (profile) => {
-    // Navigate to chat page with the guide
     router.push({
       pathname: '/app-pages/Chat',
-      params: { guideId: profile.id, guideName: profile.fullName }
+      params: { guideId: profile.id, guideName: profile.full_name }
     });
+  };
+
+  const handleBecomeGuide = () => {
+    if (hasOwnProfile) {
+      Alert.alert(
+        'Profile Already Exists',
+        'You already have a tour guide profile. You can only create one profile per account.',
+        [{ text: 'OK', style: 'cancel' }]
+      );
+      return;
+    }
+    router.push('/app-pages/TGprofile');
+  };
+
+  const handleDeleteProfile = async (profile) => {
+    if (currentUser && profile.user_id !== currentUser.id) {
+      Alert.alert('Unauthorized', 'You can only delete your own profile');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Profile',
+      'Are you sure you want to delete your tour guide profile? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('tour_guides')
+                .delete()
+                .eq('id', profile.id);
+
+              if (error) throw error;
+
+              // Refresh profiles
+              await loadProfiles();
+              setHasOwnProfile(false);
+              Alert.alert('Success', 'Your profile has been deleted successfully');
+            } catch (error) {
+              console.error('Error deleting profile:', error);
+              Alert.alert('Error', 'Failed to delete profile. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleUpdateProfile = (profile) => {
+    if (currentUser && profile.user_id !== currentUser.id) {
+      Alert.alert('Unauthorized', 'You can only update your own profile');
+      return;
+    }
+    
+    router.push({
+      pathname: '/app-pages/TGprofile',
+      params: { profileId: profile.id }
+    });
+  };
+
+  const renderStars = (rating) => {
+    const stars = [];
+    const numRating = parseFloat(rating);
+    const fullStars = Math.floor(numRating);
+    const hasHalfStar = numRating % 1 >= 0.5;
+    
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(<Ionicons key={`star-${i}`} name="star" size={12} color="#FFD700" />);
+    }
+    if (hasHalfStar) {
+      stars.push(<Ionicons key="half-star" name="star-half" size={12} color="#FFD700" />);
+    }
+    const emptyStars = 5 - stars.length;
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(<Ionicons key={`empty-${i}`} name="star-outline" size={12} color="#FFD700" />);
+    }
+    return stars;
+  };
+
+  const GuideCard = ({ profile }) => {
+    const isOwner = currentUser && profile.user_id === currentUser.id;
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            {profile.image ? (
+              <Image source={{ uri: profile.image }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarPlaceholderText}>
+                  {profile.full_name?.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <View style={styles.headerInfo}>
+              <Text style={styles.guideName}>{profile.full_name}</Text>
+              <View style={styles.locationContainer}>
+                <Ionicons name="location-outline" size={12} color="#666" />
+                <Text style={styles.locationText}>{profile.province || 'Location not set'}</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.ratingContainer}>
+            <View style={styles.starsRow}>
+              {renderStars(profile.rating || 4.5)}
+            </View>
+            <Text style={styles.ratingText}>{profile.rating || 4.5}</Text>
+            <Text style={styles.reviewCount}>({profile.reviewCount || 0})</Text>
+          </View>
+        </View>
+
+        {profile.image ? (
+          <Image source={{ uri: profile.image }} style={styles.coverImage} />
+        ) : (
+          <View style={[styles.coverImage, styles.coverPlaceholder]}>
+            <Ionicons name="camera-outline" size={40} color="#ccc" />
+          </View>
+        )}
+
+        <View style={styles.cardContent}>
+          <Text style={styles.guideTitle}>Official Photographer and Travel Guide</Text>
+          
+          {profile.experience && (
+            <View style={styles.experienceContainer}>
+              <Ionicons name="briefcase-outline" size={14} color="#007AFF" />
+              <Text style={styles.experienceText}>{profile.experience} of experience</Text>
+            </View>
+          )}
+
+          {profile.languages && (
+            <View style={styles.languagesContainer}>
+              <Ionicons name="language-outline" size={14} color="#666" />
+              <Text style={styles.languagesText}>{profile.languages}</Text>
+            </View>
+          )}
+
+          {profile.description && (
+            <Text style={styles.descriptionPreview} numberOfLines={2}>
+              {profile.description}
+            </Text>
+          )}
+
+          {profile.travel_mode_tags?.length > 0 && (
+            <View style={styles.tagsContainer}>
+              {profile.travel_mode_tags.slice(0, 3).map((tag, index) => (
+                <View key={index} style={styles.tag}>
+                  <Text style={styles.tagText}>#{tag}</Text>
+                </View>
+              ))}
+              {profile.travel_mode_tags.length > 3 && (
+                <Text style={styles.moreTags}>+{profile.travel_mode_tags.length - 3}</Text>
+              )}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.actionButtons}>
+          {isOwner && (
+            <>
+              <TouchableOpacity 
+                style={styles.updateButton}
+                onPress={() => handleUpdateProfile(profile)}
+              >
+                <Ionicons name="create-outline" size={16} color="#fff" />
+                <Text style={styles.updateButtonText}>Update</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.deleteButton}
+                onPress={() => handleDeleteProfile(profile)}
+              >
+                <Ionicons name="trash-outline" size={16} color="#fff" />
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          
+          <TouchableOpacity 
+            style={[styles.viewButton, !isOwner && styles.fullWidthViewButton]}
+            onPress={() => handleCardPress(profile)}
+          >
+            <Text style={styles.viewButtonText}>View Profile</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.chatButton}
+            onPress={() => handleChatPress(profile)}
+          >
+            <Ionicons name="chatbubble-outline" size={18} color="#25D366" />
+            <Text style={styles.chatButtonText}>Chat</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {isOwner && (
+          <View style={styles.ownerBadge}>
+            <Text style={styles.ownerBadgeText}>Your Profile</Text>
+          </View>
+        )}
+      </View>
+    );
   };
 
   const EmptyState = () => (
@@ -61,133 +332,37 @@ const TourGuideList = () => {
       </Text>
       <TouchableOpacity 
         style={styles.createButton}
-        onPress={() => router.push('/app-pages/TourGuideProfile')}
+        onPress={handleBecomeGuide}
       >
         <Ionicons name="add-circle-outline" size={20} color="#fff" />
-        <Text style={styles.createButtonText}>Create Your Profile</Text>
+        <Text style={styles.createButtonText}>Become a Tour Guide</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const GuideCard = ({ profile }) => (
-    <View style={styles.card}>
-      {/* Header with Avatar and Name */}
-      <View style={styles.cardHeader}>
-        <View style={styles.headerLeft}>
-          {profile.image ? (
-            <Image source={{ uri: profile.image }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarPlaceholderText}>
-                {profile.fullName?.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <View style={styles.headerInfo}>
-            <Text style={styles.guideName}>{profile.fullName}</Text>
-            <View style={styles.locationContainer}>
-              <Ionicons name="location-outline" size={12} color="#666" />
-              <Text style={styles.locationText}>{profile.province || 'Location not set'}</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={14} color="#FFD700" />
-          <Text style={styles.ratingText}>4.9</Text>
-        </View>
+  const SearchResultsCount = () => {
+    if (searchQuery.length === 0) return null;
+    return (
+      <View style={styles.resultsCountContainer}>
+        <Text style={styles.resultsCountText}>
+          Found {filteredProfiles.length} {filteredProfiles.length === 1 ? 'result' : 'results'} for "{searchQuery}"
+        </Text>
       </View>
+    );
+  };
 
-      {/* Cover Image */}
-      {profile.image ? (
-        <Image source={{ uri: profile.image }} style={styles.coverImage} />
-      ) : (
-        <View style={[styles.coverImage, styles.coverPlaceholder]}>
-          <Ionicons name="camera-outline" size={40} color="#ccc" />
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading tour guides...</Text>
         </View>
-      )}
-
-      {/* Content */}
-      <View style={styles.cardContent}>
-        <Text style={styles.guideTitle}>Official Photographer and Travel Guide</Text>
-        
-        {/* Experience */}
-        {profile.experience && (
-          <View style={styles.experienceContainer}>
-            <Ionicons name="briefcase-outline" size={14} color="#007AFF" />
-            <Text style={styles.experienceText}>{profile.experience} of experience</Text>
-          </View>
-        )}
-
-        {/* Languages */}
-        {profile.languages && (
-          <View style={styles.languagesContainer}>
-            <Ionicons name="language-outline" size={14} color="#666" />
-            <Text style={styles.languagesText}>{profile.languages}</Text>
-          </View>
-        )}
-
-        {/* Description Preview */}
-        {profile.description && (
-          <Text style={styles.descriptionPreview} numberOfLines={2}>
-            {profile.description}
-          </Text>
-        )}
-
-        {/* Tags */}
-        {profile.travelModeTags?.length > 0 && (
-          <View style={styles.tagsContainer}>
-            {profile.travelModeTags.slice(0, 3).map((tag, index) => (
-              <View key={index} style={styles.tag}>
-                <Text style={styles.tagText}>#{tag}</Text>
-              </View>
-            ))}
-            {profile.travelModeTags.length > 3 && (
-              <Text style={styles.moreTags}>+{profile.travelModeTags.length - 3}</Text>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Action Buttons */}
-      <View style={styles.actionButtons}>
-        <TouchableOpacity 
-          style={styles.viewButton}
-          onPress={() => handleCardPress(profile)}
-        >
-          <Text style={styles.viewButtonText}>View Profile</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={styles.chatButton}
-          onPress={() => handleChatPress(profile)}
-        >
-          <Ionicons name="chatbubble-outline" size={18} color="#25D366" />
-          <Text style={styles.chatButtonText}>Chat</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Travel Guides</Text>
-          <Text style={styles.headerSubtitle}>Expert-led tours, unforgettable experiences.</Text>
-        </View>
-        <TouchableOpacity 
-          style={styles.addButton}
-          onPress={() => router.push('/app-pages/TourGuideProfile')}
-        >
-          <Ionicons name="add" size={24} color="#007AFF" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Hero Section */}
       <View style={styles.heroSection}>
         <Text style={styles.heroTitle}>Your Guided Journey Awaits</Text>
         <Text style={styles.heroSubtitle}>
@@ -195,14 +370,64 @@ const TourGuideList = () => {
         </Text>
       </View>
 
-      {/* Guides List */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={20} color="#8E8E93" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name, location, or tags..."
+            placeholderTextColor="#8E8E93"
+            value={searchQuery}
+            onChangeText={handleSearch}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => handleSearch('')}>
+              <Ionicons name="close-circle" size={18} color="#8E8E93" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <SearchResultsCount />
+
+      <View style={styles.becomeButtonContainer}>
+        <TouchableOpacity 
+          style={[styles.becomeButton, hasOwnProfile && styles.becomeButtonDisabled]}
+          onPress={handleBecomeGuide}
+          disabled={hasOwnProfile}
+        >
+          <Ionicons name="add-circle-outline" size={20} color="#fff" />
+          <Text style={styles.becomeButtonText}>
+            {hasOwnProfile ? 'Profile Already Created' : 'Become a Tour Guide'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
-        data={profiles}
+        data={filteredProfiles}
         renderItem={({ item }) => <GuideCard profile={item} />}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
-        ListEmptyComponent={EmptyState}
+        ListEmptyComponent={
+          searchQuery.length > 0 ? (
+            <View style={styles.noResultsContainer}>
+              <Ionicons name="search-outline" size={60} color="#ccc" />
+              <Text style={styles.noResultsTitle}>No results found</Text>
+              <Text style={styles.noResultsText}>
+                We couldn't find any tour guides matching "{searchQuery}"
+              </Text>
+              <TouchableOpacity 
+                style={styles.clearSearchButton}
+                onPress={() => handleSearch('')}
+              >
+                <Text style={styles.clearSearchButtonText}>Clear Search</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <EmptyState />
+          )
+        }
       />
     </SafeAreaView>
   );
@@ -213,42 +438,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 2,
-  },
-  addButton: {
-    padding: 4,
-  },
   heroSection: {
     paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
     backgroundColor: '#fff',
-    marginBottom: 8,
   },
   heroTitle: {
     fontSize: 24,
@@ -262,6 +456,69 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 8,
+    color: '#333',
+    paddingVertical: 0,
+  },
+  resultsCountContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  resultsCountText: {
+    fontSize: 13,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  becomeButtonContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  becomeButton: {
+    flexDirection: 'row',
+    backgroundColor: '#000000',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  becomeButtonDisabled: {
+    backgroundColor: '#666',
+    opacity: 0.6,
+  },
+  becomeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   listContainer: {
     padding: 16,
@@ -279,6 +536,7 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 1,
     borderColor: '#f0f0f0',
+    position: 'relative',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -331,15 +589,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    marginRight: 4,
   },
   ratingText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#FFD700',
-    marginLeft: 4,
+    marginLeft: 2,
+  },
+  reviewCount: {
+    fontSize: 10,
+    color: '#999',
+    marginLeft: 2,
   },
   coverImage: {
     width: '100%',
@@ -414,14 +681,47 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+    gap: 8,
+  },
+  updateButton: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 4,
+  },
+  updateButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#FF6B6B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 4,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   viewButton: {
-    flex: 1,
+    flex: 2,
     backgroundColor: '#007AFF',
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    marginRight: 8,
+  },
+  fullWidthViewButton: {
+    flex: 3,
   },
   viewButtonText: {
     color: '#fff',
@@ -436,13 +736,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     paddingVertical: 10,
     borderRadius: 8,
-    marginLeft: 8,
     gap: 6,
   },
   chatButtonText: {
     color: '#25D366',
     fontSize: 14,
     fontWeight: '500',
+  },
+  ownerBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  ownerBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '600',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -477,6 +790,46 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '500',
+  },
+  noResultsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  noResultsTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  clearSearchButton: {
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  clearSearchButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
   },
 });
 
