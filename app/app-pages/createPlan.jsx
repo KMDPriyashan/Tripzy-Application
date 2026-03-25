@@ -17,7 +17,7 @@ import {
 import 'react-native-get-random-values';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
-import { useNotification } from '../app-pages/context/NotificationContext.js';
+import { useNotification } from './context/NotificationContext.js';
 
 const CreatePlan = () => {
   const router = useRouter();

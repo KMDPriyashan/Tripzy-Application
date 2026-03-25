@@ -1,13 +1,17 @@
 import { Stack } from 'expo-router';
+import { NotificationProvider } from './app-pages/context/NotificationContext.js';
+
 
 export default function RootLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/loginpage" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/welcome" options={{ headerShown: false }} />
-      <Stack.Screen name="auth/profile" options={{ headerShown: false }} />
+    <NotificationProvider>
+      <Stack>
+        {/* Your screens */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="loginpage" options={{ headerShown: false }} />
+      <Stack.Screen name="signup" options={{ headerShown: false }} />
+      <Stack.Screen name="welcome" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       
       {/* App Pages - Hide headers for all */}
@@ -23,6 +27,9 @@ export default function RootLayout() {
       <Stack.Screen name="app-pages/feed" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/map" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/settings" options={{ headerShown: false }} />
-    </Stack>
+      <Stack.Screen name="app-pages/plan" options={{ headerShown: false }} />
+      </Stack>
+    </NotificationProvider>
   );
 }
+

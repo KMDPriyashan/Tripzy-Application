@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
@@ -25,25 +25,31 @@ const TourGuideList = () => {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [hasOwnProfile, setHasOwnProfile] = useState(false);
+  const subscriptionRef = useRef(null);
 
   useEffect(() => {
     loadCurrentUser();
+    
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+      }
+    };
   }, []);
 
   const loadCurrentUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      if (user) {
+        await loadProfiles();
+        setupRealtimeSubscription();
+      }
     } catch (error) {
       console.error('Error loading user:', error);
     }
   };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadProfiles();
-    }, [])
-  );
 
   const loadProfiles = async () => {
     setLoading(true);
@@ -84,23 +90,126 @@ const TourGuideList = () => {
     }
   };
 
+  // Setup real-time subscription for tour_guides table
+  const setupRealtimeSubscription = async () => {
+    // Remove existing subscription if any
+    if (subscriptionRef.current) {
+      await supabase.removeChannel(subscriptionRef.current);
+    }
+
+    // Create new channel for real-time updates
+    const channel = supabase
+      .channel('tour-guides-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'tour_guides',
+        },
+        (payload) => {
+          console.log('Real-time update received:', payload);
+          handleRealtimeUpdate(payload);
+        }
+      )
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
+
+    subscriptionRef.current = channel;
+  };
+
+  // Handle real-time updates
+  const handleRealtimeUpdate = (payload) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+
+    switch (eventType) {
+      case 'INSERT':
+        // New profile added
+        const newProfile = {
+          ...newRecord,
+          rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
+          reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
+        };
+        
+        setProfiles(prevProfiles => [newProfile, ...prevProfiles]);
+        
+        // Update filtered profiles if search query is empty
+        if (searchQuery === '') {
+          setFilteredProfiles(prev => [newProfile, ...prev]);
+        } else {
+          // Check if new profile matches search query
+          const matchesSearch = checkProfileMatchesSearch(newProfile, searchQuery);
+          if (matchesSearch) {
+            setFilteredProfiles(prev => [newProfile, ...prev]);
+          }
+        }
+        
+        // Show notification (optional)
+        // Alert.alert('New Guide', `${newProfile.full_name} joined as a tour guide!`);
+        break;
+        
+      case 'UPDATE':
+        // Profile updated
+        const updatedProfile = {
+          ...newRecord,
+          rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
+          reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
+        };
+        
+        setProfiles(prevProfiles => 
+          prevProfiles.map(profile => 
+            profile.id === updatedProfile.id ? updatedProfile : profile
+          )
+        );
+        
+        setFilteredProfiles(prev => 
+          prev.map(profile => 
+            profile.id === updatedProfile.id ? updatedProfile : profile
+          )
+        );
+        break;
+        
+      case 'DELETE':
+        // Profile deleted
+        setProfiles(prevProfiles => 
+          prevProfiles.filter(profile => profile.id !== oldRecord.id)
+        );
+        setFilteredProfiles(prev => 
+          prev.filter(profile => profile.id !== oldRecord.id)
+        );
+        break;
+    }
+    
+    // Update hasOwnProfile status if current user's profile changed
+    if (currentUser) {
+      const userProfile = profiles.find(p => p.user_id === currentUser.id);
+      setHasOwnProfile(!!userProfile);
+    }
+  };
+
+  // Helper function to check if profile matches search query
+  const checkProfileMatchesSearch = (profile, query) => {
+    if (!query.trim()) return true;
+    const searchLower = query.toLowerCase();
+    return (
+      profile.full_name?.toLowerCase().includes(searchLower) ||
+      profile.province?.toLowerCase().includes(searchLower) ||
+      profile.travel_mode_tags?.some(tag => tag.toLowerCase().includes(searchLower)) ||
+      profile.languages?.toLowerCase().includes(searchLower) ||
+      profile.description?.toLowerCase().includes(searchLower)
+    );
+  };
+
   const handleSearch = (text) => {
     setSearchQuery(text);
     if (text.trim() === '') {
       setFilteredProfiles(profiles);
     } else {
       const searchLower = text.toLowerCase();
-      const filtered = profiles.filter(profile => {
-        const nameMatch = profile.full_name?.toLowerCase().includes(searchLower);
-        const locationMatch = profile.province?.toLowerCase().includes(searchLower);
-        const tagMatch = profile.travel_mode_tags?.some(tag => 
-          tag.toLowerCase().includes(searchLower)
-        );
-        const languageMatch = profile.languages?.toLowerCase().includes(searchLower);
-        const descriptionMatch = profile.description?.toLowerCase().includes(searchLower);
-        
-        return nameMatch || locationMatch || tagMatch || languageMatch || descriptionMatch;
-      });
+      const filtered = profiles.filter(profile => 
+        checkProfileMatchesSearch(profile, searchLower)
+      );
       setFilteredProfiles(filtered);
     }
   };
@@ -153,10 +262,8 @@ const TourGuideList = () => {
                 .eq('id', profile.id);
 
               if (error) throw error;
-
-              // Refresh profiles
-              await loadProfiles();
-              setHasOwnProfile(false);
+              
+              // No need to manually update state - real-time subscription will handle it
               Alert.alert('Success', 'Your profile has been deleted successfully');
             } catch (error) {
               console.error('Error deleting profile:', error);
@@ -434,6 +541,7 @@ const TourGuideList = () => {
 };
 
 const styles = StyleSheet.create({
+  // ... (keep all your existing styles)
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',

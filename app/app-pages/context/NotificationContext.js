@@ -6,7 +6,20 @@ import { Animated, Dimensions, PanResponder, Text, TouchableOpacity, View } from
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NotificationContext = createContext();
 
-export const useNotification = () => useContext(NotificationContext);
+// ✅ Add safety check to useNotification
+export const useNotification = () => {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    // Return a dummy function instead of throwing error
+    console.warn('useNotification must be used within a NotificationProvider. Returning dummy function.');
+    return {
+      showNotification: () => {
+        console.log('Notification would show here (provider missing)');
+      }
+    };
+  }
+  return context;
+};
 
 export const NotificationProvider = ({ children }) => {
   const [notification, setNotification] = useState(null);
