@@ -1,6 +1,7 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -10,6 +11,7 @@ const PlanPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarDays, setCalendarDays] = useState([]);
+  const [previousItineraries, setPreviousItineraries] = useState([]);
 
   // Bottom navigation items
   const navItems = [
@@ -20,12 +22,97 @@ const PlanPage = () => {
     { name: 'Profile', icon: '👤', target: '/app-pages/profile' },
   ];
 
-  // Sample previous itineraries
-  const previousItineraries = [
-    { id: 1, title: 'Winter Wonderland Tour', date: 'Dec 20-25, 2024', days: 6 },
-    { id: 2, title: 'Autumn Europe Trip', date: 'Oct 10-20, 2024', days: 11 },
-    { id: 3, title: 'Summer Beach Vacation', date: 'Aug 5-12, 2024', days: 8 },
-  ];
+  // Load itineraries when component mounts
+  useEffect(() => {
+    loadItineraries();
+  }, []);
+
+  const loadItineraries = async () => {
+    try {
+      const savedPlans = await AsyncStorage.getItem('travelPlans');
+      if (savedPlans) {
+        const plans = JSON.parse(savedPlans);
+        // Sort by created date (newest first) and limit to last 5
+        const sortedPlans = plans.sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        ).slice(0, 5);
+        
+        // Format itineraries for display
+        const formattedItineraries = sortedPlans.map(plan => ({
+          id: plan.id,
+          title: plan.destination || 'Untitled Trip',
+          date: formatDateRange(plan.startDate, plan.endDate),
+          days: calculateDays(plan.startDate, plan.endDate),
+          planData: plan
+        }));
+        
+        setPreviousItineraries(formattedItineraries);
+      } else {
+        // Default sample itineraries if no saved plans
+        setPreviousItineraries([
+          { id: 'sample1', title: 'Winter Wonderland Tour', date: 'Dec 20-25, 2024', days: 6, planData: null },
+          { id: 'sample2', title: 'Autumn Europe Trip', date: 'Oct 10-20, 2024', days: 11, planData: null },
+          { id: 'sample3', title: 'Summer Beach Vacation', date: 'Aug 5-12, 2024', days: 8, planData: null },
+        ]);
+      }
+    } catch (error) {
+      console.error('Error loading itineraries:', error);
+    }
+  };
+
+  const formatDateRange = (startDate, endDate) => {
+    if (!startDate && !endDate) return 'Date not set';
+    
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } catch {
+        return dateStr;
+      }
+    };
+    
+    const start = formatDate(startDate);
+    const end = formatDate(endDate);
+    
+    if (start && end) {
+      return `${start} - ${end}`;
+    } else if (start) {
+      return start;
+    } else if (end) {
+      return end;
+    }
+    return 'Date not set';
+  };
+
+  const calculateDays = (startDate, endDate) => {
+    if (!startDate || !endDate) return 0;
+    try {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
+      const diffTime = Math.abs(end - start);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      return diffDays;
+    } catch {
+      return 0;
+    }
+  };
+
+  const handleViewItinerary = (itinerary) => {
+    if (itinerary.planData) {
+      // Navigate to the plan details page (myItineraries with highlight)
+      router.push({
+        pathname: '/app-pages/myItineraries',
+        params: { highlightPlan: itinerary.id }
+      });
+    } else {
+      // For sample itineraries, show alert
+      Alert.alert('Sample Itinerary', 'This is a sample itinerary. Create your own plan to view details!');
+    }
+  };
 
   // Generate calendar days when currentDate changes
   useEffect(() => {
@@ -73,7 +160,6 @@ const PlanPage = () => {
 
   const handleDatePress = (dateInfo) => {
     setSelectedDate(dateInfo.date);
-    // You can add additional logic here for date selection
     console.log('Selected date:', dateInfo.date);
   };
 
@@ -115,12 +201,6 @@ const PlanPage = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        
-        
-      </View>
-
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
@@ -145,8 +225,6 @@ const PlanPage = () => {
               <Text style={styles.monthNavButtonText}>›</Text>
             </TouchableOpacity>
           </View>
-
-
 
           {/* Calendar Grid */}
           <View style={styles.calendarGrid}>
@@ -173,7 +251,6 @@ const PlanPage = () => {
                   ]}>
                     {dateInfo.day}
                   </Text>
-
                 </TouchableOpacity>
               );
             })}
@@ -209,28 +286,40 @@ const PlanPage = () => {
         <View style={styles.itinerariesSection}>
           <Text style={styles.sectionTitle}>Previous Itineraries</Text>
           
-          {previousItineraries.map((itinerary) => (
-            <View key={itinerary.id} style={styles.itineraryCard}>
-              <View style={styles.itineraryContent}>
-                <Text style={styles.itineraryTitle}>{itinerary.title}</Text>
-                <View style={styles.itineraryDetails}>
-                  <Text style={styles.itineraryDate}>{itinerary.date}</Text>
-                  <Text style={styles.itineraryDays}>{itinerary.days} days</Text>
+          {previousItineraries.length > 0 ? (
+            previousItineraries.map((itinerary) => (
+              <View key={itinerary.id} style={styles.itineraryCard}>
+                <View style={styles.itineraryContent}>
+                  <Text style={styles.itineraryTitle}>{itinerary.title}</Text>
+                  <View style={styles.itineraryDetails}>
+                    <Text style={styles.itineraryDate}>{itinerary.date}</Text>
+                    {itinerary.days > 0 && (
+                      <Text style={styles.itineraryDays}>{itinerary.days} days</Text>
+                    )}
+                  </View>
                 </View>
+                <TouchableOpacity 
+                  style={styles.viewButton}
+                  onPress={() => handleViewItinerary(itinerary)}
+                >
+                  <Text style={styles.viewButtonText}>View</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity style={styles.viewButton}>
-                <Text style={styles.viewButtonText}>View</Text>
-              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyItineraries}>
+              <Text style={styles.emptyText}>No itineraries yet</Text>
+              <Text style={styles.emptySubtext}>Create your first plan to see it here!</Text>
             </View>
-          ))}
+          )}
         </View>
 
         {/* Create Itinerary Button */}
         <TouchableOpacity 
           style={styles.createButton}
-          onPress={() => router.replace('/Tabs')}
+          onPress={() => router.push('/app-pages/myItineraries')}
         >
-          <Text style={styles.createButtonText}>+ Create Itinerary</Text>
+          <Text style={styles.createButtonText}>View Itineraries</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -257,17 +346,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   header: {
-    
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 40,
     paddingBottom: 15,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -290,8 +376,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 30,
     backgroundColor: '#ffffff',
-    textAlign: 'center',
-    
   },
   mainTitle: {
     fontSize: 30,
@@ -300,7 +384,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     lineHeight: 38,
     textAlign: 'center',
-  
   },
   subtitle: {
     fontSize: 14,
@@ -340,7 +423,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
   },
-
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -380,7 +462,6 @@ const styles = StyleSheet.create({
   otherMonthText: {
     color: '#999',
   },
-
   legendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -494,6 +575,22 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  emptyItineraries: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
   createButton: {
     backgroundColor: '#1a1a1a',
