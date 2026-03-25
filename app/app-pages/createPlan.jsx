@@ -451,12 +451,12 @@ const CreatePlan = () => {
           <Text style={styles.pageSubtitle}>
             {isUpdating 
               ? 'Make changes to your travel plan and save updates'
-              : 'Start organizing your dream trip with ease—choose destinations, set dates, and customize every detail'}
+              : '✏️ Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖'}
           </Text>
 
           {/* Destination Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Destination</Text>
+            <Text style={styles.label}> End Destination</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter destination"
@@ -470,7 +470,7 @@ const CreatePlan = () => {
             <Text style={styles.label}>Post Caption</Text>
             <TextInput
               style={styles.input}
-              placeholder="Write a caption for your post"
+              placeholder="Write a caption for your post as a long ...."
               value={postCaption}
               onChangeText={setPostCaption}
             />
@@ -498,7 +498,7 @@ const CreatePlan = () => {
               <Text style={styles.label}>Planning Location</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Location"
+                placeholder=" Planed Location"
                 value={planningLocation}
                 onChangeText={setPlanningLocation}
               />
@@ -517,10 +517,10 @@ const CreatePlan = () => {
 
           {/* Province */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Province</Text>
+            <Text style={styles.label}>Your Province</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter province"
+              placeholder="Enter province of you stay"
               value={province}
               onChangeText={setProvince}
             />
@@ -584,7 +584,7 @@ const CreatePlan = () => {
                 <Text style={styles.dateLabel}>Start Date</Text>
                 <TextInput
                   style={styles.dateInput}
-                  placeholder="DD/MM/YYYY"
+                  placeholder="12 of May, 2026"
                   value={startDate}
                   onChangeText={setStartDate}
                 />
@@ -595,7 +595,7 @@ const CreatePlan = () => {
                 <Text style={styles.dateLabel}>End Date</Text>
                 <TextInput
                   style={styles.dateInput}
-                  placeholder="DD/MM/YYYY"
+                  placeholder="15 of May, 2026" 
                   value={endDate}
                   onChangeText={setEndDate}
                 />
@@ -637,7 +637,7 @@ const CreatePlan = () => {
               {/* Trip Details Summary */}
               <View style={styles.budgetDetailsGrid}>
                 <View style={styles.budgetDetailItem}>
-                  <Text style={styles.budgetDetailLabel}>Destination</Text>
+                  <Text style={styles.budgetDetailLabel}> Destination</Text>
                   <Text style={styles.budgetDetailValue}>{budgetBreakdown.destination || 'Not set'}</Text>
                 </View>
                 <View style={styles.budgetDetailItem}>
@@ -734,10 +734,10 @@ const CreatePlan = () => {
 
           {/* Collaborates */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>collaborates</Text>
+            <Text style={styles.label}>Collaborates For Your Trip</Text>
             <TextInput
               style={styles.input}
-              placeholder="Add collaborators"
+              placeholder="Add collaborators ( nimal perera , kasun deshan , .... )"
             />
           </View>
 
@@ -753,6 +753,7 @@ const CreatePlan = () => {
               onChangeText={setTripNotes}
             />
           </View>
+          <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! 🔖</Text>
 
           {/* Complete/Update Plan Button */}
           <TouchableOpacity
@@ -794,6 +795,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 20,
+    fontStyle: 'italic',
   },
   inputGroup: {
     marginBottom: 20,
@@ -928,7 +930,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 5,
     marginBottom: 30,
   },
   completeButtonText: {
@@ -1205,6 +1207,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
     opacity: 0.7,
   },
+  endtext:{
+    textAlign:'center',
+    lineHeight:25,
+    color:'#666',
+    marginBottom:20,
+    fontStyle:'italic',
+  }
 });
 
 export default CreatePlan;
