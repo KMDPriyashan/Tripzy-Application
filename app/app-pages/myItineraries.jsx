@@ -854,7 +854,7 @@ ${packingText}
                       style={styles.reserveButton}
                       onPress={() => {
                         setModalVisible(false);
-                        Alert.alert('Reserve', 'Reservation feature coming soon!');
+                        router.push('/app-pages/TourGuideList');
                       }}
                     >
                       <Text style={styles.reserveButtonText}>Reserve for 'Travel Guide'</Text>
@@ -883,6 +883,19 @@ ${packingText}
         <Ionicons name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.emptyButtonText}>Create Your First Plan</Text>
       </TouchableOpacity>
+    </View>
+  );
+
+  const Footer = () => (
+    <View style={styles.footerContainer}>
+      <View style={styles.footerDivider} />
+      <Text style={styles.footerQuote}>
+        "Travel far enough to meet yourself."
+      </Text>
+      <Text style={styles.footerText}>
+        Every journey begins with a single step. Your adventures are waiting — start planning your next unforgettable experience today.
+      </Text>
+      
     </View>
   );
 
@@ -996,7 +1009,7 @@ ${packingText}
                     setModalVisible(true);
                   }
                 }}>
-                  <Text style={styles.recentSeeAll}>See All</Text>
+                  <Text style={styles.recentSeeAll}>See More.. </Text>
                 </TouchableOpacity>
               </View>
               <ScrollView 
@@ -1031,6 +1044,9 @@ ${packingText}
             }
             scrollEnabled={false}
           />
+
+          {/* Footer Section */}
+          <Footer />
         </ScrollView>
       </SafeAreaView>
 
@@ -1211,7 +1227,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
   recentPlanImagePlaceholder: {
-    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1453,6 +1469,56 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginTop: 10,
     textAlign: 'center',
+  },
+  // Footer Styles
+  footerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 3,
+    paddingBottom: 5,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginTop: 5,
+  },
+  footerDivider: {
+    width: 50,
+    height: 2,
+    backgroundColor: '#007AFF',
+    borderRadius: 1,
+    marginBottom: 10,
+  },
+  footerQuote: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  footerText: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  footerDecoration: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#007AFF',
+    opacity: 0.5,
+  },
+  footerDotMiddle: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#007AFF',
+    marginHorizontal: 8,
+    opacity: 0.8,
   },
   modalOverlay: {
     flex: 1,

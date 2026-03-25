@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 75,
     paddingBottom: 16,
     backgroundColor: '#fff',
   },
