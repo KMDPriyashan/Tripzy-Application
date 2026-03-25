@@ -38,6 +38,7 @@ const MyItineraries = () => {
   const [highlightedPlanId, setHighlightedPlanId] = useState(null);
   const [notification, setNotification] = useState(null);
   const [notificationVisible, setNotificationVisible] = useState(false);
+  const [recentPlans, setRecentPlans] = useState([]);
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const timeoutRef = useRef(null);
   const viewShotRef = useRef(null);
@@ -80,7 +81,6 @@ const MyItineraries = () => {
   useEffect(() => {
     if (params.highlightPlan) {
       setHighlightedPlanId(params.highlightPlan);
-      // Auto remove highlight after 3 seconds
       setTimeout(() => {
         setHighlightedPlanId(null);
       }, 3000);
@@ -99,8 +99,16 @@ const MyItineraries = () => {
       const savedPlans = await AsyncStorage.getItem('travelPlans');
       if (savedPlans) {
         const plans = JSON.parse(savedPlans);
-        setItineraries(plans);
-        setFilteredItineraries(plans);
+        // Sort by created date (newest first)
+        const sortedPlans = plans.sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        setItineraries(sortedPlans);
+        setFilteredItineraries(sortedPlans);
+        
+        // Get newest 5 plans for recommendations
+        const newestPlans = sortedPlans.slice(0, 5);
+        setRecentPlans(newestPlans);
       }
     } catch (error) {
       console.error('Error loading itineraries:', error);
@@ -109,7 +117,6 @@ const MyItineraries = () => {
 
   // Show notification function
   const showNotification = (type, title, message, data = {}) => {
-    // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -117,14 +124,12 @@ const MyItineraries = () => {
     setNotification({ type, title, message, data });
     setNotificationVisible(true);
 
-    // Animate in
     Animated.spring(slideAnim, {
       toValue: 0,
       useNativeDriver: true,
       friction: 8,
     }).start();
 
-    // Auto dismiss after 5 seconds
     timeoutRef.current = setTimeout(() => {
       dismissNotification();
     }, 5000);
@@ -148,9 +153,7 @@ const MyItineraries = () => {
   const handleNotificationPress = () => {
     if (notification?.data?.planId) {
       dismissNotification();
-      // Highlight the plan
       setHighlightedPlanId(notification.data.planId);
-      // Scroll to the plan (you can implement scrolling later)
       setTimeout(() => {
         setHighlightedPlanId(null);
       }, 3000);
@@ -196,7 +199,6 @@ const MyItineraries = () => {
 
   // Update function - navigate to createPlan with existing data
   const handleUpdateItinerary = (item) => {
-    // Prepare the data to pass to createPlan
     const planData = {
       savedDestination: item.destination,
       savedPostCaption: item.postCaption,
@@ -216,7 +218,6 @@ const MyItineraries = () => {
       planId: item.id
     };
 
-    // Navigate to createPlan with the data
     router.push({
       pathname: '/app-pages/createPlan',
       params: planData
@@ -239,9 +240,13 @@ const MyItineraries = () => {
               await AsyncStorage.setItem('travelPlans', JSON.stringify(updatedItineraries));
               setItineraries(updatedItineraries);
               setFilteredItineraries(updatedItineraries);
+              // Update recent plans
+              const sortedPlans = updatedItineraries.sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+              );
+              setRecentPlans(sortedPlans.slice(0, 5));
               Alert.alert('Success', 'Itinerary deleted successfully');
               
-              // Show notification
               showNotification(
                 'success',
                 'Deleted Successfully 🗑️',
@@ -271,7 +276,6 @@ const MyItineraries = () => {
         return;
       }
 
-      // Capture the view as an image
       const uri = await viewShotRef.current.capture({
         format: 'png',
         quality: 0.95,
@@ -280,7 +284,6 @@ const MyItineraries = () => {
 
       setShareModalVisible(false);
 
-      // Check if sharing is available
       const isAvailable = await Sharing.isAvailableAsync();
       
       if (isAvailable) {
@@ -290,7 +293,6 @@ const MyItineraries = () => {
           UTI: 'image.png',
         });
         
-        // Show success notification
         showNotification(
           'success',
           'Shared Successfully! 📤',
@@ -298,7 +300,6 @@ const MyItineraries = () => {
           { planId: sharingItinerary.id }
         );
       } else {
-        // Fallback to text sharing if sharing not available
         const message = await generateShareMessage(sharingItinerary);
         await Share.share({
           message,
@@ -428,7 +429,7 @@ ${packingText}
     }
   };
 
-  // Updated Share Modal Component with better image layout
+  // Share Modal Component
   const ShareModal = () => (
     <Modal
       animationType="fade"
@@ -441,11 +442,9 @@ ${packingText}
           <Text style={styles.shareModalTitle}>Creating Share Image...</Text>
           <Text style={styles.shareModalSubtitle}>Please wait a moment</Text>
           
-          {/* Hidden view that gets captured */}
           {sharingItinerary && (
             <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.95 }}>
               <View style={styles.shareCard}>
-                {/* Full Screen Background Image */}
                 {sharingItinerary.image ? (
                   <Image 
                     source={{ uri: sharingItinerary.image }} 
@@ -457,13 +456,8 @@ ${packingText}
                     <Ionicons name="image-outline" size={60} color="#fff" />
                   </View>
                 )}
-                
-                {/* Gradient Overlay for better text readability */}
                 <View style={styles.shareGradient} />
-                
-                {/* Content Container */}
                 <View style={styles.shareContent}>
-                  {/* Top Section with Date and Emoji */}
                   <View style={styles.shareTopSection}>
                     <View style={styles.shareDateBadge}>
                       <Ionicons name="calendar" size={14} color="#fff" />
@@ -478,16 +472,13 @@ ${packingText}
                     </View>
                   </View>
 
-                  {/* Main Content - Centered */}
                   <View style={styles.shareMainContent}>
                     <Text style={styles.shareDestination}>
                       {sharingItinerary.planningLocation || 'Amazing Destination'}
                     </Text>
-                    
                     <Text style={styles.shareLocation}>
                       <Ionicons name="location" size={14} color="#FFD700" /> {sharingItinerary.province || 'Sri Lanka'}
                     </Text>
-
                     <View style={styles.shareTimeBadge}>
                       <Ionicons name="time" size={14} color="#FFD700" />
                       <Text style={styles.shareTimeLabel}> Starts at </Text>
@@ -497,9 +488,7 @@ ${packingText}
                     </View>
                   </View>
 
-                  {/* Bottom Section with Stats and Caption */}
                   <View style={styles.shareBottomSection}>
-                    {/* Stats Row */}
                     <View style={styles.shareStats}>
                       <View style={styles.shareStat}>
                         <Ionicons name="heart" size={16} color="#FF6B6B" />
@@ -511,7 +500,6 @@ ${packingText}
                       </View>
                     </View>
 
-                    {/* Caption (if exists) */}
                     {sharingItinerary.postCaption && (
                       <View style={styles.shareCaptionContainer}>
                         <Text style={styles.shareCaptionLabel}>Caption</Text>
@@ -521,7 +509,6 @@ ${packingText}
                       </View>
                     )}
 
-                    {/* App Branding */}
                     <View style={styles.shareBranding}>
                       <Text style={styles.shareBrandingText}>Travel Planner</Text>
                       <Text style={styles.shareBrandingSub}>Plan Your Perfect Journey</Text>
@@ -576,7 +563,6 @@ ${packingText}
 
     return (
       <View style={[styles.card, isHighlighted && styles.highlightedCard]}>
-        {/* Card Content - Clickable */}
         <TouchableOpacity 
           style={styles.cardContent}
           onPress={() => {
@@ -585,7 +571,6 @@ ${packingText}
           }}
           activeOpacity={0.7}
         >
-          {/* Date and Emoji Header */}
           <View style={styles.cardDateHeader}>
             <Text style={styles.cardDate}>
               {formattedDate}
@@ -593,28 +578,23 @@ ${packingText}
             <Text style={styles.cardHeaderEmoji}>{getEmoji()}</Text>
           </View>
 
-          {/* Location Title */}
           <Text style={styles.cardLocationTitle}>
             {item.planningLocation || 'Bopath Alla Waterfall'}
           </Text>
 
-          {/* Full Address */}
           <Text style={styles.cardAddress} numberOfLines={2}>
             {item.province || 'Agalwatte village, Kuruwita, in the Ratnapura District of Sri Lanka.'}
           </Text>
 
-          {/* Start Time Row */}
           <View style={styles.startTimeRow}>
             <Text style={styles.startTimeLabel}>Start By :</Text>
             <Text style={styles.startTimeValue}>{item.startedTime || '6.00 A.M'}</Text>
           </View>
 
-          {/* Approve Button */}
           <TouchableOpacity style={styles.approveButton}>
             <Text style={styles.approveButtonText}>Approve the Travel Guide</Text>
           </TouchableOpacity>
 
-          {/* See More Button */}
           <TouchableOpacity 
             style={styles.seeMoreButton}
             onPress={() => {
@@ -626,7 +606,6 @@ ${packingText}
           </TouchableOpacity>
         </TouchableOpacity>
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Ionicons name="heart-outline" size={18} color="#FF6B6B" />
@@ -638,9 +617,7 @@ ${packingText}
           </View>
         </View>
 
-        {/* Action Buttons Row */}
         <View style={styles.actionButtonsRow}>
-          {/* Update Button */}
           <TouchableOpacity 
             style={styles.updateButton}
             onPress={() => handleUpdateItinerary(item)}
@@ -648,7 +625,6 @@ ${packingText}
             <Text style={styles.updateButtonText}>UPDATE</Text>
           </TouchableOpacity>
 
-          {/* Share Button */}
           <TouchableOpacity 
             style={styles.shareButton}
             onPress={() => handleShare(item)}
@@ -656,7 +632,6 @@ ${packingText}
             <Text style={styles.shareButtonText}>SHARE</Text>
           </TouchableOpacity>
 
-          {/* Delete Button */}
           <TouchableOpacity 
             style={styles.deleteButton}
             onPress={() => handleDeleteItinerary(item.id)}
@@ -665,6 +640,70 @@ ${packingText}
           </TouchableOpacity>
         </View>
       </View>
+    );
+  };
+
+  // Recent Plan Card Component for Recommendations
+  const RecentPlanCard = ({ plan }) => {
+    const getPlanEmoji = () => {
+      const dest = (plan.destination || '').toLowerCase();
+      if (dest.includes('beach')) return '🏖️';
+      if (dest.includes('mountain')) return '⛰️';
+      if (dest.includes('waterfall')) return '🌊';
+      if (dest.includes('city')) return '🏙️';
+      if (dest.includes('adventure')) return '🧗';
+      return '✈️';
+    };
+
+    const formatShortDate = (dateString) => {
+      if (!dateString) return '';
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } catch {
+        return '';
+      }
+    };
+
+    return (
+      <TouchableOpacity 
+        style={styles.recentPlanCard}
+        onPress={() => {
+          setSelectedItinerary(plan);
+          setModalVisible(true);
+        }}
+      >
+        {/* Card Image */}
+        {plan.image ? (
+          <Image source={{ uri: plan.image }} style={styles.recentPlanImage} />
+        ) : (
+          <View style={[styles.recentPlanImage, styles.recentPlanImagePlaceholder]}>
+            <Text style={styles.recentPlanEmoji}>{getPlanEmoji()}</Text>
+          </View>
+        )}
+        
+        {/* Overlay */}
+        <View style={styles.recentPlanOverlay}>
+          <View style={styles.recentPlanTag}>
+            <Text style={styles.recentPlanTagText}>
+              {plan.currentStatus || 'Planned'}
+            </Text>
+          </View>
+          <Text style={styles.recentPlanName} numberOfLines={1}>
+            {plan.destination || 'Untitled Trip'}
+          </Text>
+          <Text style={styles.recentPlanLocation} numberOfLines={1}>
+            {plan.planningLocation || plan.province || 'Location not set'}
+          </Text>
+          <View style={styles.recentPlanDate}>
+            <Ionicons name="calendar-outline" size={10} color="#fff" />
+            <Text style={styles.recentPlanDateText}>
+              {formatShortDate(plan.startDate) || 'Date TBD'}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -680,7 +719,6 @@ ${packingText}
           <ScrollView showsVerticalScrollIndicator={false}>
             {selectedItinerary && (
               <>
-                {/* Modal Header */}
                 <View style={styles.modalHeader}>
                   <TouchableOpacity onPress={() => setModalVisible(false)}>
                     <Ionicons name="close" size={24} color="#333" />
@@ -691,7 +729,6 @@ ${packingText}
                   </TouchableOpacity>
                 </View>
 
-                {/* Hero Image */}
                 {selectedItinerary.image ? (
                   <Image source={{ uri: selectedItinerary.image }} style={styles.modalImage} />
                 ) : (
@@ -700,7 +737,6 @@ ${packingText}
                   </View>
                 )}
 
-                {/* Title Section */}
                 <View style={styles.modalBody}>
                   <View style={styles.modalTitleRow}>
                     <Text style={styles.modalDestination}>
@@ -715,7 +751,6 @@ ${packingText}
                     <Text style={styles.modalCaption}>"{selectedItinerary.postCaption}"</Text>
                   )}
 
-                  {/* Trip Details Grid */}
                   <View style={styles.detailsGrid}>
                     <View style={styles.detailCard}>
                       <Ionicons name="calendar" size={20} color="#007AFF" />
@@ -739,7 +774,6 @@ ${packingText}
                     </View>
                   </View>
 
-                  {/* Location Info */}
                   <View style={styles.infoSection}>
                     <Text style={styles.infoSectionTitle}>📍 Location Details</Text>
                     <View style={styles.infoRow}>
@@ -751,7 +785,6 @@ ${packingText}
                     </View>
                   </View>
 
-                  {/* Budget Breakdown */}
                   {selectedItinerary.budgetBreakdown && (
                     <View style={styles.infoSection}>
                       <Text style={styles.infoSectionTitle}>💰 Budget Breakdown</Text>
@@ -790,7 +823,6 @@ ${packingText}
                     </View>
                   )}
 
-                  {/* Packing List */}
                   {selectedItinerary.selectedPackingItems?.length > 0 && (
                     <View style={styles.infoSection}>
                       <Text style={styles.infoSectionTitle}>🎒 Packing List</Text>
@@ -805,7 +837,6 @@ ${packingText}
                     </View>
                   )}
 
-                  {/* Trip Notes */}
                   {selectedItinerary.tripNotes && (
                     <View style={styles.infoSection}>
                       <Text style={styles.infoSectionTitle}>📝 Trip Notes</Text>
@@ -813,7 +844,6 @@ ${packingText}
                     </View>
                   )}
 
-                  {/* Action Buttons */}
                   <View style={styles.actionButtons}>
                     <TouchableOpacity style={styles.whatsappButton} onPress={() => handleShare(selectedItinerary)}>
                       <Ionicons name="share-social" size={18} color="#fff" />
@@ -940,7 +970,7 @@ ${packingText}
             </TouchableOpacity>
           </View>
 
-          {/* Search Results Count (optional) */}
+          {/* Search Results Count */}
           {searchQuery.length > 0 && (
             <Text style={styles.searchResultText}>
               Found {filteredItineraries.length} result{filteredItineraries.length !== 1 ? 's' : ''}
@@ -955,26 +985,31 @@ ${packingText}
             </Text>
           </View>
 
-          {/* Category Tags */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsScroll}>
-            <View style={styles.tagsWrapper}>
-              <TouchableOpacity style={[styles.categoryTag, styles.categoryTagActive]}>
-                <Text style={[styles.categoryTagText, styles.categoryTagTextActive]}>waterfall</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>Beach</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>Adventure</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>Mountain</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>City</Text>
-              </TouchableOpacity>
+          {/* Recent Plans Section - Newest 5 Plans */}
+          {recentPlans.length > 0 && (
+            <View style={styles.recentSection}>
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>🔥 Recent Adventures</Text>
+                <TouchableOpacity onPress={() => {
+                  if (recentPlans.length > 0) {
+                    setSelectedItinerary(recentPlans[0]);
+                    setModalVisible(true);
+                  }
+                }}>
+                  <Text style={styles.recentSeeAll}>See All</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentScrollContent}
+              >
+                {recentPlans.map((plan) => (
+                  <RecentPlanCard key={plan.id} plan={plan} />
+                ))}
+              </ScrollView>
             </View>
-          </ScrollView>
+          )}
 
           {/* Itineraries List */}
           <FlatList
@@ -1031,6 +1066,7 @@ ${packingText}
   );
 };
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1131,30 +1167,93 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666666',
   },
-  tagsScroll: {
-    paddingHorizontal: 20,
+  // Recent Plans Section Styles
+  recentSection: {
     marginBottom: 20,
   },
-  tagsWrapper: {
+  recentHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
-  categoryTag: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F2F2F7',
-    marginRight: 10,
+  recentTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
   },
-  categoryTagActive: {
-    backgroundColor: '#E8F1FF',
-  },
-  categoryTagText: {
-    fontSize: 14,
-    color: '#666666',
+  recentSeeAll: {
+    fontSize: 13,
+    color: '#007AFF',
     fontWeight: '500',
   },
-  categoryTagTextActive: {
+  recentScrollContent: {
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingBottom: 5,
+  },
+  recentPlanCard: {
+    width: 140,
+    marginRight: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recentPlanImage: {
+    width: '100%',
+    height: 120,
+    backgroundColor: '#f5f5f5',
+  },
+  recentPlanImagePlaceholder: {
+    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentPlanEmoji: {
+    fontSize: 40,
+  },
+  recentPlanOverlay: {
+    padding: 10,
+    backgroundColor: '#fff',
+  },
+  recentPlanTag: {
+    backgroundColor: '#007AFF20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  recentPlanTagText: {
+    fontSize: 9,
     color: '#007AFF',
+    fontWeight: '500',
+  },
+  recentPlanName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  recentPlanLocation: {
+    fontSize: 10,
+    color: '#666',
+    marginBottom: 4,
+  },
+  recentPlanDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  recentPlanDateText: {
+    fontSize: 9,
+    color: '#999',
   },
   listContainer: {
     paddingHorizontal: 20,
@@ -1583,7 +1682,6 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '500',
   },
-  // Notification Styles
   notificationContainer: {
     position: 'absolute',
     top: 0,
@@ -1632,7 +1730,6 @@ const styles = StyleSheet.create({
   notificationClose: {
     padding: 6,
   },
-  // Share Modal Styles
   shareModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
