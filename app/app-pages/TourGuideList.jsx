@@ -29,7 +29,7 @@ const TourGuideList = () => {
 
   useEffect(() => {
     loadCurrentUser();
-    
+
     // Cleanup subscription on unmount
     return () => {
       if (subscriptionRef.current) {
@@ -71,7 +71,7 @@ const TourGuideList = () => {
         }));
         setProfiles(profilesWithRatings);
         setFilteredProfiles(profilesWithRatings);
-        
+
         // Check if current user has a profile
         if (currentUser) {
           const userProfile = profilesWithRatings.find(p => p.user_id === currentUser.id);
@@ -131,9 +131,9 @@ const TourGuideList = () => {
           rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
           reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
         };
-        
+
         setProfiles(prevProfiles => [newProfile, ...prevProfiles]);
-        
+
         // Update filtered profiles if search query is empty
         if (searchQuery === '') {
           setFilteredProfiles(prev => [newProfile, ...prev]);
@@ -144,11 +144,11 @@ const TourGuideList = () => {
             setFilteredProfiles(prev => [newProfile, ...prev]);
           }
         }
-        
+
         // Show notification (optional)
         // Alert.alert('New Guide', `${newProfile.full_name} joined as a tour guide!`);
         break;
-        
+
       case 'UPDATE':
         // Profile updated
         const updatedProfile = {
@@ -156,31 +156,31 @@ const TourGuideList = () => {
           rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
           reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
         };
-        
-        setProfiles(prevProfiles => 
-          prevProfiles.map(profile => 
+
+        setProfiles(prevProfiles =>
+          prevProfiles.map(profile =>
             profile.id === updatedProfile.id ? updatedProfile : profile
           )
         );
-        
-        setFilteredProfiles(prev => 
-          prev.map(profile => 
+
+        setFilteredProfiles(prev =>
+          prev.map(profile =>
             profile.id === updatedProfile.id ? updatedProfile : profile
           )
         );
         break;
-        
+
       case 'DELETE':
         // Profile deleted
-        setProfiles(prevProfiles => 
+        setProfiles(prevProfiles =>
           prevProfiles.filter(profile => profile.id !== oldRecord.id)
         );
-        setFilteredProfiles(prev => 
+        setFilteredProfiles(prev =>
           prev.filter(profile => profile.id !== oldRecord.id)
         );
         break;
     }
-    
+
     // Update hasOwnProfile status if current user's profile changed
     if (currentUser) {
       const userProfile = profiles.find(p => p.user_id === currentUser.id);
@@ -207,7 +207,7 @@ const TourGuideList = () => {
       setFilteredProfiles(profiles);
     } else {
       const searchLower = text.toLowerCase();
-      const filtered = profiles.filter(profile => 
+      const filtered = profiles.filter(profile =>
         checkProfileMatchesSearch(profile, searchLower)
       );
       setFilteredProfiles(filtered);
@@ -262,7 +262,7 @@ const TourGuideList = () => {
                 .eq('id', profile.id);
 
               if (error) throw error;
-              
+
               // No need to manually update state - real-time subscription will handle it
               Alert.alert('Success', 'Your profile has been deleted successfully');
             } catch (error) {
@@ -280,7 +280,7 @@ const TourGuideList = () => {
       Alert.alert('Unauthorized', 'You can only update your own profile');
       return;
     }
-    
+
     router.push({
       pathname: '/app-pages/TGprofile',
       params: { profileId: profile.id }
@@ -292,7 +292,7 @@ const TourGuideList = () => {
     const numRating = parseFloat(rating);
     const fullStars = Math.floor(numRating);
     const hasHalfStar = numRating % 1 >= 0.5;
-    
+
     for (let i = 0; i < fullStars; i++) {
       stars.push(<Ionicons key={`star-${i}`} name="star" size={12} color="#FFD700" />);
     }
@@ -349,7 +349,7 @@ const TourGuideList = () => {
 
         <View style={styles.cardContent}>
           <Text style={styles.guideTitle}>Official Photographer and Travel Guide</Text>
-          
+
           {profile.experience && (
             <View style={styles.experienceContainer}>
               <Ionicons name="briefcase-outline" size={14} color="#007AFF" />
@@ -387,15 +387,15 @@ const TourGuideList = () => {
         <View style={styles.actionButtons}>
           {isOwner && (
             <>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.updateButton}
                 onPress={() => handleUpdateProfile(profile)}
               >
                 <Ionicons name="create-outline" size={16} color="#fff" />
                 <Text style={styles.updateButtonText}>Update</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.deleteButton}
                 onPress={() => handleDeleteProfile(profile)}
               >
@@ -404,15 +404,15 @@ const TourGuideList = () => {
               </TouchableOpacity>
             </>
           )}
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[styles.viewButton, !isOwner && styles.fullWidthViewButton]}
             onPress={() => handleCardPress(profile)}
           >
             <Text style={styles.viewButtonText}>View Profile</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.chatButton}
             onPress={() => handleChatPress(profile)}
           >
@@ -420,7 +420,7 @@ const TourGuideList = () => {
             <Text style={styles.chatButtonText}>Chat</Text>
           </TouchableOpacity>
         </View>
-        
+
         {isOwner && (
           <View style={styles.ownerBadge}>
             <Text style={styles.ownerBadgeText}>Your Profile</Text>
@@ -437,7 +437,7 @@ const TourGuideList = () => {
       <Text style={styles.emptyText}>
         Be the first to create a tour guide profile and share your expertise with travelers!
       </Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.createButton}
         onPress={handleBecomeGuide}
       >
@@ -498,7 +498,7 @@ const TourGuideList = () => {
       <SearchResultsCount />
 
       <View style={styles.becomeButtonContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.becomeButton, hasOwnProfile && styles.becomeButtonDisabled]}
           onPress={handleBecomeGuide}
           disabled={hasOwnProfile}
@@ -524,7 +524,7 @@ const TourGuideList = () => {
               <Text style={styles.noResultsText}>
                 We couldn't find any tour guides matching "{searchQuery}"
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.clearSearchButton}
                 onPress={() => handleSearch('')}
               >
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     paddingHorizontal: 20,
-    paddingTop: 75,
+    paddingTop: 70,
     paddingBottom: 16,
     backgroundColor: '#fff',
   },
