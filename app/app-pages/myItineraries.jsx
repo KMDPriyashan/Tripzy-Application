@@ -563,6 +563,19 @@ ${packingText}
 
     return (
       <View style={[styles.card, isHighlighted && styles.highlightedCard]}>
+        {/* Image Section - NEW */}
+        {item.image ? (
+          <Image 
+            source={{ uri: item.image }} 
+            style={styles.cardImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
+            <Text style={styles.cardImageEmoji}>{getEmoji()}</Text>
+          </View>
+        )}
+        
         <TouchableOpacity 
           style={styles.cardContent}
           onPress={() => {
@@ -1278,7 +1291,6 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#F0F0F0',
@@ -1287,6 +1299,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    overflow: 'hidden', // This ensures the image corners are rounded
   },
   highlightedCard: {
     borderColor: '#007AFF',
@@ -1296,8 +1309,24 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  // New styles for card image
+  cardImage: {
+    width: '100%',
+    height: 180,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  cardImagePlaceholder: {
+    backgroundColor: '#007AFF20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardImageEmoji: {
+    fontSize: 50,
+  },
   cardContent: {
     width: '100%',
+    padding: 16,
   },
   cardDateHeader: {
     flexDirection: 'row',
@@ -1368,6 +1397,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
     paddingTop: 12,
+    paddingHorizontal: 16,
   },
   statItem: {
     flexDirection: 'row',
@@ -1383,6 +1413,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   updateButton: {
     flex: 1,
