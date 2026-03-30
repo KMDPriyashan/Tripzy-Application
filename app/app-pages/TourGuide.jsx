@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 13,
     color: '#333',
     marginLeft: 8,
     paddingVertical: 0,
@@ -851,7 +851,7 @@ const styles = StyleSheet.create({
   },
   destinationInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 13,
     color: '#333',
     marginLeft: 8,
     paddingVertical: 0,
@@ -954,8 +954,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
+    fontSize: 13,
     color: '#333',
+    
     borderWidth: 1,
     borderColor: '#f0f0f0',
   },
