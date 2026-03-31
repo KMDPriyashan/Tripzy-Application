@@ -7,14 +7,22 @@
     "scheme": "tripzyapplication",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.TripzyApplication"
+      "package": "com.anonymous.TripzyApplication",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk"
+        }
+      }
     },
     "web": {
       "output": "static"
