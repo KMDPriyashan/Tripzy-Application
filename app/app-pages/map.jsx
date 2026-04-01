@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +15,9 @@ import {
   View
 } from 'react-native';
 
+// Import Supabase functions with correct path
+import { getPopularLocations, searchDatabaseLocations, supabase } from '../../lib/supabase';
+
 const mapPage = () => {
   const router = useRouter();
   const [fromLocation, setFromLocation] = useState('');
@@ -25,11 +28,6 @@ const mapPage = () => {
   const [waypoints, setWaypoints] = useState([]);
   const [showAddDestination, setShowAddDestination] = useState(false);
   const [newDestination, setNewDestination] = useState('');
-  const [savedLocations, setSavedLocations] = useState([
-    { id: 1, name: 'Gampaha', address: 'Gampaha, Sri Lanka' },
-    { id: 2, name: 'Kandy', address: 'Kandy, Sri Lanka' },
-    { id: 3, name: 'Galle', address: 'Galle, Sri Lanka' },
-  ]);
   const [routeDetails, setRouteDetails] = useState(null);
   
   // Search states
@@ -37,8 +35,12 @@ const mapPage = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [selectedInput, setSelectedInput] = useState(null); // 'from', 'to', or 'waypoint'
+  const [selectedInput, setSelectedInput] = useState(null);
   const searchTimeout = useRef(null);
+  
+  // Popular locations state
+  const [popularLocations, setPopularLocations] = useState([]);
+  const [loadingPopular, setLoadingPopular] = useState(true);
   
   // Weather and traffic info
   const [weatherInfo, setWeatherInfo] = useState({
@@ -47,7 +49,26 @@ const mapPage = () => {
   });
   const [trafficInfo, setTrafficInfo] = useState('Light traffic in this area');
 
-  // Search locations using Google Places API
+  // Load popular locations on mount
+  useEffect(() => {
+    loadPopularLocations();
+  }, []);
+
+  const loadPopularLocations = async () => {
+    try {
+      setLoadingPopular(true);
+      const popular = await getPopularLocations(8);
+      console.log('Loaded popular locations:', popular?.length || 0);
+      setPopularLocations(popular || []);
+    } catch (error) {
+      console.error('Error loading popular locations:', error);
+      setPopularLocations([]);
+    } finally {
+      setLoadingPopular(false);
+    }
+  };
+
+  // Updated searchLocations function with better error handling
   const searchLocations = async (query) => {
     if (!query.trim() || query.length < 2) {
       setSearchResults([]);
@@ -56,32 +77,79 @@ const mapPage = () => {
     }
 
     setSearching(true);
+    const allResults = [];
+
     try {
-      // Using Google Places API (text search)
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk`
-      );
+      console.log('Searching for:', query);
       
-      const data = await response.json();
+      // 1. Search in Supabase Database
+      const dbResults = await searchDatabaseLocations(query);
+      console.log('Database results count:', dbResults?.length || 0);
       
-      if (data.status === 'OK' && data.results.length > 0) {
-        const results = data.results.slice(0, 5).map(place => ({
-          id: place.place_id,
-          name: place.name,
-          address: place.formatted_address,
-          latitude: place.geometry.location.lat,
-          longitude: place.geometry.location.lng,
-          types: place.types,
-          rating: place.rating
+      if (dbResults && dbResults.length > 0) {
+        const formattedDbResults = dbResults.map(loc => ({
+          id: loc.id,
+          name: loc.name,
+          address: loc.address || `${loc.city || loc.district || ''}, Sri Lanka`,
+          latitude: parseFloat(loc.latitude),
+          longitude: parseFloat(loc.longitude),
+          source: 'database',
+          rating: loc.rating,
+          category: loc.category,
+          city: loc.city,
+          district: loc.district,
+          search_relevance: loc.search_relevance || 0
         }));
-        setSearchResults(results);
-        setShowSearchResults(true);
-      } else {
-        setSearchResults([]);
+        allResults.push(...formattedDbResults);
+      }
+
+      // 2. Search in Google Places API (only if no database results)
+      if (allResults.length === 0) {
+        try {
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk`
+          );
+          
+          const data = await response.json();
+          
+          if (data.status === 'OK' && data.results && data.results.length > 0) {
+            const googleResults = data.results.slice(0, 5).map(place => ({
+              id: place.place_id,
+              name: place.name,
+              address: place.formatted_address,
+              latitude: place.geometry.location.lat,
+              longitude: place.geometry.location.lng,
+              source: 'google',
+              types: place.types,
+              rating: place.rating
+            }));
+            allResults.push(...googleResults);
+          }
+        } catch (error) {
+          console.error('Google search error:', error);
+        }
+      }
+
+      // Sort and set results
+      allResults.sort((a, b) => {
+        if (a.source === 'database' && b.source !== 'database') return -1;
+        if (a.source !== 'database' && b.source === 'database') return 1;
+        if (a.source === 'database' && b.source === 'database') {
+          return (b.search_relevance || 0) - (a.search_relevance || 0);
+        }
+        return 0;
+      });
+
+      const finalResults = allResults.slice(0, 10);
+      setSearchResults(finalResults);
+      setShowSearchResults(finalResults.length > 0);
+      
+      if (finalResults.length === 0 && allResults.length === 0) {
+        // Show local suggestions as fallback
+        getLocalSuggestions(query);
       }
     } catch (error) {
       console.error('Search error:', error);
-      // Fallback to local suggestions
       getLocalSuggestions(query);
     } finally {
       setSearching(false);
@@ -91,20 +159,29 @@ const mapPage = () => {
   // Local suggestions as fallback
   const getLocalSuggestions = (query) => {
     const localPlaces = [
-      { id: '1', name: 'Gampaha Town', address: 'Gampaha, Sri Lanka' },
-      { id: '2', name: 'Gampaha Botanical Garden', address: 'Gampaha Fly Over, Gampaha' },
-      { id: '3', name: 'Gampaha Wickramarachchi University', address: 'Gampaha, Sri Lanka' },
-      { id: '4', name: 'Gampaha District Secretariat Office', address: 'Gampaha, Sri Lanka' },
-      { id: '5', name: 'Kandy City Center', address: 'Kandy, Sri Lanka' },
-      { id: '6', name: 'Galle Fort', address: 'Galle, Sri Lanka' },
+      { id: '1', name: 'Gampaha Town', address: 'Gampaha, Sri Lanka', latitude: 7.0908, longitude: 80.0056 },
+      { id: '2', name: 'Henerathgoda Botanical Garden', address: 'Gampaha, Sri Lanka', latitude: 7.1011, longitude: 80.0156 },
+      { id: '3', name: 'Gampaha Wickramarachchi University', address: 'Gampaha, Sri Lanka', latitude: 7.0875, longitude: 80.0117 },
+      { id: '4', name: 'Gampaha Railway Station', address: 'Gampaha, Sri Lanka', latitude: 7.0897, longitude: 80.0100 },
+      { id: '5', name: 'Kandy City Center', address: 'Kandy, Sri Lanka', latitude: 7.2914, longitude: 80.6386 },
+      { id: '6', name: 'Galle Fort', address: 'Galle, Sri Lanka', latitude: 6.0275, longitude: 80.2183 },
+      { id: '7', name: 'Colombo City Center', address: 'Colombo, Sri Lanka', latitude: 6.9271, longitude: 79.8612 },
+      { id: '8', name: 'Temple of the Tooth', address: 'Kandy, Sri Lanka', latitude: 7.2936, longitude: 80.6414 },
     ];
     
     const filtered = localPlaces.filter(place => 
       place.name.toLowerCase().includes(query.toLowerCase()) ||
       place.address.toLowerCase().includes(query.toLowerCase())
     );
-    setSearchResults(filtered);
-    setShowSearchResults(true);
+    
+    const formattedResults = filtered.map(place => ({
+      ...place,
+      source: 'local',
+      rating: 4.0
+    }));
+    
+    setSearchResults(formattedResults);
+    setShowSearchResults(formattedResults.length > 0);
   };
 
   // Handle text input change with debounce
@@ -133,7 +210,8 @@ const mapPage = () => {
         name: location.name, 
         address: location.address,
         latitude: location.latitude,
-        longitude: location.longitude
+        longitude: location.longitude,
+        source: location.source
       }]);
       setShowAddDestination(false);
     }
@@ -217,11 +295,6 @@ const mapPage = () => {
 
   const removeWaypoint = (id) => {
     setWaypoints(waypoints.filter(wp => wp.id !== id));
-  };
-
-  const addSavedLocation = (location) => {
-    setWaypoints([...waypoints, { id: Date.now(), name: location.name, address: location.address }]);
-    setShowAddDestination(false);
   };
 
   const calculateRoute = () => {
@@ -334,21 +407,43 @@ const mapPage = () => {
     ]);
   };
 
-  const sendToPhone = () => {
-    Alert.alert('Send Directions', 'Directions have been sent to your phone via email');
-  };
-
-  const copyLink = () => {
-    Alert.alert('Link Copied', 'Route link has been copied to clipboard');
+  // Debug button to test database connection
+  const testDatabaseConnection = async () => {
+    console.log('🔍 Testing database connection...');
+    try {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('count');
+      
+      if (error) {
+        console.error('Database error:', error);
+        Alert.alert('Database Error', error.message);
+      } else {
+        console.log('Database connected!');
+        Alert.alert('Success', 'Database connected successfully!');
+      }
+      
+      const popular = await getPopularLocations(5);
+      console.log('Popular locations:', popular);
+      
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      Alert.alert('Error', 'Failed to connect to database');
+    }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Map Enhance</Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backButton}>Back</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity onPress={testDatabaseConnection} style={styles.testButton}>
+            <Text style={styles.testButtonText}>🔧</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -469,20 +564,67 @@ const mapPage = () => {
           />
         </View>
 
+        {/* Popular Locations Quick Select */}
+        {!loadingPopular && popularLocations.length > 0 && !showSearchResults && (
+          <View style={styles.popularContainer}>
+            <Text style={styles.popularTitle}>📍 Popular Places</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.popularScroll}
+            >
+              {popularLocations.map((location) => (
+                <TouchableOpacity
+                  key={location.id}
+                  style={styles.popularItem}
+                  onPress={() => {
+                    setToLocation(location.name);
+                    setRouteDetails(null);
+                  }}
+                >
+                  <Text style={styles.popularIcon}>
+                    {location.category === 'restaurant' ? '🍽️' :
+                     location.category === 'hospital' ? '🏥' :
+                     location.category === 'hotel' ? '🏨' :
+                     location.category === 'park' ? '🌳' :
+                     location.category === 'shopping_mall' ? '🛍️' :
+                     location.category === 'temple' ? '🛕' : '📍'}
+                  </Text>
+                  <Text style={styles.popularName}>{location.name}</Text>
+                  <Text style={styles.popularAddress} numberOfLines={1}>
+                    {location.city || location.district || 'Sri Lanka'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Search Results Panel */}
         {showSearchResults && searchResults.length > 0 && (
           <View style={styles.searchResultsPanel}>
-            <Text style={styles.searchResultsTitle}>Choose destination, or click on the map.</Text>
-            {searchResults.map((item, index) => (
+            <Text style={styles.searchResultsTitle}>
+              {searchResults.filter(r => r.source === 'database').length > 0 ? 
+                '📍 From your saved places' : '📍 Search results'}
+            </Text>
+            {searchResults.map((item) => (
               <TouchableOpacity 
                 key={item.id} 
                 style={styles.searchResultItem}
                 onPress={() => selectLocation(item)}
               >
-                <Text style={styles.searchResultName}>{item.name}</Text>
+                <View style={styles.searchResultHeader}>
+                  <Text style={styles.searchResultName}>{item.name}</Text>
+                  {item.source === 'database' && (
+                    <Text style={styles.databaseBadge}>📌 Saved</Text>
+                  )}
+                </View>
                 <Text style={styles.searchResultAddress} numberOfLines={1}>
                   {item.address}
                 </Text>
+                {item.rating && (
+                  <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -491,25 +633,9 @@ const mapPage = () => {
         {searching && (
           <View style={styles.searchingContainer}>
             <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.searchingText}>Searching...</Text>
+            <Text style={styles.searchingText}>Searching locations...</Text>
           </View>
         )}
-
-        {/* Saved Locations */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Saved 📌</Text>
-          <View style={styles.savedContainer}>
-            {savedLocations.map((location) => (
-              <TouchableOpacity 
-                key={location.id}
-                style={styles.savedItem}
-                onPress={() => setToLocation(location.name)}
-              >
-                <Text style={styles.savedItemText}>{location.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
 
         {/* Weather & Traffic Info */}
         <View style={styles.infoPanel}>
@@ -518,8 +644,8 @@ const mapPage = () => {
             <Text style={styles.weatherCondition}>{weatherInfo.condition}</Text>
           </View>
           <View style={styles.trafficInfo}>
-            <Text style={styles.trafficText}>{trafficInfo}</Text>
-            <Text style={styles.trafficSubText}>No known road disruptions. Traffic incidents will show up here.</Text>
+            <Text style={styles.trafficText}>🚦 {trafficInfo}</Text>
+            <Text style={styles.trafficSubText}>Updated just now</Text>
           </View>
         </View>
 
@@ -539,17 +665,6 @@ const mapPage = () => {
             {routeDetails.tolls && <Text style={styles.routeToll}>This route has tolls.</Text>}
           </View>
         )}
-
-        {/* Options */}
-        <View style={styles.optionsContainer}>
-          <Text style={styles.sectionTitle}>Options</Text>
-          <TouchableOpacity style={styles.optionButton} onPress={sendToPhone}>
-            <Text style={styles.optionText}>📱 Send directions to your phone</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.optionButton} onPress={copyLink}>
-            <Text style={styles.optionText}>🔗 Copy link</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Buttons */}
         <TouchableOpacity style={styles.calculateButton} onPress={calculateRoute}>
@@ -597,17 +712,6 @@ const mapPage = () => {
                 </View>
               )}
               
-              <Text style={styles.modalSubtitle}>Saved Places</Text>
-              {savedLocations.map((location) => (
-                <TouchableOpacity
-                  key={location.id}
-                  style={styles.modalSavedItem}
-                  onPress={() => addSavedLocation(location)}
-                >
-                  <Text style={styles.modalSavedText}>{location.name}</Text>
-                </TouchableOpacity>
-              ))}
-              
               <View style={styles.modalButtons}>
                 <TouchableOpacity style={styles.modalCancel} onPress={() => setShowAddDestination(false)}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -644,7 +748,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  testButton: {
+    padding: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+  },
+  testButtonText: {
+    fontSize: 16,
+  },
   backButton: {
+    padding: 8,
+  },
+  backButtonText: {
     fontSize: 16,
     color: '#007AFF',
   },
@@ -806,6 +926,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  popularContainer: {
+    marginBottom: 20,
+  },
+  popularTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#333',
+  },
+  popularScroll: {
+    flexDirection: 'row',
+  },
+  popularItem: {
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 12,
+    marginRight: 12,
+    minWidth: 100,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    alignItems: 'center',
+  },
+  popularIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  popularName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  popularAddress: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
   searchResultsPanel: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
@@ -830,15 +988,35 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  searchResultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   searchResultName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
+    flex: 1,
+  },
+  databaseBadge: {
+    fontSize: 10,
+    color: '#007AFF',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   searchResultAddress: {
     fontSize: 12,
     color: '#666',
+  },
+  searchResultRating: {
+    fontSize: 11,
+    color: '#FFB800',
+    marginTop: 4,
   },
   searchingContainer: {
     flexDirection: 'row',
@@ -851,21 +1029,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginLeft: 8,
-  },
-  savedContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  savedItem: {
-    backgroundColor: '#f0f0f0',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  savedItemText: {
-    fontSize: 14,
-    color: '#333',
   },
   infoPanel: {
     backgroundColor: '#f8f9fa',
@@ -943,17 +1106,6 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontWeight: '500',
   },
-  optionsContainer: {
-    marginBottom: 20,
-  },
-  optionButton: {
-    paddingVertical: 12,
-    marginBottom: 8,
-  },
-  optionText: {
-    fontSize: 14,
-    color: '#007AFF',
-  },
   calculateButton: {
     backgroundColor: '#34C759',
     paddingVertical: 14,
@@ -1022,21 +1174,6 @@ const styles = StyleSheet.create({
   modalResultName: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#333',
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#666',
-  },
-  modalSavedItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  modalSavedText: {
-    fontSize: 16,
     color: '#333',
   },
   modalButtons: {
