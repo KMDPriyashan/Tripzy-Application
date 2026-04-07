@@ -42,7 +42,15 @@
         }
       ],
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Tripzy to access your location for accurate weather forecasts.",
+          "locationAlwaysPermission": "Allow Tripzy to use your location even when the app is in the background for weather updates.",
+          "locationWhenInUsePermission": "Allow Tripzy to access your location while using the app for weather forecasts."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

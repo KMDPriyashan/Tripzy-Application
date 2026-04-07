@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 20,      
   },
   searchContainer: {
     paddingHorizontal: 16,
