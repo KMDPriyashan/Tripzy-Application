@@ -188,6 +188,7 @@ const mapPage = () => {
   const handleSearchChange = (text, inputType) => {
     setSearchQuery(text);
     setSelectedInput(inputType);
+    setShowSearchResults(true); // Keep results visible while typing
     
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
@@ -216,10 +217,19 @@ const mapPage = () => {
       setShowAddDestination(false);
     }
     
+    // Clear search results after selection
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchResults(false);
     setSelectedInput(null);
+  };
+
+  // Clear search results (for cancel button)
+  const clearSearchResultsManually = () => {
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setSelectedInput(null);
+    setSearchQuery('');
   };
 
   // Travel mode mapping
@@ -446,7 +456,10 @@ const mapPage = () => {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView 
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Search along the route...</Text>
         <Text style={styles.subtitle}>📍 Better Location, Finding Everything!</Text>
 
@@ -519,6 +532,48 @@ const mapPage = () => {
           {useCurrentLocation && currentLocationText ? (
             <Text style={styles.locationHint}>Using: {currentLocationText}</Text>
           ) : null}
+          
+          {/* Search Results for "From" Section */}
+          {showSearchResults && selectedInput === 'from' && searchResults.length > 0 && (
+            <View style={styles.searchResultsPanel}>
+              <View style={styles.searchResultsHeader}>
+                <Text style={styles.searchResultsTitle}>
+                  {searchResults.filter(r => r.source === 'database').length > 0 ? 
+                    '📍 From your saved places' : '📍 Search results'}
+                </Text>
+                <TouchableOpacity onPress={clearSearchResultsManually}>
+                  <Text style={styles.clearResultsText}>✕ Cancel</Text>
+                </TouchableOpacity>
+              </View>
+              {searchResults.map((item) => (
+                <TouchableOpacity 
+                  key={item.id} 
+                  style={styles.searchResultItem}
+                  onPress={() => selectLocation(item)}
+                >
+                  <View style={styles.searchResultHeader}>
+                    <Text style={styles.searchResultName}>{item.name}</Text>
+                    {item.source === 'database' && (
+                      <Text style={styles.databaseBadge}>📌 Saved</Text>
+                    )}
+                  </View>
+                  <Text style={styles.searchResultAddress} numberOfLines={1}>
+                    {item.address}
+                  </Text>
+                  {item.rating && (
+                    <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          
+          {searching && selectedInput === 'from' && (
+            <View style={styles.searchingContainer}>
+              <ActivityIndicator size="small" color="#007AFF" />
+              <Text style={styles.searchingText}>Searching locations...</Text>
+            </View>
+          )}
         </View>
 
         {/* Waypoints */}
@@ -562,6 +617,48 @@ const mapPage = () => {
               if (toLocation) handleSearchChange(toLocation, 'to');
             }}
           />
+          
+          {/* Search Results for "To" Section */}
+          {showSearchResults && selectedInput === 'to' && searchResults.length > 0 && (
+            <View style={styles.searchResultsPanel}>
+              <View style={styles.searchResultsHeader}>
+                <Text style={styles.searchResultsTitle}>
+                  {searchResults.filter(r => r.source === 'database').length > 0 ? 
+                    '📍 From your saved places' : '📍 Search results'}
+                </Text>
+                <TouchableOpacity onPress={clearSearchResultsManually}>
+                  <Text style={styles.clearResultsText}>✕ Cancel</Text>
+                </TouchableOpacity>
+              </View>
+              {searchResults.map((item) => (
+                <TouchableOpacity 
+                  key={item.id} 
+                  style={styles.searchResultItem}
+                  onPress={() => selectLocation(item)}
+                >
+                  <View style={styles.searchResultHeader}>
+                    <Text style={styles.searchResultName}>{item.name}</Text>
+                    {item.source === 'database' && (
+                      <Text style={styles.databaseBadge}>📌 Saved</Text>
+                    )}
+                  </View>
+                  <Text style={styles.searchResultAddress} numberOfLines={1}>
+                    {item.address}
+                  </Text>
+                  {item.rating && (
+                    <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          
+          {searching && selectedInput === 'to' && (
+            <View style={styles.searchingContainer}>
+              <ActivityIndicator size="small" color="#007AFF" />
+              <Text style={styles.searchingText}>Searching locations...</Text>
+            </View>
+          )}
         </View>
 
         {/* Popular Locations Quick Select */}
@@ -597,43 +694,6 @@ const mapPage = () => {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </View>
-        )}
-
-        {/* Search Results Panel */}
-        {showSearchResults && searchResults.length > 0 && (
-          <View style={styles.searchResultsPanel}>
-            <Text style={styles.searchResultsTitle}>
-              {searchResults.filter(r => r.source === 'database').length > 0 ? 
-                '📍 From your saved places' : '📍 Search results'}
-            </Text>
-            {searchResults.map((item) => (
-              <TouchableOpacity 
-                key={item.id} 
-                style={styles.searchResultItem}
-                onPress={() => selectLocation(item)}
-              >
-                <View style={styles.searchResultHeader}>
-                  <Text style={styles.searchResultName}>{item.name}</Text>
-                  {item.source === 'database' && (
-                    <Text style={styles.databaseBadge}>📌 Saved</Text>
-                  )}
-                </View>
-                <Text style={styles.searchResultAddress} numberOfLines={1}>
-                  {item.address}
-                </Text>
-                {item.rating && (
-                  <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {searching && (
-          <View style={styles.searchingContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-            <Text style={styles.searchingText}>Searching locations...</Text>
           </View>
         )}
 
@@ -967,7 +1027,7 @@ const styles = StyleSheet.create({
   searchResultsPanel: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    marginBottom: 20,
+    marginTop: 10,
     borderWidth: 1,
     borderColor: '#e0e0e0',
     shadowColor: '#000',
@@ -976,12 +1036,22 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  searchResultsTitle: {
-    fontSize: 12,
-    color: '#666',
+  searchResultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+  },
+  searchResultsTitle: {
+    fontSize: 12,
+    color: '#666',
+  },
+  clearResultsText: {
+    fontSize: 12,
+    color: '#FF6B6B',
+    fontWeight: '500',
   },
   searchResultItem: {
     padding: 12,
@@ -1023,7 +1093,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 12,
-    marginBottom: 20,
+    marginTop: 10,
   },
   searchingText: {
     fontSize: 12,
