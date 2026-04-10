@@ -1,23 +1,24 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const BudgetEstimate = () => {
   const router = useRouter();
+  const params = useLocalSearchParams(); // Move this to the top level
   
   // Basic trip information
-  const [destination, setDestination] = useState('');
-  const [duration, setDuration] = useState('');
-  const [groupSize, setGroupSize] = useState('1');
-  const [budgetStyle, setBudgetStyle] = useState('mid-range');
+  const [destination, setDestination] = useState(params.savedDestination || ''); // Initialize with saved data
+  const [duration, setDuration] = useState(params.savedDuration || '');
+  const [groupSize, setGroupSize] = useState(params.savedGroupSize || '1');
+  const [budgetStyle, setBudgetStyle] = useState(params.savedBudgetStyle || 'mid-range');
   
   // Transport costs
   const [transportOption, setTransportOption] = useState('');
@@ -85,14 +86,28 @@ const BudgetEstimate = () => {
       total: total
     };
     
-    // Return data to previous screen
-    router.back();
-    // Use setTimeout to ensure navigation completes first
-    setTimeout(() => {
-      router.setParams({ 
-        budgetData: JSON.stringify(budgetBreakdown)
-      });
-    }, 100);
+    // Return to createPlan with both budget data AND saved form state
+    router.push({
+      pathname: '/app-pages/createPlan',
+      params: {
+        budgetData: JSON.stringify(budgetBreakdown),
+        // Pass back all the saved form data from createPlan
+        savedDestination: params.savedDestination,
+        savedPostCaption: params.savedPostCaption,
+        savedSelectedImage: params.savedSelectedImage,
+        savedPlanningLocation: params.savedPlanningLocation,
+        savedStartedTime: params.savedStartedTime,
+        savedProvince: params.savedProvince,
+        savedStartDate: params.savedStartDate,
+        savedEndDate: params.savedEndDate,
+        savedTripNotes: params.savedTripNotes,
+        savedCurrentStatus: params.savedCurrentStatus,
+        savedSelectedPackingItems: params.savedSelectedPackingItems,
+        savedBudgetEstimate: params.savedBudgetEstimate,
+        savedShowBudgetSummary: params.savedShowBudgetSummary,
+        savedBudgetBreakdown: params.savedBudgetBreakdown
+      }
+    });
   };
 
   const getBudgetStyleColor = (style) => {
