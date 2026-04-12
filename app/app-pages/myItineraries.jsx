@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Directory, File, Paths } from 'expo-file-system';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -38,78 +39,196 @@ const MyItineraries = () => {
   const [highlightedPlanId, setHighlightedPlanId] = useState(null);
   const [notification, setNotification] = useState(null);
   const [notificationVisible, setNotificationVisible] = useState(false);
+  const [recentPlans, setRecentPlans] = useState([]);
   const slideAnim = useRef(new Animated.Value(-100)).current;
   const timeoutRef = useRef(null);
   const viewShotRef = useRef(null);
 
-  // Bottom navigation items
-  const navItems = [
-    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: '/' },
-    { name: 'Map', icon: 'map-outline', activeIcon: 'map', route: '/app-pages/map' },
-    { name: 'Feed', icon: 'newspaper-outline', activeIcon: 'newspaper', route: '/app-pages/feed' },
-    { name: 'Group', icon: 'people-outline', activeIcon: 'people', route: '/app-pages/TourGuide' },
-    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: '/auth/profile' },
-  ];
-
-  const [activeTab, setActiveTab] = useState('Home');
-
-  // Pan responder for swipe to dismiss notification
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy < 0) {
-          slideAnim.setValue(gestureState.dy);
-        }
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy < -50) {
-          dismissNotification();
-        } else {
-          Animated.spring(slideAnim, {
-            toValue: 0,
-            useNativeDriver: true,
-            friction: 8,
-          }).start();
-        }
-      },
-    })
-  ).current;
-
-  // Check for highlighted plan from notification
-  useEffect(() => {
-    if (params.highlightPlan) {
-      setHighlightedPlanId(params.highlightPlan);
-      // Auto remove highlight after 3 seconds
-      setTimeout(() => {
-        setHighlightedPlanId(null);
-      }, 3000);
+  // Function to validate and fix image URIs
+  const validateImageUri = (uri) => {
+    if (!uri) return null;
+    
+    // Check if the image is a valid local file
+    if (uri.startsWith('file://') || uri.startsWith('content://')) {
+      return uri;
     }
-  }, [params.highlightPlan]);
+    
+    // For data URLs (base64)
+    if (uri.startsWith('data:image')) {
+      return uri;
+    }
+    
+    // For remote URLs
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      return uri;
+    }
+    
+    return null;
+  };
 
-  // Load itineraries when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      loadItineraries();
-    }, [])
-  );
+  // Function to copy image to permanent storage using new API
+  const copyImageToPermanentStorage = async (tempUri) => {
+    if (!tempUri) return null;
+    
+    try {
+      // Create a permanent directory if it doesn't exist
+      const permanentDir = new Directory(Paths.document, 'travel_images');
+      
+      // Check if directory exists, create if not
+      if (!permanentDir.exists) {
+        permanentDir.create({ intermediates: true });
+      }
+      
+      // Generate unique filename
+      const filename = `plan_image_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const permanentFile = new File(permanentDir, filename);
+      
+      // Create source file object
+      const sourceFile = new File(tempUri);
+      
+      // Copy the file
+      sourceFile.copy(permanentFile);
+      
+      return permanentFile.uri;
+    } catch (error) {
+      console.error('Error copying image:', error);
+      return tempUri; // Return original if copy fails
+    }
+  };
 
+  // Function to clean up old/unused images using new API
+  const cleanupOldImages = async () => {
+    try {
+      const savedPlans = await AsyncStorage.getItem('travelPlans');
+      if (!savedPlans) return;
+      
+      const plans = JSON.parse(savedPlans);
+      const usedImages = new Set();
+      
+      // Collect all used image URIs
+      plans.forEach(plan => {
+        if (plan.image && plan.image.includes('/travel_images/')) {
+          usedImages.add(plan.image);
+        }
+      });
+      
+      // Get all images in the travel_images directory
+      const permanentDir = new Directory(Paths.document, 'travel_images');
+      
+      if (permanentDir.exists) {
+        const contents = permanentDir.list();
+        
+        // Delete unused images
+        for (const item of contents) {
+          if (item instanceof File) {
+            if (!usedImages.has(item.uri)) {
+              item.delete();
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up images:', error);
+    }
+  };
+
+  // Load itineraries with image validation
   const loadItineraries = async () => {
     try {
       const savedPlans = await AsyncStorage.getItem('travelPlans');
       if (savedPlans) {
-        const plans = JSON.parse(savedPlans);
-        setItineraries(plans);
-        setFilteredItineraries(plans);
+        let plans = JSON.parse(savedPlans);
+        
+        // Validate and fix images for each plan
+        let needsUpdate = false;
+        const validatedPlans = plans.map(plan => {
+          // Check if image file still exists
+          if (plan.image && plan.image.includes('/travel_images/')) {
+            try {
+              const imageFile = new File(plan.image);
+              if (!imageFile.exists) {
+                needsUpdate = true;
+                return { ...plan, image: null };
+              }
+            } catch (e) {
+              needsUpdate = true;
+              return { ...plan, image: null };
+            }
+          }
+          
+          const validatedImage = validateImageUri(plan.image);
+          if (validatedImage !== plan.image) {
+            needsUpdate = true;
+            return { ...plan, image: validatedImage };
+          }
+          return plan;
+        });
+        
+        // If any images were invalid, save the corrected data
+        if (needsUpdate) {
+          await AsyncStorage.setItem('travelPlans', JSON.stringify(validatedPlans));
+        }
+        
+        // Sort by created date (newest first)
+        const sortedPlans = validatedPlans.sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        setItineraries(sortedPlans);
+        setFilteredItineraries(sortedPlans);
+        
+        // Get newest 5 plans for recommendations
+        const newestPlans = sortedPlans.slice(0, 5);
+        setRecentPlans(newestPlans);
       }
     } catch (error) {
       console.error('Error loading itineraries:', error);
     }
   };
 
+  // Function to save plan with permanent image storage
+  const savePlanWithPermanentImage = async (planData) => {
+    try {
+      let finalImageUri = planData.image;
+      
+      // If there's a temporary image, copy it to permanent storage
+      if (planData.image && (
+        planData.image.startsWith('file://') || 
+        planData.image.startsWith('content://')
+      )) {
+        const permanentUri = await copyImageToPermanentStorage(planData.image);
+        if (permanentUri) {
+          finalImageUri = permanentUri;
+        }
+      }
+      
+      // Get existing plans
+      const savedPlans = await AsyncStorage.getItem('travelPlans');
+      let plans = savedPlans ? JSON.parse(savedPlans) : [];
+      
+      // Add or update plan
+      if (planData.id) {
+        // Update existing plan
+        const index = plans.findIndex(p => p.id === planData.id);
+        if (index !== -1) {
+          plans[index] = { ...planData, image: finalImageUri };
+        }
+      } else {
+        // Add new plan
+        plans.push({ ...planData, image: finalImageUri, id: Date.now().toString(), createdAt: new Date().toISOString() });
+      }
+      
+      await AsyncStorage.setItem('travelPlans', JSON.stringify(plans));
+      await loadItineraries(); // Reload to show updated data
+      
+      return true;
+    } catch (error) {
+      console.error('Error saving plan:', error);
+      return false;
+    }
+  };
+
   // Show notification function
   const showNotification = (type, title, message, data = {}) => {
-    // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -117,14 +236,12 @@ const MyItineraries = () => {
     setNotification({ type, title, message, data });
     setNotificationVisible(true);
 
-    // Animate in
     Animated.spring(slideAnim, {
       toValue: 0,
       useNativeDriver: true,
       friction: 8,
     }).start();
 
-    // Auto dismiss after 5 seconds
     timeoutRef.current = setTimeout(() => {
       dismissNotification();
     }, 5000);
@@ -148,9 +265,7 @@ const MyItineraries = () => {
   const handleNotificationPress = () => {
     if (notification?.data?.planId) {
       dismissNotification();
-      // Highlight the plan
       setHighlightedPlanId(notification.data.planId);
-      // Scroll to the plan (you can implement scrolling later)
       setTimeout(() => {
         setHighlightedPlanId(null);
       }, 3000);
@@ -189,6 +304,7 @@ const MyItineraries = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    await cleanupOldImages(); // Clean up old images on refresh
     await loadItineraries();
     setSearchQuery('');
     setRefreshing(false);
@@ -196,7 +312,6 @@ const MyItineraries = () => {
 
   // Update function - navigate to createPlan with existing data
   const handleUpdateItinerary = (item) => {
-    // Prepare the data to pass to createPlan
     const planData = {
       savedDestination: item.destination,
       savedPostCaption: item.postCaption,
@@ -216,14 +331,13 @@ const MyItineraries = () => {
       planId: item.id
     };
 
-    // Navigate to createPlan with the data
     router.push({
       pathname: '/app-pages/createPlan',
       params: planData
     });
   };
 
-  // Delete function
+  // Delete function with image cleanup using new API
   const handleDeleteItinerary = (id) => {
     Alert.alert(
       'Delete Itinerary',
@@ -235,13 +349,32 @@ const MyItineraries = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Find the plan to delete
+              const planToDelete = itineraries.find(item => item.id === id);
+              
+              // Delete the associated image file if it's in our permanent storage
+              if (planToDelete?.image && planToDelete.image.includes('/travel_images/')) {
+                try {
+                  const imageFile = new File(planToDelete.image);
+                  if (imageFile.exists) {
+                    imageFile.delete();
+                  }
+                } catch (e) {
+                  console.log('Image already deleted or not found');
+                }
+              }
+              
               const updatedItineraries = itineraries.filter(item => item.id !== id);
               await AsyncStorage.setItem('travelPlans', JSON.stringify(updatedItineraries));
               setItineraries(updatedItineraries);
               setFilteredItineraries(updatedItineraries);
-              Alert.alert('Success', 'Itinerary deleted successfully');
               
-              // Show notification
+              // Update recent plans
+              const sortedPlans = updatedItineraries.sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+              );
+              setRecentPlans(sortedPlans.slice(0, 5));
+              
               showNotification(
                 'success',
                 'Deleted Successfully 🗑️',
@@ -250,10 +383,70 @@ const MyItineraries = () => {
               );
             } catch (error) {
               console.error('Error deleting itinerary:', error);
+              Alert.alert('Error', 'Failed to delete itinerary');
             }
           }
         }
       ]
+    );
+  };
+
+  // Image component with error handling
+  const PlanImage = ({ imageUri, style, placeholderEmoji }) => {
+    const [imageError, setImageError] = useState(false);
+    const [validUri, setValidUri] = useState(null);
+
+    useEffect(() => {
+      // Validate and set image URI
+      const validated = validateImageUri(imageUri);
+      setValidUri(validated);
+      setImageError(!validated);
+    }, [imageUri]);
+
+    if (imageError || !validUri) {
+      return (
+        <View style={[style, styles.cardImagePlaceholder]}>
+          <Text style={styles.cardImageEmoji}>{placeholderEmoji || '🏠️'}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <Image 
+        source={{ uri: validUri }}
+        style={style}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
+    );
+  };
+
+  // Recent Plan Image Component
+  const RecentPlanImage = ({ imageUri, style, placeholderEmoji }) => {
+    const [imageError, setImageError] = useState(false);
+    const [validUri, setValidUri] = useState(null);
+
+    useEffect(() => {
+      const validated = validateImageUri(imageUri);
+      setValidUri(validated);
+      setImageError(!validated);
+    }, [imageUri]);
+
+    if (imageError || !validUri) {
+      return (
+        <View style={[style, styles.recentPlanImagePlaceholder]}>
+          <Text style={styles.recentPlanEmoji}>{placeholderEmoji || '✈️'}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <Image 
+        source={{ uri: validUri }}
+        style={style}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
     );
   };
 
@@ -271,7 +464,6 @@ const MyItineraries = () => {
         return;
       }
 
-      // Capture the view as an image
       const uri = await viewShotRef.current.capture({
         format: 'png',
         quality: 0.95,
@@ -280,7 +472,6 @@ const MyItineraries = () => {
 
       setShareModalVisible(false);
 
-      // Check if sharing is available
       const isAvailable = await Sharing.isAvailableAsync();
       
       if (isAvailable) {
@@ -290,7 +481,6 @@ const MyItineraries = () => {
           UTI: 'image.png',
         });
         
-        // Show success notification
         showNotification(
           'success',
           'Shared Successfully! 📤',
@@ -298,7 +488,6 @@ const MyItineraries = () => {
           { planId: sharingItinerary.id }
         );
       } else {
-        // Fallback to text sharing if sharing not available
         const message = await generateShareMessage(sharingItinerary);
         await Share.share({
           message,
@@ -421,6 +610,17 @@ ${packingText}
     }
   };
 
+  // Bottom navigation items
+  const navItems = [
+    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: '/' },
+    { name: 'Map', icon: 'map-outline', activeIcon: 'map', route: '/app-pages/map' },
+    { name: 'Feed', icon: 'newspaper-outline', activeIcon: 'newspaper', route: '/app-pages/feed' },
+    { name: 'Group', icon: 'people-outline', activeIcon: 'people', route: '/app-pages/TourGuide' },
+    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: '/auth/profile' },
+  ];
+
+  const [activeTab, setActiveTab] = useState('Home');
+
   const handleNavPress = (route, tabName) => {
     setActiveTab(tabName);
     if (route) {
@@ -428,137 +628,50 @@ ${packingText}
     }
   };
 
-  // Updated Share Modal Component with better image layout
-  const ShareModal = () => (
-    <Modal
-      animationType="fade"
-      transparent={true}
-      visible={shareModalVisible}
-      onRequestClose={() => setShareModalVisible(false)}
-    >
-      <View style={styles.shareModalOverlay}>
-        <View style={styles.shareModalContent}>
-          <Text style={styles.shareModalTitle}>Creating Share Image...</Text>
-          <Text style={styles.shareModalSubtitle}>Please wait a moment</Text>
-          
-          {/* Hidden view that gets captured */}
-          {sharingItinerary && (
-            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.95 }}>
-              <View style={styles.shareCard}>
-                {/* Full Screen Background Image */}
-                {sharingItinerary.image ? (
-                  <Image 
-                    source={{ uri: sharingItinerary.image }} 
-                    style={styles.shareBackgroundImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.shareBackgroundImage, styles.sharePlaceholderBackground]}>
-                    <Ionicons name="image-outline" size={60} color="#fff" />
-                  </View>
-                )}
-                
-                {/* Gradient Overlay for better text readability */}
-                <View style={styles.shareGradient} />
-                
-                {/* Content Container */}
-                <View style={styles.shareContent}>
-                  {/* Top Section with Date and Emoji */}
-                  <View style={styles.shareTopSection}>
-                    <View style={styles.shareDateBadge}>
-                      <Ionicons name="calendar" size={14} color="#fff" />
-                      <Text style={styles.shareDate}>
-                        {formatDate(sharingItinerary.startDate)}
-                      </Text>
-                    </View>
-                    <View style={styles.shareEmojiBadge}>
-                      <Text style={styles.shareEmoji}>
-                        {getEmojiForDestination(sharingItinerary.destination)}
-                      </Text>
-                    </View>
-                  </View>
+  // Check for highlighted plan from notification
+  useEffect(() => {
+    if (params.highlightPlan) {
+      setHighlightedPlanId(params.highlightPlan);
+      setTimeout(() => {
+        setHighlightedPlanId(null);
+      }, 3000);
+    }
+  }, [params.highlightPlan]);
 
-                  {/* Main Content - Centered */}
-                  <View style={styles.shareMainContent}>
-                    <Text style={styles.shareDestination}>
-                      {sharingItinerary.planningLocation || 'Amazing Destination'}
-                    </Text>
-                    
-                    <Text style={styles.shareLocation}>
-                      <Ionicons name="location" size={14} color="#FFD700" /> {sharingItinerary.province || 'Sri Lanka'}
-                    </Text>
-
-                    <View style={styles.shareTimeBadge}>
-                      <Ionicons name="time" size={14} color="#FFD700" />
-                      <Text style={styles.shareTimeLabel}> Starts at </Text>
-                      <Text style={styles.shareTimeValue}>
-                        {sharingItinerary.startedTime || '6.00 A.M'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Bottom Section with Stats and Caption */}
-                  <View style={styles.shareBottomSection}>
-                    {/* Stats Row */}
-                    <View style={styles.shareStats}>
-                      <View style={styles.shareStat}>
-                        <Ionicons name="heart" size={16} color="#FF6B6B" />
-                        <Text style={styles.shareStatText}>1.2k</Text>
-                      </View>
-                      <View style={styles.shareStat}>
-                        <Ionicons name="chatbubble" size={16} color="#4A90E2" />
-                        <Text style={styles.shareStatText}>1.75k</Text>
-                      </View>
-                    </View>
-
-                    {/* Caption (if exists) */}
-                    {sharingItinerary.postCaption && (
-                      <View style={styles.shareCaptionContainer}>
-                        <Text style={styles.shareCaptionLabel}>Caption</Text>
-                        <Text style={styles.shareCaption} numberOfLines={2}>
-                          "{sharingItinerary.postCaption}"
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* App Branding */}
-                    <View style={styles.shareBranding}>
-                      <Text style={styles.shareBrandingText}>Travel Planner</Text>
-                      <Text style={styles.shareBrandingSub}>Plan Your Perfect Journey</Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            </ViewShot>
-          )}
-
-          <TouchableOpacity 
-            style={styles.shareModalButton}
-            onPress={captureAndShare}
-          >
-            <Text style={styles.shareModalButtonText}>Continue Sharing</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.shareModalCancel}
-            onPress={() => setShareModalVisible(false)}
-          >
-            <Text style={styles.shareModalCancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+  // Load itineraries when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadItineraries();
+    }, [])
   );
 
-  const getEmojiForDestination = (destination) => {
-    const dest = (destination || '').toLowerCase();
-    if (dest.includes('beach')) return '🏖️';
-    if (dest.includes('mountain')) return '⛰️';
-    if (dest.includes('waterfall')) return '🌊';
-    if (dest.includes('city')) return '🏙️';
-    if (dest.includes('adventure')) return '🧗';
-    return '✈️';
-  };
+  // Clean up old images on app start
+  useEffect(() => {
+    cleanupOldImages();
+  }, []);
+
+  // Pan responder for swipe to dismiss notification
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy < 0) {
+          slideAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy < -50) {
+          dismissNotification();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   const ItineraryCard = ({ item }) => {
     const formattedDate = formatDate(item.startDate);
@@ -576,7 +689,13 @@ ${packingText}
 
     return (
       <View style={[styles.card, isHighlighted && styles.highlightedCard]}>
-        {/* Card Content - Clickable */}
+        {/* Image Section with error handling */}
+        <PlanImage 
+          imageUri={item.image}
+          style={styles.cardImage}
+          placeholderEmoji={getEmoji()}
+        />
+        
         <TouchableOpacity 
           style={styles.cardContent}
           onPress={() => {
@@ -585,7 +704,6 @@ ${packingText}
           }}
           activeOpacity={0.7}
         >
-          {/* Date and Emoji Header */}
           <View style={styles.cardDateHeader}>
             <Text style={styles.cardDate}>
               {formattedDate}
@@ -593,28 +711,23 @@ ${packingText}
             <Text style={styles.cardHeaderEmoji}>{getEmoji()}</Text>
           </View>
 
-          {/* Location Title */}
           <Text style={styles.cardLocationTitle}>
             {item.planningLocation || 'Bopath Alla Waterfall'}
           </Text>
 
-          {/* Full Address */}
           <Text style={styles.cardAddress} numberOfLines={2}>
             {item.province || 'Agalwatte village, Kuruwita, in the Ratnapura District of Sri Lanka.'}
           </Text>
 
-          {/* Start Time Row */}
           <View style={styles.startTimeRow}>
             <Text style={styles.startTimeLabel}>Start By :</Text>
             <Text style={styles.startTimeValue}>{item.startedTime || '6.00 A.M'}</Text>
           </View>
 
-          {/* Approve Button */}
           <TouchableOpacity style={styles.approveButton}>
             <Text style={styles.approveButtonText}>Approve the Travel Guide</Text>
           </TouchableOpacity>
 
-          {/* See More Button */}
           <TouchableOpacity 
             style={styles.seeMoreButton}
             onPress={() => {
@@ -626,7 +739,6 @@ ${packingText}
           </TouchableOpacity>
         </TouchableOpacity>
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
             <Ionicons name="heart-outline" size={18} color="#FF6B6B" />
@@ -638,9 +750,7 @@ ${packingText}
           </View>
         </View>
 
-        {/* Action Buttons Row */}
         <View style={styles.actionButtonsRow}>
-          {/* Update Button */}
           <TouchableOpacity 
             style={styles.updateButton}
             onPress={() => handleUpdateItinerary(item)}
@@ -648,7 +758,6 @@ ${packingText}
             <Text style={styles.updateButtonText}>UPDATE</Text>
           </TouchableOpacity>
 
-          {/* Share Button */}
           <TouchableOpacity 
             style={styles.shareButton}
             onPress={() => handleShare(item)}
@@ -656,7 +765,6 @@ ${packingText}
             <Text style={styles.shareButtonText}>SHARE</Text>
           </TouchableOpacity>
 
-          {/* Delete Button */}
           <TouchableOpacity 
             style={styles.deleteButton}
             onPress={() => handleDeleteItinerary(item.id)}
@@ -668,176 +776,246 @@ ${packingText}
     );
   };
 
-  const ItineraryDetailModal = () => (
-    <Modal
-      animationType="slide"
-      transparent={true}
-      visible={modalVisible}
-      onRequestClose={() => setModalVisible(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {selectedItinerary && (
-              <>
-                {/* Modal Header */}
-                <View style={styles.modalHeader}>
-                  <TouchableOpacity onPress={() => setModalVisible(false)}>
-                    <Ionicons name="close" size={24} color="#333" />
-                  </TouchableOpacity>
-                  <Text style={styles.modalTitle}>Trip Details</Text>
-                  <TouchableOpacity onPress={() => handleShare(selectedItinerary)}>
-                    <Ionicons name="share-outline" size={24} color="#007AFF" />
-                  </TouchableOpacity>
-                </View>
+  // Recent Plan Card Component for Recommendations
+  const RecentPlanCard = ({ plan }) => {
+    const getPlanEmoji = () => {
+      const dest = (plan.destination || '').toLowerCase();
+      if (dest.includes('beach')) return '🏖️';
+      if (dest.includes('mountain')) return '⛰️';
+      if (dest.includes('waterfall')) return '🌊';
+      if (dest.includes('city')) return '🏙️';
+      if (dest.includes('adventure')) return '🧗';
+      return '✈️';
+    };
 
-                {/* Hero Image */}
-                {selectedItinerary.image ? (
-                  <Image source={{ uri: selectedItinerary.image }} style={styles.modalImage} />
-                ) : (
-                  <View style={[styles.modalImage, styles.modalPlaceholderImage]}>
-                    <Ionicons name="image-outline" size={50} color="#ccc" />
+    const formatShortDate = (dateString) => {
+      if (!dateString) return '';
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } catch {
+        return '';
+      }
+    };
+
+    return (
+      <TouchableOpacity 
+        style={styles.recentPlanCard}
+        onPress={() => {
+          setSelectedItinerary(plan);
+          setModalVisible(true);
+        }}
+      >
+        {/* Card Image with error handling */}
+        <RecentPlanImage 
+          imageUri={plan.image}
+          style={styles.recentPlanImage}
+          placeholderEmoji={getPlanEmoji()}
+        />
+        
+        {/* Overlay */}
+        <View style={styles.recentPlanOverlay}>
+          <View style={styles.recentPlanTag}>
+            <Text style={styles.recentPlanTagText}>
+              {plan.currentStatus || 'Planned'}
+            </Text>
+          </View>
+          <Text style={styles.recentPlanName} numberOfLines={1}>
+            {plan.destination || 'Untitled Trip'}
+          </Text>
+          <Text style={styles.recentPlanLocation} numberOfLines={1}>
+            {plan.planningLocation || plan.province || 'Location not set'}
+          </Text>
+          <View style={styles.recentPlanDate}>
+            <Ionicons name="calendar-outline" size={10} color="#fff" />
+            <Text style={styles.recentPlanDateText}>
+              {formatShortDate(plan.startDate) || 'Date TBD'}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const ItineraryDetailModal = () => {
+    const [modalImageError, setModalImageError] = useState(false);
+    const [validModalImageUri, setValidModalImageUri] = useState(null);
+
+    useEffect(() => {
+      if (selectedItinerary?.image) {
+        const validated = validateImageUri(selectedItinerary.image);
+        setValidModalImageUri(validated);
+        setModalImageError(!validated);
+      }
+    }, [selectedItinerary]);
+
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedItinerary && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <TouchableOpacity onPress={() => setModalVisible(false)}>
+                      <Ionicons name="close" size={24} color="#333" />
+                    </TouchableOpacity>
+                    <Text style={styles.modalTitle}>Trip Details</Text>
+                    <TouchableOpacity onPress={() => handleShare(selectedItinerary)}>
+                      <Ionicons name="share-outline" size={24} color="#007AFF" />
+                    </TouchableOpacity>
                   </View>
-                )}
 
-                {/* Title Section */}
-                <View style={styles.modalBody}>
-                  <View style={styles.modalTitleRow}>
-                    <Text style={styles.modalDestination}>
-                      {selectedItinerary.destination || 'Untitled Destination'}
-                    </Text>
-                    <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedItinerary.currentStatus) }]}>
-                      <Text style={styles.modalStatusText}>{selectedItinerary.currentStatus || 'Planned'}</Text>
+                  {!modalImageError && validModalImageUri ? (
+                    <Image 
+                      source={{ uri: validModalImageUri }}
+                      style={styles.modalImage}
+                      onError={() => setModalImageError(true)}
+                    />
+                  ) : (
+                    <View style={[styles.modalImage, styles.modalPlaceholderImage]}>
+                      <Ionicons name="image-outline" size={50} color="#ccc" />
                     </View>
-                  </View>
-
-                  {selectedItinerary.postCaption && (
-                    <Text style={styles.modalCaption}>"{selectedItinerary.postCaption}"</Text>
                   )}
 
-                  {/* Trip Details Grid */}
-                  <View style={styles.detailsGrid}>
-                    <View style={styles.detailCard}>
-                      <Ionicons name="calendar" size={20} color="#007AFF" />
-                      <Text style={styles.detailLabel}>Start Date</Text>
-                      <Text style={styles.detailValue}>{formatDate(selectedItinerary.startDate)}</Text>
-                    </View>
-                    <View style={styles.detailCard}>
-                      <Ionicons name="calendar" size={20} color="#FF6B6B" />
-                      <Text style={styles.detailLabel}>End Date</Text>
-                      <Text style={styles.detailValue}>{formatDate(selectedItinerary.endDate)}</Text>
-                    </View>
-                    <View style={styles.detailCard}>
-                      <Ionicons name="time" size={20} color="#34C759" />
-                      <Text style={styles.detailLabel}>Start Time</Text>
-                      <Text style={styles.detailValue}>{selectedItinerary.startedTime || 'Not set'}</Text>
-                    </View>
-                    <View style={styles.detailCard}>
-                      <Ionicons name="people" size={20} color="#FF9500" />
-                      <Text style={styles.detailLabel}>Collaborators</Text>
-                      <Text style={styles.detailValue}>0</Text>
-                    </View>
-                  </View>
-
-                  {/* Location Info */}
-                  <View style={styles.infoSection}>
-                    <Text style={styles.infoSectionTitle}>📍 Location Details</Text>
-                    <View style={styles.infoRow}>
-                      <Ionicons name="location" size={16} color="#666" />
-                      <Text style={styles.infoText}>
-                        {selectedItinerary.planningLocation || 'Location not specified'}
-                        {selectedItinerary.province ? `, ${selectedItinerary.province}` : ''}
+                  <View style={styles.modalBody}>
+                    <View style={styles.modalTitleRow}>
+                      <Text style={styles.modalDestination}>
+                        {selectedItinerary.destination || 'Untitled Destination'}
                       </Text>
-                    </View>
-                  </View>
-
-                  {/* Budget Breakdown */}
-                  {selectedItinerary.budgetBreakdown && (
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoSectionTitle}>💰 Budget Breakdown</Text>
-                      <View style={styles.budgetItems}>
-                        <View style={styles.budgetItem}>
-                          <Text style={styles.budgetItemLabel}>Transport</Text>
-                          <Text style={styles.budgetItemValue}>
-                            ${selectedItinerary.budgetBreakdown.transport?.cost || 0}
-                          </Text>
-                        </View>
-                        <View style={styles.budgetItem}>
-                          <Text style={styles.budgetItemLabel}>Accommodation</Text>
-                          <Text style={styles.budgetItemValue}>
-                            ${selectedItinerary.budgetBreakdown.accommodation?.cost || 0}
-                          </Text>
-                        </View>
-                        <View style={styles.budgetItem}>
-                          <Text style={styles.budgetItemLabel}>Food</Text>
-                          <Text style={styles.budgetItemValue}>
-                            ${selectedItinerary.budgetBreakdown.food?.cost || 0}
-                          </Text>
-                        </View>
-                        <View style={styles.budgetItem}>
-                          <Text style={styles.budgetItemLabel}>Activities</Text>
-                          <Text style={styles.budgetItemValue}>
-                            ${selectedItinerary.budgetBreakdown.activities?.cost || 0}
-                          </Text>
-                        </View>
+                      <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedItinerary.currentStatus) }]}>
+                        <Text style={styles.modalStatusText}>{selectedItinerary.currentStatus || 'Planned'}</Text>
                       </View>
-                      <View style={styles.totalBudget}>
-                        <Text style={styles.totalBudgetLabel}>Total</Text>
-                        <Text style={styles.totalBudgetValue}>
-                          ${selectedItinerary.budgetBreakdown.total?.toFixed(2) || 0}
+                    </View>
+
+                    {selectedItinerary.postCaption && (
+                      <Text style={styles.modalCaption}>"{selectedItinerary.postCaption}"</Text>
+                    )}
+
+                    <View style={styles.detailsGrid}>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="calendar" size={20} color="#007AFF" />
+                        <Text style={styles.detailLabel}>Start Date</Text>
+                        <Text style={styles.detailValue}>{formatDate(selectedItinerary.startDate)}</Text>
+                      </View>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="calendar" size={20} color="#FF6B6B" />
+                        <Text style={styles.detailLabel}>End Date</Text>
+                        <Text style={styles.detailValue}>{formatDate(selectedItinerary.endDate)}</Text>
+                      </View>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="time" size={20} color="#34C759" />
+                        <Text style={styles.detailLabel}>Start Time</Text>
+                        <Text style={styles.detailValue}>{selectedItinerary.startedTime || 'Not set'}</Text>
+                      </View>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="people" size={20} color="#FF9500" />
+                        <Text style={styles.detailLabel}>Collaborators</Text>
+                        <Text style={styles.detailValue}>0</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoSectionTitle}>📍 Location Details</Text>
+                      <View style={styles.infoRow}>
+                        <Ionicons name="location" size={16} color="#666" />
+                        <Text style={styles.infoText}>
+                          {selectedItinerary.planningLocation || 'Location not specified'}
+                          {selectedItinerary.province ? `, ${selectedItinerary.province}` : ''}
                         </Text>
                       </View>
                     </View>
-                  )}
 
-                  {/* Packing List */}
-                  {selectedItinerary.selectedPackingItems?.length > 0 && (
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoSectionTitle}>🎒 Packing List</Text>
-                      <View style={styles.packingItems}>
-                        {selectedItinerary.selectedPackingItems.map((item, index) => (
-                          <View key={index} style={styles.packingItem}>
-                            <Ionicons name="checkmark-circle" size={16} color="#34C759" />
-                            <Text style={styles.packingItemText}>{item}</Text>
+                    {selectedItinerary.budgetBreakdown && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoSectionTitle}>💰 Budget Breakdown</Text>
+                        <View style={styles.budgetItems}>
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Transport</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.transport?.cost || 0}
+                            </Text>
                           </View>
-                        ))}
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Accommodation</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.accommodation?.cost || 0}
+                            </Text>
+                          </View>
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Food</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.food?.cost || 0}
+                            </Text>
+                          </View>
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Activities</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.activities?.cost || 0}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.totalBudget}>
+                          <Text style={styles.totalBudgetLabel}>Total</Text>
+                          <Text style={styles.totalBudgetValue}>
+                            ${selectedItinerary.budgetBreakdown.total?.toFixed(2) || 0}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                  )}
+                    )}
 
-                  {/* Trip Notes */}
-                  {selectedItinerary.tripNotes && (
-                    <View style={styles.infoSection}>
-                      <Text style={styles.infoSectionTitle}>📝 Trip Notes</Text>
-                      <Text style={styles.notesText}>{selectedItinerary.tripNotes}</Text>
-                    </View>
-                  )}
+                    {selectedItinerary.selectedPackingItems?.length > 0 && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoSectionTitle}>🎒 Packing List</Text>
+                        <View style={styles.packingItems}>
+                          {selectedItinerary.selectedPackingItems.map((item, index) => (
+                            <View key={index} style={styles.packingItem}>
+                              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                              <Text style={styles.packingItemText}>{item}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
 
-                  {/* Action Buttons */}
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity style={styles.whatsappButton} onPress={() => handleShare(selectedItinerary)}>
-                      <Ionicons name="share-social" size={18} color="#fff" />
-                      <Text style={styles.whatsappButtonText}>Share This Adventure</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.reserveButton}
-                      onPress={() => {
-                        setModalVisible(false);
-                        Alert.alert('Reserve', 'Reservation feature coming soon!');
-                      }}
-                    >
-                      <Text style={styles.reserveButtonText}>Reserve for 'Travel Guide'</Text>
-                    </TouchableOpacity>
+                    {selectedItinerary.tripNotes && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoSectionTitle}>📝 Trip Notes</Text>
+                        <Text style={styles.notesText}>{selectedItinerary.tripNotes}</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity style={styles.whatsappButton} onPress={() => handleShare(selectedItinerary)}>
+                        <Ionicons name="share-social" size={18} color="#fff" />
+                        <Text style={styles.whatsappButtonText}>Share This Adventure</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={styles.reserveButton}
+                        onPress={() => {
+                          setModalVisible(false);
+                          router.push('/app-pages/TourGuideList');
+                        }}
+                      >
+                        <Text style={styles.reserveButtonText}>Reserve for 'Travel Guide'</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              </>
-            )}
-          </ScrollView>
+                </>
+              )}
+            </ScrollView>
+          </View>
         </View>
-      </View>
-    </Modal>
-  );
+      </Modal>
+    );
+  };
 
   const EmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -853,6 +1031,18 @@ ${packingText}
         <Ionicons name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.emptyButtonText}>Create Your First Plan</Text>
       </TouchableOpacity>
+    </View>
+  );
+
+  const Footer = () => (
+    <View style={styles.footerContainer}>
+      <View style={styles.footerDivider} />
+      <Text style={styles.footerQuote}>
+        "Travel far enough to meet yourself."
+      </Text>
+      <Text style={styles.footerText}>
+        Every journey begins with a single step. Your adventures are waiting — start planning your next unforgettable experience today.
+      </Text>
     </View>
   );
 
@@ -940,7 +1130,7 @@ ${packingText}
             </TouchableOpacity>
           </View>
 
-          {/* Search Results Count (optional) */}
+          {/* Search Results Count */}
           {searchQuery.length > 0 && (
             <Text style={styles.searchResultText}>
               Found {filteredItineraries.length} result{filteredItineraries.length !== 1 ? 's' : ''}
@@ -955,26 +1145,31 @@ ${packingText}
             </Text>
           </View>
 
-          {/* Category Tags */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsScroll}>
-            <View style={styles.tagsWrapper}>
-              <TouchableOpacity style={[styles.categoryTag, styles.categoryTagActive]}>
-                <Text style={[styles.categoryTagText, styles.categoryTagTextActive]}>waterfall</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>Beach</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>Adventure</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>Mountain</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.categoryTag}>
-                <Text style={styles.categoryTagText}>City</Text>
-              </TouchableOpacity>
+          {/* Recent Plans Section - Newest 5 Plans */}
+          {recentPlans.length > 0 && (
+            <View style={styles.recentSection}>
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>🔥 Recent Adventures</Text>
+                <TouchableOpacity onPress={() => {
+                  if (recentPlans.length > 0) {
+                    setSelectedItinerary(recentPlans[0]);
+                    setModalVisible(true);
+                  }
+                }}>
+                  <Text style={styles.recentSeeAll}>See More.. </Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentScrollContent}
+              >
+                {recentPlans.map((plan) => (
+                  <RecentPlanCard key={plan.id} plan={plan} />
+                ))}
+              </ScrollView>
             </View>
-          </ScrollView>
+          )}
 
           {/* Itineraries List */}
           <FlatList
@@ -996,6 +1191,9 @@ ${packingText}
             }
             scrollEnabled={false}
           />
+
+          {/* Footer Section */}
+          <Footer />
         </ScrollView>
       </SafeAreaView>
 
@@ -1003,7 +1201,12 @@ ${packingText}
       <ItineraryDetailModal />
 
       {/* Share Modal */}
-      <ShareModal />
+      <ShareModal 
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        onShare={captureAndShare}
+        sharingItinerary={sharingItinerary}
+      />
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
@@ -1031,7 +1234,172 @@ ${packingText}
   );
 };
 
+// Share Modal Component
+const ShareModal = ({ visible, onClose, onShare, sharingItinerary }) => {
+  const viewShotRef = useRef(null);
+
+  const captureAndShare = async () => {
+    if (!viewShotRef.current) {
+      Alert.alert('Error', 'Could not capture image');
+      return;
+    }
+
+    try {
+      const uri = await viewShotRef.current.capture({
+        format: 'png',
+        quality: 0.95,
+        result: 'tmpfile',
+      });
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: `Share my trip to ${sharingItinerary?.destination}`,
+          UTI: 'image.png',
+        });
+        
+        onClose();
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+      Alert.alert('Error', 'Failed to share. Please try again.');
+    }
+  };
+
+  const getEmojiForDestination = (destination) => {
+    const dest = (destination || '').toLowerCase();
+    if (dest.includes('beach')) return '🏖️';
+    if (dest.includes('mountain')) return '⛰️';
+    if (dest.includes('waterfall')) return '🌊';
+    if (dest.includes('city')) return '🏙️';
+    if (dest.includes('adventure')) return '🧗';
+    return '✈️';
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Date not set';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    } catch {
+      return dateString;
+    }
+  };
+
+  return (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <View style={styles.shareModalOverlay}>
+        <View style={styles.shareModalContent}>
+          <Text style={styles.shareModalTitle}>Creating Share Image...</Text>
+          <Text style={styles.shareModalSubtitle}>Please wait a moment</Text>
+          
+          {sharingItinerary && (
+            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.95 }}>
+              <View style={styles.shareCard}>
+                {sharingItinerary.image ? (
+                  <Image 
+                    source={{ uri: sharingItinerary.image }} 
+                    style={styles.shareBackgroundImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.shareBackgroundImage, styles.sharePlaceholderBackground]}>
+                    <Ionicons name="image-outline" size={60} color="#fff" />
+                  </View>
+                )}
+                <View style={styles.shareGradient} />
+                <View style={styles.shareContent}>
+                  <View style={styles.shareTopSection}>
+                    <View style={styles.shareDateBadge}>
+                      <Ionicons name="calendar" size={14} color="#fff" />
+                      <Text style={styles.shareDate}>
+                        {formatDate(sharingItinerary.startDate)}
+                      </Text>
+                    </View>
+                    <View style={styles.shareEmojiBadge}>
+                      <Text style={styles.shareEmoji}>
+                        {getEmojiForDestination(sharingItinerary.destination)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.shareMainContent}>
+                    <Text style={styles.shareDestination}>
+                      {sharingItinerary.planningLocation || 'Amazing Destination'}
+                    </Text>
+                    <Text style={styles.shareLocation}>
+                      <Ionicons name="location" size={14} color="#FFD700" /> {sharingItinerary.province || 'Sri Lanka'}
+                    </Text>
+                    <View style={styles.shareTimeBadge}>
+                      <Ionicons name="time" size={14} color="#FFD700" />
+                      <Text style={styles.shareTimeLabel}> Starts at </Text>
+                      <Text style={styles.shareTimeValue}>
+                        {sharingItinerary.startedTime || '6.00 A.M'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.shareBottomSection}>
+                    <View style={styles.shareStats}>
+                      <View style={styles.shareStat}>
+                        <Ionicons name="heart" size={16} color="#FF6B6B" />
+                        <Text style={styles.shareStatText}>1.2k</Text>
+                      </View>
+                      <View style={styles.shareStat}>
+                        <Ionicons name="chatbubble" size={16} color="#4A90E2" />
+                        <Text style={styles.shareStatText}>1.75k</Text>
+                      </View>
+                    </View>
+
+                    {sharingItinerary.postCaption && (
+                      <View style={styles.shareCaptionContainer}>
+                        <Text style={styles.shareCaptionLabel}>Caption</Text>
+                        <Text style={styles.shareCaption} numberOfLines={2}>
+                          "{sharingItinerary.postCaption}"
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.shareBranding}>
+                      <Text style={styles.shareBrandingText}>Travel Planner</Text>
+                      <Text style={styles.shareBrandingSub}>Plan Your Perfect Journey</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </ViewShot>
+          )}
+
+          <TouchableOpacity 
+            style={styles.shareModalButton}
+            onPress={captureAndShare}
+          >
+            <Text style={styles.shareModalButtonText}>Continue Sharing</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.shareModalCancel}
+            onPress={onClose}
+          >
+            <Text style={styles.shareModalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// Styles (keep all your existing styles - they remain the same)
 const styles = StyleSheet.create({
+  // ... (keep all your existing styles from the original file)
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -1131,30 +1499,92 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666666',
   },
-  tagsScroll: {
-    paddingHorizontal: 20,
+  recentSection: {
     marginBottom: 20,
   },
-  tagsWrapper: {
+  recentHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
-  categoryTag: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F2F2F7',
-    marginRight: 10,
+  recentTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
   },
-  categoryTagActive: {
-    backgroundColor: '#E8F1FF',
-  },
-  categoryTagText: {
-    fontSize: 14,
-    color: '#666666',
+  recentSeeAll: {
+    fontSize: 13,
+    color: '#007AFF',
     fontWeight: '500',
   },
-  categoryTagTextActive: {
+  recentScrollContent: {
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingBottom: 5,
+  },
+  recentPlanCard: {
+    width: 140,
+    marginRight: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recentPlanImage: {
+    width: '100%',
+    height: 120,
+    backgroundColor: '#f5f5f5',
+  },
+  recentPlanImagePlaceholder: {
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentPlanEmoji: {
+    fontSize: 40,
+  },
+  recentPlanOverlay: {
+    padding: 10,
+    backgroundColor: '#fff',
+  },
+  recentPlanTag: {
+    backgroundColor: '#007AFF20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  recentPlanTagText: {
+    fontSize: 9,
     color: '#007AFF',
+    fontWeight: '500',
+  },
+  recentPlanName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  recentPlanLocation: {
+    fontSize: 10,
+    color: '#666',
+    marginBottom: 4,
+  },
+  recentPlanDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  recentPlanDateText: {
+    fontSize: 9,
+    color: '#999',
   },
   listContainer: {
     paddingHorizontal: 20,
@@ -1163,7 +1593,6 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#F0F0F0',
@@ -1172,6 +1601,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    overflow: 'hidden',
   },
   highlightedCard: {
     borderColor: '#007AFF',
@@ -1181,8 +1611,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  cardImage: {
+    width: '100%',
+    height: 180,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  cardImagePlaceholder: {
+    backgroundColor: '#007AFF20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardImageEmoji: {
+    fontSize: 50,
+  },
   cardContent: {
     width: '100%',
+    padding: 16,
   },
   cardDateHeader: {
     flexDirection: 'row',
@@ -1253,6 +1698,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
     paddingTop: 12,
+    paddingHorizontal: 16,
   },
   statItem: {
     flexDirection: 'row',
@@ -1268,6 +1714,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   updateButton: {
     flex: 1,
@@ -1354,6 +1802,35 @@ const styles = StyleSheet.create({
     color: '#666666',
     marginTop: 10,
     textAlign: 'center',
+  },
+  footerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 3,
+    paddingBottom: 5,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginTop: 5,
+  },
+  footerDivider: {
+    width: 50,
+    height: 2,
+    backgroundColor: '#007AFF',
+    borderRadius: 1,
+    marginBottom: 10,
+  },
+  footerQuote: {
+    fontSize: 16,
+    fontStyle: 'italic',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  footerText: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
   },
   modalOverlay: {
     flex: 1,
@@ -1583,7 +2060,6 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '500',
   },
-  // Notification Styles
   notificationContainer: {
     position: 'absolute',
     top: 0,
@@ -1632,7 +2108,6 @@ const styles = StyleSheet.create({
   notificationClose: {
     padding: 6,
   },
-  // Share Modal Styles
   shareModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
