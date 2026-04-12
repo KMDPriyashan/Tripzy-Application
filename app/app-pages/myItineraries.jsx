@@ -1,204 +1,344 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Directory, File, Paths } from 'expo-file-system';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
   Dimensions,
+  FlatList,
+  Image,
   Modal,
+  PanResponder,
   ScrollView,
   Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ViewShot from 'react-native-view-shot';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-// Simple UUID generator
-const generateUUID = () => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-};
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MyItineraries = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [plans, setPlans] = useState([]);
-  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [itineraries, setItineraries] = useState([]);
+  const [filteredItineraries, setFilteredItineraries] = useState([]);
+  const [selectedItinerary, setSelectedItinerary] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editingPlan, setEditingPlan] = useState(null);
-  const [editForm, setEditForm] = useState({
-    destination: '',
-    startDate: '',
-    endDate: '',
-    activities: [],
-  });
-  const [newActivity, setNewActivity] = useState('');
-  
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [sharingItinerary, setSharingItinerary] = useState(null);
+  const [highlightedPlanId, setHighlightedPlanId] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [recentPlans, setRecentPlans] = useState([]);
+  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const timeoutRef = useRef(null);
+  const viewShotRef = useRef(null);
 
-  // Load plans from storage
-  const loadPlans = async () => {
+  // Function to validate and fix image URIs
+  const validateImageUri = (uri) => {
+    if (!uri) return null;
+    
+    // Check if the image is a valid local file
+    if (uri.startsWith('file://') || uri.startsWith('content://')) {
+      return uri;
+    }
+    
+    // For data URLs (base64)
+    if (uri.startsWith('data:image')) {
+      return uri;
+    }
+    
+    // For remote URLs
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      return uri;
+    }
+    
+    return null;
+  };
+
+  // Function to copy image to permanent storage using new API
+  const copyImageToPermanentStorage = async (tempUri) => {
+    if (!tempUri) return null;
+    
+    try {
+      // Create a permanent directory if it doesn't exist
+      const permanentDir = new Directory(Paths.document, 'travel_images');
+      
+      // Check if directory exists, create if not
+      if (!permanentDir.exists) {
+        permanentDir.create({ intermediates: true });
+      }
+      
+      // Generate unique filename
+      const filename = `plan_image_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const permanentFile = new File(permanentDir, filename);
+      
+      // Create source file object
+      const sourceFile = new File(tempUri);
+      
+      // Copy the file
+      sourceFile.copy(permanentFile);
+      
+      return permanentFile.uri;
+    } catch (error) {
+      console.error('Error copying image:', error);
+      return tempUri; // Return original if copy fails
+    }
+  };
+
+  // Function to clean up old/unused images using new API
+  const cleanupOldImages = async () => {
+    try {
+      const savedPlans = await AsyncStorage.getItem('travelPlans');
+      if (!savedPlans) return;
+      
+      const plans = JSON.parse(savedPlans);
+      const usedImages = new Set();
+      
+      // Collect all used image URIs
+      plans.forEach(plan => {
+        if (plan.image && plan.image.includes('/travel_images/')) {
+          usedImages.add(plan.image);
+        }
+      });
+      
+      // Get all images in the travel_images directory
+      const permanentDir = new Directory(Paths.document, 'travel_images');
+      
+      if (permanentDir.exists) {
+        const contents = permanentDir.list();
+        
+        // Delete unused images
+        for (const item of contents) {
+          if (item instanceof File) {
+            if (!usedImages.has(item.uri)) {
+              item.delete();
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up images:', error);
+    }
+  };
+
+  // Load itineraries with image validation
+  const loadItineraries = async () => {
     try {
       const savedPlans = await AsyncStorage.getItem('travelPlans');
       if (savedPlans) {
-        const parsedPlans = JSON.parse(savedPlans);
+        let plans = JSON.parse(savedPlans);
+        
+        // Validate and fix images for each plan
+        let needsUpdate = false;
+        const validatedPlans = plans.map(plan => {
+          // Check if image file still exists
+          if (plan.image && plan.image.includes('/travel_images/')) {
+            try {
+              const imageFile = new File(plan.image);
+              if (!imageFile.exists) {
+                needsUpdate = true;
+                return { ...plan, image: null };
+              }
+            } catch (e) {
+              needsUpdate = true;
+              return { ...plan, image: null };
+            }
+          }
+          
+          const validatedImage = validateImageUri(plan.image);
+          if (validatedImage !== plan.image) {
+            needsUpdate = true;
+            return { ...plan, image: validatedImage };
+          }
+          return plan;
+        });
+        
+        // If any images were invalid, save the corrected data
+        if (needsUpdate) {
+          await AsyncStorage.setItem('travelPlans', JSON.stringify(validatedPlans));
+        }
+        
         // Sort by created date (newest first)
-        parsedPlans.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        setPlans(parsedPlans);
-      } else {
-        // Sample data for testing
-        const samplePlans = [
-          {
-            id: generateUUID(),
-            destination: 'Bali, Indonesia',
-            startDate: '2025-05-15',
-            endDate: '2025-05-22',
-            activities: ['Visit Ubud', 'Beach day at Kuta', 'Sunset at Tanah Lot'],
-            notes: 'Remember to bring sunscreen!',
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: generateUUID(),
-            destination: 'Tokyo, Japan',
-            startDate: '2025-06-10',
-            endDate: '2025-06-20',
-            activities: ['Shibuya Crossing', 'Mount Fuji tour', 'Akihabara shopping'],
-            notes: 'Get JR Pass',
-            createdAt: new Date().toISOString(),
-          },
-        ];
-        setPlans(samplePlans);
-        await AsyncStorage.setItem('travelPlans', JSON.stringify(samplePlans));
+        const sortedPlans = validatedPlans.sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        setItineraries(sortedPlans);
+        setFilteredItineraries(sortedPlans);
+        
+        // Get newest 5 plans for recommendations
+        const newestPlans = sortedPlans.slice(0, 5);
+        setRecentPlans(newestPlans);
       }
     } catch (error) {
-      console.error('Error loading plans:', error);
+      console.error('Error loading itineraries:', error);
     }
   };
 
-  useEffect(() => {
-    loadPlans();
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadPlans();
-    }, [])
-  );
-
-  // Handle share functionality using React Native's built-in Share
-  const handleShare = async (plan) => {
+  // Function to save plan with permanent image storage
+  const savePlanWithPermanentImage = async (planData) => {
     try {
-      const shareMessage = `
-🗺️ Travel Itinerary: ${plan.destination}
-📅 Date: ${formatDateRange(plan.startDate, plan.endDate)}
-✈️ Duration: ${calculateDays(plan.startDate, plan.endDate)} days
-
-Activities:
-${plan.activities.map((activity, i) => `${i + 1}. ${activity}`).join('\n')}
-
-${plan.notes ? `📝 Notes: ${plan.notes}` : ''}
-
-Created with Tripzy App
-      `;
+      let finalImageUri = planData.image;
       
-      await Share.share({
-        message: shareMessage,
-        title: `My ${plan.destination} Itinerary`,
-      });
-    } catch (error) {
-      Alert.alert('Error', 'Could not share itinerary');
-    }
-  };
-
-  const formatDateRange = (startDate, endDate) => {
-    if (!startDate && !endDate) return 'Date not set';
-    
-    const formatDate = (dateStr) => {
-      if (!dateStr) return '';
-      try {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      } catch {
-        return dateStr;
+      // If there's a temporary image, copy it to permanent storage
+      if (planData.image && (
+        planData.image.startsWith('file://') || 
+        planData.image.startsWith('content://')
+      )) {
+        const permanentUri = await copyImageToPermanentStorage(planData.image);
+        if (permanentUri) {
+          finalImageUri = permanentUri;
+        }
       }
+      
+      // Get existing plans
+      const savedPlans = await AsyncStorage.getItem('travelPlans');
+      let plans = savedPlans ? JSON.parse(savedPlans) : [];
+      
+      // Add or update plan
+      if (planData.id) {
+        // Update existing plan
+        const index = plans.findIndex(p => p.id === planData.id);
+        if (index !== -1) {
+          plans[index] = { ...planData, image: finalImageUri };
+        }
+      } else {
+        // Add new plan
+        plans.push({ ...planData, image: finalImageUri, id: Date.now().toString(), createdAt: new Date().toISOString() });
+      }
+      
+      await AsyncStorage.setItem('travelPlans', JSON.stringify(plans));
+      await loadItineraries(); // Reload to show updated data
+      
+      return true;
+    } catch (error) {
+      console.error('Error saving plan:', error);
+      return false;
+    }
+  };
+
+  // Show notification function
+  const showNotification = (type, title, message, data = {}) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    setNotification({ type, title, message, data });
+    setNotificationVisible(true);
+
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      friction: 8,
+    }).start();
+
+    timeoutRef.current = setTimeout(() => {
+      dismissNotification();
+    }, 5000);
+  };
+
+  const dismissNotification = () => {
+    Animated.timing(slideAnim, {
+      toValue: -100,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setNotificationVisible(false);
+      setNotification(null);
+    });
+
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+  };
+
+  const handleNotificationPress = () => {
+    if (notification?.data?.planId) {
+      dismissNotification();
+      setHighlightedPlanId(notification.data.planId);
+      setTimeout(() => {
+        setHighlightedPlanId(null);
+      }, 3000);
+    }
+  };
+
+  const getIconForType = (type) => {
+    switch (type) {
+      case 'success':
+        return { name: 'checkmark-circle', color: '#4CAF50' };
+      case 'plan':
+        return { name: 'map', color: '#007AFF' };
+      case 'budget':
+        return { name: 'wallet', color: '#FF9800' };
+      case 'packing':
+        return { name: 'bag', color: '#9C27B0' };
+      default:
+        return { name: 'notifications', color: '#007AFF' };
+    }
+  };
+
+  // Search function
+  const handleSearch = (text) => {
+    setSearchQuery(text);
+    if (text.trim() === '') {
+      setFilteredItineraries(itineraries);
+    } else {
+      const filtered = itineraries.filter(item => 
+        (item.destination && item.destination.toLowerCase().includes(text.toLowerCase())) ||
+        (item.planningLocation && item.planningLocation.toLowerCase().includes(text.toLowerCase())) ||
+        (item.province && item.province.toLowerCase().includes(text.toLowerCase()))
+      );
+      setFilteredItineraries(filtered);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await cleanupOldImages(); // Clean up old images on refresh
+    await loadItineraries();
+    setSearchQuery('');
+    setRefreshing(false);
+  };
+
+  // Update function - navigate to createPlan with existing data
+  const handleUpdateItinerary = (item) => {
+    const planData = {
+      savedDestination: item.destination,
+      savedPostCaption: item.postCaption,
+      savedSelectedImage: item.image,
+      savedPlanningLocation: item.planningLocation,
+      savedStartedTime: item.startedTime,
+      savedProvince: item.province,
+      savedStartDate: item.startDate,
+      savedEndDate: item.endDate,
+      savedTripNotes: item.tripNotes,
+      savedCurrentStatus: item.currentStatus,
+      savedSelectedPackingItems: JSON.stringify(item.selectedPackingItems || []),
+      savedBudgetEstimate: JSON.stringify(item.budgetEstimate || {}),
+      savedShowBudgetSummary: item.budgetBreakdown ? 'true' : 'false',
+      savedBudgetBreakdown: JSON.stringify(item.budgetBreakdown || null),
+      isUpdating: 'true',
+      planId: item.id
     };
-    
-    const start = formatDate(startDate);
-    const end = formatDate(endDate);
-    
-    if (start && end) {
-      return `${start} - ${end}`;
-    } else if (start) {
-      return start;
-    } else if (end) {
-      return end;
-    }
-    return 'Date not set';
-  };
 
-  const calculateDays = (startDate, endDate) => {
-    if (!startDate || !endDate) return 0;
-    try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
-      const diffTime = Math.abs(end - start);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      return diffDays;
-    } catch {
-      return 0;
-    }
-  };
-
-  const handleViewPlan = (plan) => {
-    setSelectedPlan(plan);
-    setModalVisible(true);
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const closeModal = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: SCREEN_WIDTH,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setModalVisible(false);
-      setSelectedPlan(null);
+    router.push({
+      pathname: '/app-pages/createPlan',
+      params: planData
     });
   };
 
-  const handleDeletePlan = async (planId) => {
+  // Delete function with image cleanup using new API
+  const handleDeleteItinerary = (id) => {
     Alert.alert(
       'Delete Itinerary',
       'Are you sure you want to delete this itinerary?',
@@ -209,468 +349,1499 @@ Created with Tripzy App
           style: 'destructive',
           onPress: async () => {
             try {
-              const updatedPlans = plans.filter(plan => plan.id !== planId);
-              await AsyncStorage.setItem('travelPlans', JSON.stringify(updatedPlans));
-              setPlans(updatedPlans);
-              if (modalVisible) closeModal();
-              Alert.alert('Success', 'Itinerary deleted successfully');
+              // Find the plan to delete
+              const planToDelete = itineraries.find(item => item.id === id);
+              
+              // Delete the associated image file if it's in our permanent storage
+              if (planToDelete?.image && planToDelete.image.includes('/travel_images/')) {
+                try {
+                  const imageFile = new File(planToDelete.image);
+                  if (imageFile.exists) {
+                    imageFile.delete();
+                  }
+                } catch (e) {
+                  console.log('Image already deleted or not found');
+                }
+              }
+              
+              const updatedItineraries = itineraries.filter(item => item.id !== id);
+              await AsyncStorage.setItem('travelPlans', JSON.stringify(updatedItineraries));
+              setItineraries(updatedItineraries);
+              setFilteredItineraries(updatedItineraries);
+              
+              // Update recent plans
+              const sortedPlans = updatedItineraries.sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt)
+              );
+              setRecentPlans(sortedPlans.slice(0, 5));
+              
+              showNotification(
+                'success',
+                'Deleted Successfully 🗑️',
+                'The itinerary has been removed',
+                {}
+              );
             } catch (error) {
+              console.error('Error deleting itinerary:', error);
               Alert.alert('Error', 'Failed to delete itinerary');
             }
-          },
-        },
+          }
+        }
       ]
     );
   };
 
-  const handleEditPlan = (plan) => {
-    setEditingPlan(plan);
-    setEditForm({
-      destination: plan.destination,
-      startDate: plan.startDate || '',
-      endDate: plan.endDate || '',
-      activities: [...(plan.activities || [])],
-      notes: plan.notes || '',
-    });
-    setEditModalVisible(true);
-  };
+  // Image component with error handling
+  const PlanImage = ({ imageUri, style, placeholderEmoji }) => {
+    const [imageError, setImageError] = useState(false);
+    const [validUri, setValidUri] = useState(null);
 
-  const handleSaveEdit = async () => {
-    if (!editForm.destination.trim()) {
-      Alert.alert('Error', 'Please enter a destination');
-      return;
-    }
+    useEffect(() => {
+      // Validate and set image URI
+      const validated = validateImageUri(imageUri);
+      setValidUri(validated);
+      setImageError(!validated);
+    }, [imageUri]);
 
-    try {
-      const updatedPlans = plans.map(plan =>
-        plan.id === editingPlan.id
-          ? {
-              ...plan,
-              destination: editForm.destination,
-              startDate: editForm.startDate,
-              endDate: editForm.endDate,
-              activities: editForm.activities,
-              notes: editForm.notes,
-              updatedAt: new Date().toISOString(),
-            }
-          : plan
+    if (imageError || !validUri) {
+      return (
+        <View style={[style, styles.cardImagePlaceholder]}>
+          <Text style={styles.cardImageEmoji}>{placeholderEmoji || '🏠️'}</Text>
+        </View>
       );
-      
-      await AsyncStorage.setItem('travelPlans', JSON.stringify(updatedPlans));
-      setPlans(updatedPlans);
-      setEditModalVisible(false);
-      setEditingPlan(null);
-      Alert.alert('Success', 'Itinerary updated successfully');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update itinerary');
     }
+
+    return (
+      <Image 
+        source={{ uri: validUri }}
+        style={style}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
+    );
   };
 
-  const addActivity = () => {
-    if (newActivity.trim()) {
-      setEditForm({
-        ...editForm,
-        activities: [...editForm.activities, newActivity.trim()],
+  // Recent Plan Image Component
+  const RecentPlanImage = ({ imageUri, style, placeholderEmoji }) => {
+    const [imageError, setImageError] = useState(false);
+    const [validUri, setValidUri] = useState(null);
+
+    useEffect(() => {
+      const validated = validateImageUri(imageUri);
+      setValidUri(validated);
+      setImageError(!validated);
+    }, [imageUri]);
+
+    if (imageError || !validUri) {
+      return (
+        <View style={[style, styles.recentPlanImagePlaceholder]}>
+          <Text style={styles.recentPlanEmoji}>{placeholderEmoji || '✈️'}</Text>
+        </View>
+      );
+    }
+
+    return (
+      <Image 
+        source={{ uri: validUri }}
+        style={style}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
+    );
+  };
+
+  // Enhanced share function with image capture
+  const handleShare = async (itinerary) => {
+    setSharingItinerary(itinerary);
+    setShareModalVisible(true);
+  };
+
+  const captureAndShare = async () => {
+    try {
+      if (!viewShotRef.current) {
+        Alert.alert('Error', 'Could not capture image');
+        setShareModalVisible(false);
+        return;
+      }
+
+      const uri = await viewShotRef.current.capture({
+        format: 'png',
+        quality: 0.95,
+        result: 'tmpfile',
       });
-      setNewActivity('');
+
+      setShareModalVisible(false);
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: `Share my trip to ${sharingItinerary.destination}`,
+          UTI: 'image.png',
+        });
+        
+        showNotification(
+          'success',
+          'Shared Successfully! 📤',
+          `Your trip to ${sharingItinerary.destination} has been shared`,
+          { planId: sharingItinerary.id }
+        );
+      } else {
+        const message = await generateShareMessage(sharingItinerary);
+        await Share.share({
+          message,
+          title: `My Trip to ${sharingItinerary.destination || 'Amazing Destination'}`,
+        });
+      }
+    } catch (error) {
+      console.error('Error sharing image:', error);
+      Alert.alert('Error', 'Failed to share. Please try again.');
+      setShareModalVisible(false);
     }
   };
 
-  const removeActivity = (index) => {
-    const updatedActivities = editForm.activities.filter((_, i) => i !== index);
-    setEditForm({ ...editForm, activities: updatedActivities });
+  // Generate text message fallback
+  const generateShareMessage = async (itinerary) => {
+    const startDate = formatDate(itinerary.startDate);
+    const endDate = formatDate(itinerary.endDate);
+    
+    const getTypeEmoji = () => {
+      const dest = (itinerary.destination || '').toLowerCase();
+      if (dest.includes('beach')) return '🏖️';
+      if (dest.includes('mountain')) return '⛰️';
+      if (dest.includes('waterfall')) return '🌊';
+      if (dest.includes('city')) return '🏙️';
+      if (dest.includes('adventure')) return '🧗';
+      return '✈️';
+    };
+
+    let budgetText = '';
+    if (itinerary.budgetBreakdown) {
+      budgetText = `
+💰 BUDGET BREAKDOWN:
+• Transport: $${itinerary.budgetBreakdown.transport?.cost || 0}
+• Accommodation: $${itinerary.budgetBreakdown.accommodation?.cost || 0}
+• Food: $${itinerary.budgetBreakdown.food?.cost || 0}
+• Activities: $${itinerary.budgetBreakdown.activities?.cost || 0}
+━━━━━━━━━━━━━━━━━━━━
+• TOTAL: $${itinerary.budgetBreakdown.total?.toFixed(2) || 0}`;
+    }
+
+    let packingText = '';
+    if (itinerary.selectedPackingItems && itinerary.selectedPackingItems.length > 0) {
+      const items = itinerary.selectedPackingItems.slice(0, 5).join(' • ');
+      packingText = `
+🎒 PACKING ESSENTIALS:
+${items}${itinerary.selectedPackingItems.length > 5 ? ` +${itinerary.selectedPackingItems.length - 5} more` : ''}`;
+    }
+
+    const getStatusEmoji = (status) => {
+      switch (status?.toLowerCase()) {
+        case 'planned': return '📅';
+        case 'in progress': return '🔄';
+        case 'completed': return '✅';
+        default: return '📍';
+      }
+    };
+
+    return `
+━━━━━━━━━━━━━━━━━━━━
+   ${getTypeEmoji()}  TRAVEL ADVENTURE  ${getTypeEmoji()}
+━━━━━━━━━━━━━━━━━━━━
+
+📍 ${itinerary.destination?.toUpperCase() || 'EXCITING DESTINATION'}
+
+${itinerary.planningLocation ? `✨ ${itinerary.planningLocation}` : ''}
+${itinerary.province ? `📍 ${itinerary.province}` : ''}
+
+━━━━━━━━━━━━━━━━━━━━
+📅 TRIP DETAILS:
+━━━━━━━━━━━━━━━━━━━━
+• Start: ${startDate} ${itinerary.startedTime ? `at ${itinerary.startedTime}` : ''}
+• End:   ${endDate}
+• Status: ${getStatusEmoji(itinerary.currentStatus)} ${itinerary.currentStatus || 'Planned'}
+
+${itinerary.postCaption ? `
+💭 "${itinerary.postCaption}"
+` : ''}
+${budgetText}
+${packingText}
+
+━━━━━━━━━━━━━━━━━━━━
+✨ Plan your own adventure with Travel Planner!
+📱 Download the app and start your journey today!
+━━━━━━━━━━━━━━━━━━━━
+
+#TravelPlanner #Adventure #${itinerary.destination?.replace(/\s+/g, '') || 'Travel'} #Wanderlust`;
   };
 
-  const bottomNavItems = [
-    { name: 'Home', icon: 'home-outline', route: '/app-pages/home' },
-    { name: 'Map', icon: 'map-outline', route: '/app-pages/map' },
-    { name: 'Feed', icon: 'newspaper-outline', route: '/app-pages/feed' },
-    { name: 'Group', icon: 'people-outline', route: '/app-pages/community' },
-    { name: 'Profile', icon: 'person-outline', route: '/app-pages/profile' },
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Date not set';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      
+      const day = date.getDate();
+      const month = date.toLocaleString('default', { month: 'long' });
+      return `${day}${getDaySuffix(day)} of ${month}`;
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const getDaySuffix = (day) => {
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'planned': return '#007AFF';
+      case 'in progress': return '#FF9500';
+      case 'completed': return '#34C759';
+      default: return '#666';
+    }
+  };
+
+  // Bottom navigation items
+  const navItems = [
+    { name: 'Home', icon: 'home-outline', activeIcon: 'home', route: '/' },
+    { name: 'Map', icon: 'map-outline', activeIcon: 'map', route: '/app-pages/map' },
+    { name: 'Feed', icon: 'newspaper-outline', activeIcon: 'newspaper', route: '/app-pages/feed' },
+    { name: 'Group', icon: 'people-outline', activeIcon: 'people', route: '/app-pages/TourGuide' },
+    { name: 'Profile', icon: 'person-outline', activeIcon: 'person', route: '/auth/profile' },
   ];
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Itineraries</Text>
-        <TouchableOpacity onPress={loadPlans} style={styles.refreshButton}>
-          <Ionicons name="refresh-outline" size={24} color="#007AFF" />
-        </TouchableOpacity>
-      </View>
+  const [activeTab, setActiveTab] = useState('Home');
 
-      <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollViewContent}
-      >
-        {plans.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="map-outline" size={80} color="#ccc" />
-            <Text style={styles.emptyTitle}>No Itineraries Yet</Text>
-            <Text style={styles.emptyText}>
-              Create your first travel plan to see it here!
+  const handleNavPress = (route, tabName) => {
+    setActiveTab(tabName);
+    if (route) {
+      router.push(route);
+    }
+  };
+
+  // Check for highlighted plan from notification
+  useEffect(() => {
+    if (params.highlightPlan) {
+      setHighlightedPlanId(params.highlightPlan);
+      setTimeout(() => {
+        setHighlightedPlanId(null);
+      }, 3000);
+    }
+  }, [params.highlightPlan]);
+
+  // Load itineraries when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadItineraries();
+    }, [])
+  );
+
+  // Clean up old images on app start
+  useEffect(() => {
+    cleanupOldImages();
+  }, []);
+
+  // Pan responder for swipe to dismiss notification
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy < 0) {
+          slideAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy < -50) {
+          dismissNotification();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  const ItineraryCard = ({ item }) => {
+    const formattedDate = formatDate(item.startDate);
+    const isHighlighted = item.id === highlightedPlanId;
+    
+    const getEmoji = () => {
+      const dest = (item.destination || '').toLowerCase();
+      if (dest.includes('beach')) return '🏖️';
+      if (dest.includes('mountain')) return '⛰️';
+      if (dest.includes('waterfall')) return '🌊';
+      if (dest.includes('city')) return '🏙️';
+      if (dest.includes('adventure')) return '🧗';
+      return '🏠️';
+    };
+
+    return (
+      <View style={[styles.card, isHighlighted && styles.highlightedCard]}>
+        {/* Image Section with error handling */}
+        <PlanImage 
+          imageUri={item.image}
+          style={styles.cardImage}
+          placeholderEmoji={getEmoji()}
+        />
+        
+        <TouchableOpacity 
+          style={styles.cardContent}
+          onPress={() => {
+            setSelectedItinerary(item);
+            setModalVisible(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <View style={styles.cardDateHeader}>
+            <Text style={styles.cardDate}>
+              {formattedDate}
             </Text>
-            <TouchableOpacity 
-              style={styles.createButton}
-              onPress={() => router.push('/app-pages/createPlan')}
-            >
-              <Text style={styles.createButtonText}>Create Itinerary</Text>
-            </TouchableOpacity>
+            <Text style={styles.cardHeaderEmoji}>{getEmoji()}</Text>
           </View>
-        ) : (
-          plans.map((plan) => (
-            <TouchableOpacity
-              key={plan.id}
-              style={styles.planCard}
-              onPress={() => handleViewPlan(plan)}
-            >
-              <View style={styles.planHeader}>
-                <View style={styles.planIcon}>
-                  <Ionicons name="airplane-outline" size={24} color="#007AFF" />
-                </View>
-                <View style={styles.planInfo}>
-                  <Text style={styles.planDestination}>{plan.destination}</Text>
-                  <Text style={styles.planDate}>
-                    {formatDateRange(plan.startDate, plan.endDate)}
-                  </Text>
-                  <View style={styles.planStats}>
-                    <Text style={styles.planDays}>
-                      {calculateDays(plan.startDate, plan.endDate)} days
-                    </Text>
-                    <Text style={styles.planActivities}>
-                      {plan.activities?.length || 0} activities
-                    </Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={24} color="#ccc" />
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-      </ScrollView>
 
-      {/* Detail Modal */}
-      <Modal
-        visible={modalVisible}
-        transparent={true}
-        animationType="none"
-        onRequestClose={closeModal}
+          <Text style={styles.cardLocationTitle}>
+            {item.planningLocation || 'Bopath Alla Waterfall'}
+          </Text>
+
+          <Text style={styles.cardAddress} numberOfLines={2}>
+            {item.province || 'Agalwatte village, Kuruwita, in the Ratnapura District of Sri Lanka.'}
+          </Text>
+
+          <View style={styles.startTimeRow}>
+            <Text style={styles.startTimeLabel}>Start By :</Text>
+            <Text style={styles.startTimeValue}>{item.startedTime || '6.00 A.M'}</Text>
+          </View>
+
+          <TouchableOpacity style={styles.approveButton}>
+            <Text style={styles.approveButtonText}>Approve the Travel Guide</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.seeMoreButton}
+            onPress={() => {
+              setSelectedItinerary(item);
+              setModalVisible(true);
+            }}
+          >
+            <Text style={styles.seeMoreButtonText}>See More</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Ionicons name="heart-outline" size={18} color="#FF6B6B" />
+            <Text style={styles.statText}>1.2 k Reps</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Ionicons name="chatbubble-outline" size={18} color="#4A90E2" />
+            <Text style={styles.statText}>1.75 k Comments</Text>
+          </View>
+        </View>
+
+        <View style={styles.actionButtonsRow}>
+          <TouchableOpacity 
+            style={styles.updateButton}
+            onPress={() => handleUpdateItinerary(item)}
+          >
+            <Text style={styles.updateButtonText}>UPDATE</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.shareButton}
+            onPress={() => handleShare(item)}
+          >
+            <Text style={styles.shareButtonText}>SHARE</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={() => handleDeleteItinerary(item.id)}
+          >
+            <Text style={styles.deleteButtonText}>DELETE</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  // Recent Plan Card Component for Recommendations
+  const RecentPlanCard = ({ plan }) => {
+    const getPlanEmoji = () => {
+      const dest = (plan.destination || '').toLowerCase();
+      if (dest.includes('beach')) return '🏖️';
+      if (dest.includes('mountain')) return '⛰️';
+      if (dest.includes('waterfall')) return '🌊';
+      if (dest.includes('city')) return '🏙️';
+      if (dest.includes('adventure')) return '🧗';
+      return '✈️';
+    };
+
+    const formatShortDate = (dateString) => {
+      if (!dateString) return '';
+      try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      } catch {
+        return '';
+      }
+    };
+
+    return (
+      <TouchableOpacity 
+        style={styles.recentPlanCard}
+        onPress={() => {
+          setSelectedItinerary(plan);
+          setModalVisible(true);
+        }}
       >
-        <TouchableWithoutFeedback onPress={closeModal}>
-          <Animated.View style={[styles.modalOverlay, { opacity: fadeAnim }]}>
-            <TouchableWithoutFeedback>
-              <Animated.View 
-                style={[
-                  styles.modalContent,
-                  {
-                    transform: [{ translateX: slideAnim }]
-                  }
-                ]}
-              >
-                {selectedPlan && (
-                  <>
-                    <View style={styles.modalHeader}>
-                      <Text style={styles.modalTitle}>{selectedPlan.destination}</Text>
-                      <TouchableOpacity onPress={closeModal} style={styles.modalClose}>
-                        <Ionicons name="close" size={24} color="#333" />
-                      </TouchableOpacity>
+        {/* Card Image with error handling */}
+        <RecentPlanImage 
+          imageUri={plan.image}
+          style={styles.recentPlanImage}
+          placeholderEmoji={getPlanEmoji()}
+        />
+        
+        {/* Overlay */}
+        <View style={styles.recentPlanOverlay}>
+          <View style={styles.recentPlanTag}>
+            <Text style={styles.recentPlanTagText}>
+              {plan.currentStatus || 'Planned'}
+            </Text>
+          </View>
+          <Text style={styles.recentPlanName} numberOfLines={1}>
+            {plan.destination || 'Untitled Trip'}
+          </Text>
+          <Text style={styles.recentPlanLocation} numberOfLines={1}>
+            {plan.planningLocation || plan.province || 'Location not set'}
+          </Text>
+          <View style={styles.recentPlanDate}>
+            <Ionicons name="calendar-outline" size={10} color="#fff" />
+            <Text style={styles.recentPlanDateText}>
+              {formatShortDate(plan.startDate) || 'Date TBD'}
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const ItineraryDetailModal = () => {
+    const [modalImageError, setModalImageError] = useState(false);
+    const [validModalImageUri, setValidModalImageUri] = useState(null);
+
+    useEffect(() => {
+      if (selectedItinerary?.image) {
+        const validated = validateImageUri(selectedItinerary.image);
+        setValidModalImageUri(validated);
+        setModalImageError(!validated);
+      }
+    }, [selectedItinerary]);
+
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedItinerary && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <TouchableOpacity onPress={() => setModalVisible(false)}>
+                      <Ionicons name="close" size={24} color="#333" />
+                    </TouchableOpacity>
+                    <Text style={styles.modalTitle}>Trip Details</Text>
+                    <TouchableOpacity onPress={() => handleShare(selectedItinerary)}>
+                      <Ionicons name="share-outline" size={24} color="#007AFF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {!modalImageError && validModalImageUri ? (
+                    <Image 
+                      source={{ uri: validModalImageUri }}
+                      style={styles.modalImage}
+                      onError={() => setModalImageError(true)}
+                    />
+                  ) : (
+                    <View style={[styles.modalImage, styles.modalPlaceholderImage]}>
+                      <Ionicons name="image-outline" size={50} color="#ccc" />
+                    </View>
+                  )}
+
+                  <View style={styles.modalBody}>
+                    <View style={styles.modalTitleRow}>
+                      <Text style={styles.modalDestination}>
+                        {selectedItinerary.destination || 'Untitled Destination'}
+                      </Text>
+                      <View style={[styles.modalStatusBadge, { backgroundColor: getStatusColor(selectedItinerary.currentStatus) }]}>
+                        <Text style={styles.modalStatusText}>{selectedItinerary.currentStatus || 'Planned'}</Text>
+                      </View>
                     </View>
 
-                    <ScrollView style={styles.modalBody}>
-                      <View style={styles.detailSection}>
-                        <Text style={styles.detailLabel}>Travel Dates</Text>
-                        <Text style={styles.detailValue}>
-                          {formatDateRange(selectedPlan.startDate, selectedPlan.endDate)}
-                        </Text>
-                        <Text style={styles.detailSubtext}>
-                          {calculateDays(selectedPlan.startDate, selectedPlan.endDate)} days trip
+                    {selectedItinerary.postCaption && (
+                      <Text style={styles.modalCaption}>"{selectedItinerary.postCaption}"</Text>
+                    )}
+
+                    <View style={styles.detailsGrid}>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="calendar" size={20} color="#007AFF" />
+                        <Text style={styles.detailLabel}>Start Date</Text>
+                        <Text style={styles.detailValue}>{formatDate(selectedItinerary.startDate)}</Text>
+                      </View>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="calendar" size={20} color="#FF6B6B" />
+                        <Text style={styles.detailLabel}>End Date</Text>
+                        <Text style={styles.detailValue}>{formatDate(selectedItinerary.endDate)}</Text>
+                      </View>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="time" size={20} color="#34C759" />
+                        <Text style={styles.detailLabel}>Start Time</Text>
+                        <Text style={styles.detailValue}>{selectedItinerary.startedTime || 'Not set'}</Text>
+                      </View>
+                      <View style={styles.detailCard}>
+                        <Ionicons name="people" size={20} color="#FF9500" />
+                        <Text style={styles.detailLabel}>Collaborators</Text>
+                        <Text style={styles.detailValue}>0</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.infoSection}>
+                      <Text style={styles.infoSectionTitle}>📍 Location Details</Text>
+                      <View style={styles.infoRow}>
+                        <Ionicons name="location" size={16} color="#666" />
+                        <Text style={styles.infoText}>
+                          {selectedItinerary.planningLocation || 'Location not specified'}
+                          {selectedItinerary.province ? `, ${selectedItinerary.province}` : ''}
                         </Text>
                       </View>
+                    </View>
 
-                      <View style={styles.detailSection}>
-                        <Text style={styles.detailLabel}>Activities</Text>
-                        {selectedPlan.activities && selectedPlan.activities.length > 0 ? (
-                          selectedPlan.activities.map((activity, index) => (
-                            <View key={index} style={styles.activityItem}>
-                              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                              <Text style={styles.activityText}>{activity}</Text>
-                            </View>
-                          ))
-                        ) : (
-                          <Text style={styles.noDataText}>No activities added</Text>
-                        )}
-                      </View>
-
-                      {selectedPlan.notes && (
-                        <View style={styles.detailSection}>
-                          <Text style={styles.detailLabel}>Notes</Text>
-                          <Text style={styles.notesText}>{selectedPlan.notes}</Text>
+                    {selectedItinerary.budgetBreakdown && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoSectionTitle}>💰 Budget Breakdown</Text>
+                        <View style={styles.budgetItems}>
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Transport</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.transport?.cost || 0}
+                            </Text>
+                          </View>
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Accommodation</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.accommodation?.cost || 0}
+                            </Text>
+                          </View>
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Food</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.food?.cost || 0}
+                            </Text>
+                          </View>
+                          <View style={styles.budgetItem}>
+                            <Text style={styles.budgetItemLabel}>Activities</Text>
+                            <Text style={styles.budgetItemValue}>
+                              ${selectedItinerary.budgetBreakdown.activities?.cost || 0}
+                            </Text>
+                          </View>
                         </View>
-                      )}
-
-                      <View style={styles.modalActions}>
-                        <TouchableOpacity 
-                          style={[styles.actionButton, styles.editButton]}
-                          onPress={() => {
-                            closeModal();
-                            setTimeout(() => handleEditPlan(selectedPlan), 300);
-                          }}
-                        >
-                          <Ionicons name="create-outline" size={20} color="#fff" />
-                          <Text style={styles.actionButtonText}>Edit</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                          style={[styles.actionButton, styles.shareButton]}
-                          onPress={() => handleShare(selectedPlan)}
-                        >
-                          <Ionicons name="share-outline" size={20} color="#fff" />
-                          <Text style={styles.actionButtonText}>Share</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                          style={[styles.actionButton, styles.deleteButton]}
-                          onPress={() => handleDeletePlan(selectedPlan.id)}
-                        >
-                          <Ionicons name="trash-outline" size={20} color="#fff" />
-                          <Text style={styles.actionButtonText}>Delete</Text>
-                        </TouchableOpacity>
+                        <View style={styles.totalBudget}>
+                          <Text style={styles.totalBudgetLabel}>Total</Text>
+                          <Text style={styles.totalBudgetValue}>
+                            ${selectedItinerary.budgetBreakdown.total?.toFixed(2) || 0}
+                          </Text>
+                        </View>
                       </View>
-                    </ScrollView>
-                  </>
-                )}
-              </Animated.View>
-            </TouchableWithoutFeedback>
-          </Animated.View>
-        </TouchableWithoutFeedback>
-      </Modal>
+                    )}
 
-      {/* Edit Modal */}
-      <Modal
-        visible={editModalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <View style={styles.editModalOverlay}>
-          <View style={styles.editModalContent}>
-            <View style={styles.editModalHeader}>
-              <Text style={styles.editModalTitle}>Edit Itinerary</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
+                    {selectedItinerary.selectedPackingItems?.length > 0 && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoSectionTitle}>🎒 Packing List</Text>
+                        <View style={styles.packingItems}>
+                          {selectedItinerary.selectedPackingItems.map((item, index) => (
+                            <View key={index} style={styles.packingItem}>
+                              <Ionicons name="checkmark-circle" size={16} color="#34C759" />
+                              <Text style={styles.packingItemText}>{item}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
 
-            <ScrollView style={styles.editModalBody}>
-              <Text style={styles.inputLabel}>Destination</Text>
-              <TextInput
-                style={styles.input}
-                value={editForm.destination}
-                onChangeText={(text) => setEditForm({ ...editForm, destination: text })}
-                placeholder="Enter destination"
-              />
+                    {selectedItinerary.tripNotes && (
+                      <View style={styles.infoSection}>
+                        <Text style={styles.infoSectionTitle}>📝 Trip Notes</Text>
+                        <Text style={styles.notesText}>{selectedItinerary.tripNotes}</Text>
+                      </View>
+                    )}
 
-              <Text style={styles.inputLabel}>Start Date</Text>
-              <TextInput
-                style={styles.input}
-                value={editForm.startDate}
-                onChangeText={(text) => setEditForm({ ...editForm, startDate: text })}
-                placeholder="YYYY-MM-DD"
-              />
-
-              <Text style={styles.inputLabel}>End Date</Text>
-              <TextInput
-                style={styles.input}
-                value={editForm.endDate}
-                onChangeText={(text) => setEditForm({ ...editForm, endDate: text })}
-                placeholder="YYYY-MM-DD"
-              />
-
-              <Text style={styles.inputLabel}>Activities</Text>
-              <View style={styles.addActivityContainer}>
-                <TextInput
-                  style={styles.activityInput}
-                  value={newActivity}
-                  onChangeText={setNewActivity}
-                  placeholder="Add an activity"
-                />
-                <TouchableOpacity style={styles.addButton} onPress={addActivity}>
-                  <Ionicons name="add" size={24} color="#fff" />
-                </TouchableOpacity>
-              </View>
-
-              {editForm.activities.map((activity, index) => (
-                <View key={index} style={styles.activityListItem}>
-                  <Text style={styles.activityListText}>{activity}</Text>
-                  <TouchableOpacity onPress={() => removeActivity(index)}>
-                    <Ionicons name="close-circle" size={20} color="#FF6B6B" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <Text style={styles.inputLabel}>Notes (Optional)</Text>
-              <TextInput
-                style={[styles.input, styles.notesInput]}
-                value={editForm.notes}
-                onChangeText={(text) => setEditForm({ ...editForm, notes: text })}
-                placeholder="Add any notes..."
-                multiline
-              />
-
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.saveButtonText}>Save Changes</Text>
-              </TouchableOpacity>
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity style={styles.whatsappButton} onPress={() => handleShare(selectedItinerary)}>
+                        <Ionicons name="share-social" size={18} color="#fff" />
+                        <Text style={styles.whatsappButtonText}>Share This Adventure</Text>
+                      </TouchableOpacity>
+                      
+                      <TouchableOpacity 
+                        style={styles.reserveButton}
+                        onPress={() => {
+                          setModalVisible(false);
+                          router.push('/app-pages/TourGuideList');
+                        }}
+                      >
+                        <Text style={styles.reserveButtonText}>Reserve for 'Travel Guide'</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </>
+              )}
             </ScrollView>
           </View>
         </View>
       </Modal>
+    );
+  };
+
+  const EmptyState = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="map-outline" size={80} color="#ccc" />
+      <Text style={styles.emptyTitle}>No Itineraries Yet</Text>
+      <Text style={styles.emptyText}>
+        Start planning your first adventure! Create a travel plan to see it here.
+      </Text>
+      <TouchableOpacity 
+        style={styles.emptyButton}
+        onPress={() => router.push('/app-pages/createPlan')}
+      >
+        <Ionicons name="add-circle-outline" size={20} color="#fff" />
+        <Text style={styles.emptyButtonText}>Create Your First Plan</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const Footer = () => (
+    <View style={styles.footerContainer}>
+      <View style={styles.footerDivider} />
+      <Text style={styles.footerQuote}>
+        "Travel far enough to meet yourself."
+      </Text>
+      <Text style={styles.footerText}>
+        Every journey begins with a single step. Your adventures are waiting — start planning your next unforgettable experience today.
+      </Text>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      {/* Notification Component */}
+      {notificationVisible && notification && (
+        <Animated.View
+          style={[
+            styles.notificationContainer,
+            {
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+          {...panResponder.panHandlers}
+        >
+          <TouchableOpacity
+            style={styles.notificationContent}
+            onPress={handleNotificationPress}
+            activeOpacity={0.9}
+          >
+            <View style={[styles.notificationIcon, { backgroundColor: getIconForType(notification.type).color + '20' }]}>
+              <Ionicons 
+                name={getIconForType(notification.type).name} 
+                size={24} 
+                color={getIconForType(notification.type).color} 
+              />
+            </View>
+            
+            <View style={styles.notificationTextContainer}>
+              <Text style={styles.notificationTitle} numberOfLines={1}>
+                {notification.title}
+              </Text>
+              <Text style={styles.notificationMessage} numberOfLines={2}>
+                {notification.message}
+              </Text>
+            </View>
+
+            <TouchableOpacity onPress={dismissNotification} style={styles.notificationClose}>
+              <Ionicons name="close" size={20} color="#999" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollViewContent}
+        >
+          {/* Centered Header */}
+          <View style={styles.header}>
+            <Text style={styles.welcomeText}>Welcome to Your</Text>
+            <Text style={styles.headerTitle}>Creative Travel Planner</Text>
+          </View>
+
+          {/* Centered Subtitle */}
+          <Text style={styles.subtitle}>
+            Start your journey by creating, organizing, and exploring your perfect trip with your Anyone !.
+          </Text>
+
+          {/* Search Bar and Add Button */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <Ionicons name="search-outline" size={20} color="#8E8E93" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search destinations, locations..."
+                placeholderTextColor="#8E8E93"
+                value={searchQuery}
+                onChangeText={handleSearch}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => handleSearch('')}>
+                  <Ionicons name="close-circle" size={18} color="#8E8E93" />
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={() => router.push('/app-pages/createPlan')}
+            >
+              <Ionicons name="add" size={28} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Results Count */}
+          {searchQuery.length > 0 && (
+            <Text style={styles.searchResultText}>
+              Found {filteredItineraries.length} result{filteredItineraries.length !== 1 ? 's' : ''}
+            </Text>
+          )}
+
+          {/* Section Header */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Itineraries</Text>
+            <Text style={styles.sectionSubtitle}>
+              Time to map out the voyage — one bold step at a time 🚶‍♀️
+            </Text>
+          </View>
+
+          {/* Recent Plans Section - Newest 5 Plans */}
+          {recentPlans.length > 0 && (
+            <View style={styles.recentSection}>
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>🔥 Recent Adventures</Text>
+                <TouchableOpacity onPress={() => {
+                  if (recentPlans.length > 0) {
+                    setSelectedItinerary(recentPlans[0]);
+                    setModalVisible(true);
+                  }
+                }}>
+                  <Text style={styles.recentSeeAll}>See More.. </Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentScrollContent}
+              >
+                {recentPlans.map((plan) => (
+                  <RecentPlanCard key={plan.id} plan={plan} />
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Itineraries List */}
+          <FlatList
+            data={filteredItineraries}
+            renderItem={({ item }) => <ItineraryCard item={item} />}
+            keyExtractor={(item) => item.id?.toString() || Math.random().toString()}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            ListEmptyComponent={searchQuery.length > 0 ? 
+              () => (
+                <View style={styles.noResultsContainer}>
+                  <Ionicons name="search-outline" size={50} color="#ccc" />
+                  <Text style={styles.noResultsText}>No results found for "{searchQuery}"</Text>
+                </View>
+              ) : 
+              EmptyState
+            }
+            scrollEnabled={false}
+          />
+
+          {/* Footer Section */}
+          <Footer />
+        </ScrollView>
+      </SafeAreaView>
+
+      {/* Detail Modal */}
+      <ItineraryDetailModal />
+
+      {/* Share Modal */}
+      <ShareModal 
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        onShare={captureAndShare}
+        sharingItinerary={sharingItinerary}
+      />
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        {bottomNavItems.map((item) => (
+        {navItems.map((item) => (
           <TouchableOpacity
             key={item.name}
             style={styles.navItem}
-            onPress={() => router.push(item.route)}
+            onPress={() => handleNavPress(item.route, item.name)}
           >
-            <Ionicons name={item.icon} size={24} color="#666" />
-            <Text style={styles.navText}>{item.name}</Text>
+            <Ionicons 
+              name={activeTab === item.name ? item.activeIcon : item.icon} 
+              size={24} 
+              color={activeTab === item.name ? '#007AFF' : '#8E8E93'} 
+            />
+            <Text style={[
+              styles.navText, 
+              activeTab === item.name && styles.navTextActive
+            ]}>
+              {item.name}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
+// Share Modal Component
+const ShareModal = ({ visible, onClose, onShare, sharingItinerary }) => {
+  const viewShotRef = useRef(null);
+
+  const captureAndShare = async () => {
+    if (!viewShotRef.current) {
+      Alert.alert('Error', 'Could not capture image');
+      return;
+    }
+
+    try {
+      const uri = await viewShotRef.current.capture({
+        format: 'png',
+        quality: 0.95,
+        result: 'tmpfile',
+      });
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: `Share my trip to ${sharingItinerary?.destination}`,
+          UTI: 'image.png',
+        });
+        
+        onClose();
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+      Alert.alert('Error', 'Failed to share. Please try again.');
+    }
+  };
+
+  const getEmojiForDestination = (destination) => {
+    const dest = (destination || '').toLowerCase();
+    if (dest.includes('beach')) return '🏖️';
+    if (dest.includes('mountain')) return '⛰️';
+    if (dest.includes('waterfall')) return '🌊';
+    if (dest.includes('city')) return '🏙️';
+    if (dest.includes('adventure')) return '🧗';
+    return '✈️';
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Date not set';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    } catch {
+      return dateString;
+    }
+  };
+
+  return (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <View style={styles.shareModalOverlay}>
+        <View style={styles.shareModalContent}>
+          <Text style={styles.shareModalTitle}>Creating Share Image...</Text>
+          <Text style={styles.shareModalSubtitle}>Please wait a moment</Text>
+          
+          {sharingItinerary && (
+            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.95 }}>
+              <View style={styles.shareCard}>
+                {sharingItinerary.image ? (
+                  <Image 
+                    source={{ uri: sharingItinerary.image }} 
+                    style={styles.shareBackgroundImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={[styles.shareBackgroundImage, styles.sharePlaceholderBackground]}>
+                    <Ionicons name="image-outline" size={60} color="#fff" />
+                  </View>
+                )}
+                <View style={styles.shareGradient} />
+                <View style={styles.shareContent}>
+                  <View style={styles.shareTopSection}>
+                    <View style={styles.shareDateBadge}>
+                      <Ionicons name="calendar" size={14} color="#fff" />
+                      <Text style={styles.shareDate}>
+                        {formatDate(sharingItinerary.startDate)}
+                      </Text>
+                    </View>
+                    <View style={styles.shareEmojiBadge}>
+                      <Text style={styles.shareEmoji}>
+                        {getEmojiForDestination(sharingItinerary.destination)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.shareMainContent}>
+                    <Text style={styles.shareDestination}>
+                      {sharingItinerary.planningLocation || 'Amazing Destination'}
+                    </Text>
+                    <Text style={styles.shareLocation}>
+                      <Ionicons name="location" size={14} color="#FFD700" /> {sharingItinerary.province || 'Sri Lanka'}
+                    </Text>
+                    <View style={styles.shareTimeBadge}>
+                      <Ionicons name="time" size={14} color="#FFD700" />
+                      <Text style={styles.shareTimeLabel}> Starts at </Text>
+                      <Text style={styles.shareTimeValue}>
+                        {sharingItinerary.startedTime || '6.00 A.M'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.shareBottomSection}>
+                    <View style={styles.shareStats}>
+                      <View style={styles.shareStat}>
+                        <Ionicons name="heart" size={16} color="#FF6B6B" />
+                        <Text style={styles.shareStatText}>1.2k</Text>
+                      </View>
+                      <View style={styles.shareStat}>
+                        <Ionicons name="chatbubble" size={16} color="#4A90E2" />
+                        <Text style={styles.shareStatText}>1.75k</Text>
+                      </View>
+                    </View>
+
+                    {sharingItinerary.postCaption && (
+                      <View style={styles.shareCaptionContainer}>
+                        <Text style={styles.shareCaptionLabel}>Caption</Text>
+                        <Text style={styles.shareCaption} numberOfLines={2}>
+                          "{sharingItinerary.postCaption}"
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.shareBranding}>
+                      <Text style={styles.shareBrandingText}>Travel Planner</Text>
+                      <Text style={styles.shareBrandingSub}>Plan Your Perfect Journey</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </ViewShot>
+          )}
+
+          <TouchableOpacity 
+            style={styles.shareModalButton}
+            onPress={captureAndShare}
+          >
+            <Text style={styles.shareModalButtonText}>Continue Sharing</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.shareModalCancel}
+            onPress={onClose}
+          >
+            <Text style={styles.shareModalCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// Styles (keep all your existing styles - they remain the same)
 const styles = StyleSheet.create({
+  // ... (keep all your existing styles from the original file)
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFFFFF',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
-  },
-  refreshButton: {
-    padding: 8,
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
   },
   scrollViewContent: {
-    padding: 16,
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
-  emptyState: {
+  header: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#000000',
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666666',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 25,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 8,
+    color: '#000000',
+    paddingVertical: 0,
+  },
+  addButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  searchResultText: {
+    fontSize: 14,
+    color: '#666666',
+    paddingHorizontal: 20,
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
+  sectionHeader: {
+    paddingHorizontal: 20,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 5,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  recentSection: {
+    marginBottom: 20,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  recentTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000000',
+  },
+  recentSeeAll: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  recentScrollContent: {
+    paddingLeft: 16,
+    paddingRight: 8,
+    paddingBottom: 5,
+  },
+  recentPlanCard: {
+    width: 140,
+    marginRight: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  recentPlanImage: {
+    width: '100%',
+    height: 120,
+    backgroundColor: '#f5f5f5',
+  },
+  recentPlanImagePlaceholder: {
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentPlanEmoji: {
+    fontSize: 40,
+  },
+  recentPlanOverlay: {
+    padding: 10,
+    backgroundColor: '#fff',
+  },
+  recentPlanTag: {
+    backgroundColor: '#007AFF20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  recentPlanTagText: {
+    fontSize: 9,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  recentPlanName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  recentPlanLocation: {
+    fontSize: 10,
+    color: '#666',
+    marginBottom: 4,
+  },
+  recentPlanDate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  recentPlanDateText: {
+    fontSize: 9,
+    color: '#999',
+  },
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 0,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  highlightedCard: {
+    borderColor: '#007AFF',
+    borderWidth: 2,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  cardImage: {
+    width: '100%',
+    height: 180,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  cardImagePlaceholder: {
+    backgroundColor: '#007AFF20',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardImageEmoji: {
+    fontSize: 50,
+  },
+  cardContent: {
+    width: '100%',
+    padding: 16,
+  },
+  cardDateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardDate: {
+    fontSize: 14,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  cardHeaderEmoji: {
+    fontSize: 20,
+  },
+  cardLocationTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 6,
+  },
+  cardAddress: {
+    fontSize: 13,
+    color: '#8E8E93',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  startTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  startTimeLabel: {
+    fontSize: 14,
+    color: '#666666',
+    marginRight: 4,
+  },
+  startTimeValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  approveButton: {
+    backgroundColor: '#F2F2F7',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  approveButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  seeMoreButton: {
+    marginBottom: 16,
+  },
+  seeMoreButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: 12,
+    paddingHorizontal: 16,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
+  statText: {
+    fontSize: 13,
+    color: '#666666',
+    marginLeft: 4,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  updateButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginRight: 6,
+    alignItems: 'center',
+  },
+  updateButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  shareButton: {
+    flex: 1,
+    backgroundColor: '#34C759',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginHorizontal: 3,
+    alignItems: 'center',
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#FF6B6B',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginLeft: 6,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 20,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
-    marginTop: 16,
-    marginBottom: 8,
+    color: '#000000',
+    marginTop: 20,
+    marginBottom: 10,
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
+    color: '#666666',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  createButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  createButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  planCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  planHeader: {
+  emptyButton: {
     flexDirection: 'row',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
     alignItems: 'center',
   },
-  planIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E8F1FF',
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  noResultsContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    paddingVertical: 40,
   },
-  planInfo: {
-    flex: 1,
+  noResultsText: {
+    fontSize: 16,
+    color: '#666666',
+    marginTop: 10,
+    textAlign: 'center',
   },
-  planDestination: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+  footerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 3,
+    paddingBottom: 5,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    marginTop: 5,
   },
-  planDate: {
-    fontSize: 14,
+  footerDivider: {
+    width: 50,
+    height: 2,
+    backgroundColor: '#007AFF',
+    borderRadius: 1,
+    marginBottom: 10,
+  },
+  footerQuote: {
+    fontSize: 16,
+    fontStyle: 'italic',
     color: '#666',
-    marginBottom: 4,
+    textAlign: 'center',
+    marginBottom: 12,
   },
-  planStats: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  planDays: {
-    fontSize: 12,
-    color: '#007AFF',
-  },
-  planActivities: {
-    fontSize: 12,
-    color: '#666',
+  footerText: {
+    fontSize: 13,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: SCREEN_WIDTH * 0.9,
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -681,195 +1852,196 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalImage: {
+    width: '100%',
+    height: 250,
+  },
+  modalPlaceholderImage: {
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalDestination: {
+    fontSize: 24,
     fontWeight: '700',
     color: '#333',
     flex: 1,
   },
-  modalClose: {
-    padding: 8,
+  modalStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 15,
+    marginLeft: 10,
   },
-  modalBody: {
-    flex: 1,
-    padding: 20,
+  modalStatusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
   },
-  detailSection: {
-    marginBottom: 24,
+  modalCaption: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+    marginBottom: 20,
+  },
+  detailsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  detailCard: {
+    width: '48%',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    alignItems: 'center',
   },
   detailLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+    marginBottom: 3,
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  infoSection: {
+    marginBottom: 20,
+  },
+  infoSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  detailValue: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 4,
-  },
-  detailSubtext: {
-    fontSize: 14,
-    color: '#999',
-  },
-  activityItem: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 12,
+    marginBottom: 8,
   },
-  activityText: {
+  infoText: {
     fontSize: 14,
-    color: '#333',
+    color: '#666',
+    marginLeft: 8,
     flex: 1,
   },
-  noDataText: {
+  budgetItems: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+  },
+  budgetItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  budgetItemLabel: {
     fontSize: 14,
-    color: '#999',
-    fontStyle: 'italic',
+    color: '#666',
+  },
+  budgetItemValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  totalBudget: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 2,
+    borderTopColor: '#007AFF',
+  },
+  totalBudgetLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  totalBudgetValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  packingItems: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+  },
+  packingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  packingItemText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
   },
   notesText: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 12,
   },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
+  actionButtons: {
     marginTop: 20,
-    marginBottom: 30,
   },
-  actionButton: {
-    flex: 1,
+  whatsappButton: {
     flexDirection: 'row',
+    backgroundColor: '#25D366',
+    padding: 15,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
+    marginBottom: 10,
   },
-  editButton: {
-    backgroundColor: '#007AFF',
-  },
-  shareButton: {
-    backgroundColor: '#4CAF50',
-  },
-  deleteButton: {
-    backgroundColor: '#FF6B6B',
-  },
-  actionButtonText: {
+  whatsappButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
+    marginLeft: 8,
   },
-  editModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  editModalContent: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: SCREEN_HEIGHT * 0.9,
-  },
-  editModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  editModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
-  },
-  editModalBody: {
-    padding: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  input: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  notesInput: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  addActivityContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  activityInput: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  addButton: {
+  reserveButton: {
     backgroundColor: '#007AFF',
-    width: 48,
-    height: 48,
+    padding: 15,
     borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  activityListItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  activityListText: {
-    fontSize: 14,
-    color: '#333',
-    flex: 1,
-  },
-  saveButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 40,
-  },
-  saveButtonText: {
+  reserveButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   bottomNav: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#F0F0F0',
     position: 'absolute',
     bottom: 0,
     left: 0,
@@ -878,13 +2050,258 @@ const styles = StyleSheet.create({
   navItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
   },
   navText: {
     fontSize: 11,
-    color: '#666',
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  navTextActive: {
+    color: '#007AFF',
     fontWeight: '500',
-    marginTop: 4,
+  },
+  notificationContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    paddingTop: 50,
+    paddingHorizontal: 16,
+  },
+  notificationContent: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  notificationIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  notificationTextContainer: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  notificationMessage: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  notificationClose: {
+    padding: 6,
+  },
+  shareModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareModalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    width: '90%',
+    alignItems: 'center',
+  },
+  shareModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 10,
+  },
+  shareModalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  shareModalButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    borderRadius: 25,
+    marginBottom: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  shareModalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  shareModalCancel: {
+    paddingVertical: 10,
+  },
+  shareModalCancelText: {
+    color: '#999',
+    fontSize: 14,
+  },
+  shareCard: {
+    width: SCREEN_WIDTH * 0.8,
+    height: SCREEN_WIDTH * 1.2,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  shareBackgroundImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  sharePlaceholderBackground: {
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  shareContent: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  shareTopSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  shareDateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  shareDate: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  shareEmojiBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shareEmoji: {
+    fontSize: 22,
+  },
+  shareMainContent: {
+    alignItems: 'center',
+  },
+  shareDestination: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  shareLocation: {
+    color: '#fff',
+    fontSize: 14,
+    marginBottom: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  shareTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 25,
+  },
+  shareTimeLabel: {
+    color: '#fff',
+    fontSize: 12,
+    marginHorizontal: 2,
+  },
+  shareTimeValue: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  shareBottomSection: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 15,
+    padding: 15,
+  },
+  shareStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 12,
+  },
+  shareStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  shareStatText: {
+    color: '#fff',
+    fontSize: 14,
+    marginLeft: 5,
+  },
+  shareCaptionContainer: {
+    marginBottom: 12,
+  },
+  shareCaptionLabel: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 10,
+    marginBottom: 2,
+  },
+  shareCaption: {
+    color: '#fff',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  shareBranding: {
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    paddingTop: 12,
+  },
+  shareBrandingText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  shareBrandingSub: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 10,
   },
 });
 
