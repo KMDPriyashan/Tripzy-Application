@@ -13,15 +13,6 @@ const PlanPage = () => {
   const [calendarDays, setCalendarDays] = useState([]);
   const [previousItineraries, setPreviousItineraries] = useState([]);
 
-  // Bottom navigation items
-  const navItems = [
-    { name: 'Home', icon: '🏠', target: '/profile' },
-    { name: 'Map', icon: '🗺️', target: '/app-pages/map' },
-    { name: 'Feed', icon: '📰', target: '/app-pages/feed' },
-    { name: 'Group', icon: '👥', target: '/app-pages/community' },
-    { name: 'Profile', icon: '👤', target: '/app-pages/profile' },
-  ];
-
   // Load itineraries when component mounts
   useEffect(() => {
     loadItineraries();
@@ -152,12 +143,6 @@ const PlanPage = () => {
     setCalendarDays(daysArray);
   };
 
-  const handleNavPress = (targetPath) => {
-    if (targetPath) {
-      router.push(targetPath);
-    }
-  };
-
   const handleDatePress = (dateInfo) => {
     setSelectedDate(dateInfo.date);
     console.log('Selected date:', dateInfo.date);
@@ -210,7 +195,7 @@ const PlanPage = () => {
         <View style={styles.titleSection}>
           <Text style={styles.mainTitle}>Plan Your Perfect Getaway !</Text>
           <Text style={styles.subtitle}>
-            Start organizing your dream trip with ease—choose destinations, set dates, and customize every detail
+            🌳Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖
           </Text>
         </View>
 
@@ -320,22 +305,13 @@ const PlanPage = () => {
           onPress={() => router.push('/app-pages/myItineraries')}
         >
           <Text style={styles.createButtonText}>View Itineraries</Text>
+          
         </TouchableOpacity>
-      </ScrollView>
+        <View style={styles.buttomtext}>
+              <Text style={styles.endtext}>With every detail in place, this plan ensures a smooth journey filled with memorable experiences. 🔖</Text>    
+        </View>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        {navItems.map((item) => (
-          <TouchableOpacity
-            key={item.name}
-            style={styles.navItem}
-            onPress={() => handleNavPress(item.target)}
-          >
-            <Text style={styles.navIcon}>{item.icon}</Text>
-            <Text style={styles.navText}>{item.name}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -345,6 +321,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  buttomtext: {
+    alignItems: 'center',
+    justifyContent: 'center',
+   
+  },
+
+  endtext: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 8,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+
+
   header: {
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -370,7 +362,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollViewContent: {
-    paddingBottom: 100,
+    paddingBottom: 30,
   },
   titleSection: {
     paddingHorizontal: 32,
@@ -605,34 +597,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  navIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  navText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
   },
 });
 

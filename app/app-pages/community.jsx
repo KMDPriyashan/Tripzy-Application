@@ -289,8 +289,8 @@ const CommunityPage = () => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Community</Text>
-        <Text style={styles.headerSubtitle}>Where every journey begins with connection</Text>
+        <Text style={styles.headerTitle}>Travel Community</Text>
+        <Text style={styles.headerSubtitle}>🔖 Where every journey begins with connection finding your tribe and sharing the adventure together. 🔖</Text>
       </View>
 
       {/* Search Bar */}
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 70,
     paddingBottom: 15,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
@@ -463,10 +463,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1a1a1a',
     marginBottom: 4,
+    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 13,
     color: '#666',
+    textAlign: 'center',
   },
   searchContainer: {
     flexDirection: 'row',

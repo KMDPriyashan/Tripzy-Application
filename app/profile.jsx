@@ -9,7 +9,7 @@ const featureCardsData = [
   { name: 'Travel Map', description: 'Map your travels. Nourish your soul.', icon: '🗺️', target: '/app-pages/map' },
   { name: 'Travel Feed', description: 'Your Parth Begin With presence.', icon: '🔖', target: '/app-pages/feed' },
   { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TourGuide' },
-  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/communityHome' },
+  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/community' },
   { name: 'Weather', description: 'Check the weather for your destination !.', icon: '⛅', target: '/app-pages/weather' },
 ];
 
