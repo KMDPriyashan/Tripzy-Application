@@ -1,24 +1,58 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { supabase } from '../lib/supabase';
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { supabase } from "../lib/supabase";
+import { getUserProfile } from "./utils/userStorage";
+
+const [activeTab, setActiveTab] = useState("Home");
 
 // Data for the feature cards
 const featureCardsData = [
-  { name: 'Trip Planning', description: 'Plan your journey with ease by our Trip Planner.', icon: '📅', target: '/app-pages/plan' },
-  { name: 'Travel Map', description: 'Map your travels. Nourish your soul.', icon: '🗺️', target: '/app-pages/map' },
-  { name: 'Weather', description: 'Check Your Journey as Previous.', icon: '⛅', target: '/app-pages/weather' },
-  { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TourGuide' },
-  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/community' },
+  {
+    name: "Trip Planning",
+    description: "Plan your journey with ease by our Trip Planner.",
+    icon: "📅",
+    target: "/app-pages/plan",
+  },
+  {
+    name: "Travel Map",
+    description: "Map your travels. Nourish your soul.",
+    icon: "🗺️",
+    target: "/app-pages/map",
+  },
+  {
+    name: "Weather",
+    description: "Check Your Journey as Previous.",
+    icon: "⛅",
+    target: "/app-pages/weather",
+  },
+  {
+    name: "Travel Guide",
+    description: "Let your itinerary breathe with intention.",
+    icon: "📖",
+    target: "/app-pages/TourGuide",
+  },
+  {
+    name: "Travel Community",
+    description: "Chat with your travel partner.",
+    icon: "💬",
+    target: "/app-pages/community",
+  },
 ];
 
 // Data for the bottom navigation
 const navItems = [
-  { name: 'Home', icon: '🏠', target: null },
-  { name: 'Map', icon: '🗺️', target: '/app-pages/map' },
-  { name: 'Feed', icon: '📰', target: '/app-pages/feed' },
-  { name: 'Group', icon: '👥', target: '/app-pages/community' },
-  { name: 'Profile', icon: '👤', target: '/app-pages/profile' },
+  { name: "Home", icon: "🏠", target: null },
+  { name: "Map", icon: "🗺️", target: "/app-pages/map" },
+  { name: "Feed", icon: "📰", target: "/app-pages/feed" },
+  { name: "Group", icon: "👥", target: "/app-pages/community" },
+  { name: "Profile", icon: "👤", target: null },
 ];
 
 const HomePage = () => {
@@ -31,26 +65,28 @@ const HomePage = () => {
     getCurrentUser();
 
     // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          setUser(session.user);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          router.replace('/loginpage');
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        setUser(session.user);
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        router.replace("/loginpage");
       }
-    );
+    });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const getCurrentUser = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setUser(user);
     } catch (error) {
-      console.error('Error getting user:', error);
+      console.error("Error getting user:", error);
     } finally {
       setLoading(false);
     }
@@ -60,12 +96,12 @@ const HomePage = () => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Logout error:', error);
+        console.error("Logout error:", error);
       } else {
-        router.replace('/loginpage');
+        router.replace("/loginpage");
       }
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error("Logout error:", error);
     }
   };
 
@@ -75,9 +111,21 @@ const HomePage = () => {
     }
   };
 
-  const handleNavPress = (targetPath) => {
-    if (targetPath) {
-      router.push(targetPath);
+  const handleNavPress = async (item) => {
+    setActiveTab(item.name);
+
+    if (item.name === "Profile") {
+      const user = await getUserProfile();
+
+      if (user) {
+        router.push("/app-pages/ProfileScreen"); // existing user
+      } else {
+        router.push("/app-pages/CreateProfile"); // new user
+      }
+    } else {
+      if (item.target) {
+        router.push(item.target);
+      }
     }
   };
 
@@ -98,7 +146,7 @@ const HomePage = () => {
           <Text style={styles.notAuthText}>Not authenticated</Text>
           <TouchableOpacity
             style={styles.loginButton}
-            onPress={() => router.push('/loginpage')}
+            onPress={() => router.push("/loginpage")}
           >
             <Text style={styles.loginButtonText}>Go to Login</Text>
           </TouchableOpacity>
@@ -118,16 +166,21 @@ const HomePage = () => {
         <View style={styles.headerSection}>
           <View style={styles.headerTextContainer}>
             <Text style={styles.appTitle}>Tripzy</Text>
-            <TouchableOpacity style={styles.profileButton} onPress={() => router.push('/app-pages/profile')}>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => router.push("/app-pages/profile")}
+            >
               <Text style={styles.profileIcon}>👤</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.tagline}>Travel Light. Feel Deep.</Text>
-          <Text style={styles.subTagline}>A gentle, poetic invitation to begin the journey.</Text>
+          <Text style={styles.subTagline}>
+            A gentle, poetic invitation to begin the journey.
+          </Text>
 
           <Text style={styles.welcomeText}>
-            Welcome back, {user.user_metadata?.full_name || 'Traveler'}! 🌍
+            Welcome back, {user.user_metadata?.full_name || "Traveler"}! 🌍
           </Text>
         </View>
 
@@ -143,7 +196,9 @@ const HomePage = () => {
                 <Text style={styles.featureIcon}>{feature.icon}</Text>
               </View>
               <Text style={styles.featureTitle}>{feature.name}</Text>
-              <Text style={styles.featureDescription}>{feature.description}</Text>
+              <Text style={styles.featureDescription}>
+                {feature.description}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -155,7 +210,7 @@ const HomePage = () => {
           <TouchableOpacity
             key={item.name}
             style={styles.navItem}
-            onPress={() => handleNavPress(item.target)}
+            onPress={() => handleNavPress(item.target, item.name)}
           >
             <Text style={styles.navIcon}>{item.icon}</Text>
             <Text style={styles.navText}>{item.name}</Text>
@@ -169,7 +224,7 @@ const HomePage = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
   },
   scrollView: {
     flex: 1,
@@ -181,80 +236,80 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 30,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 3,
   },
   headerTextContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
   appTitle: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontWeight: "bold",
+    color: "#1a1a1a",
   },
   profileButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f0f0f0",
+    alignItems: "center",
+    justifyContent: "center",
   },
   profileIcon: {
     fontSize: 20,
   },
   tagline: {
     fontSize: 32,
-    fontWeight: '300',
-    color: '#1a1a1a',
+    fontWeight: "300",
+    color: "#1a1a1a",
     marginBottom: 8,
     lineHeight: 38,
   },
   subTagline: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
     marginBottom: 24,
     lineHeight: 22,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   welcomeText: {
     fontSize: 18,
-    color: '#444',
-    fontWeight: '500',
+    color: "#444",
+    fontWeight: "500",
   },
   featuresContainer: {
     paddingHorizontal: 20,
   },
   featureCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: "#f0f0f0",
   },
   featureIconContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: '#f8f9fa',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#f8f9fa",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
   },
   featureIcon: {
@@ -262,37 +317,37 @@ const styles = StyleSheet.create({
   },
   featureTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: "600",
+    color: "#1a1a1a",
     marginBottom: 8,
   },
   featureDescription: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     lineHeight: 20,
   },
   bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
     paddingVertical: 16,
     paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    position: 'absolute',
+    borderTopColor: "#f0f0f0",
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 5,
   },
   navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
   },
   navIcon: {
@@ -301,36 +356,36 @@ const styles = StyleSheet.create({
   },
   navText: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    color: "#666",
+    fontWeight: "500",
   },
   loadingContent: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8f9fa",
   },
   loadingText: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
   notAuthText: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
     marginBottom: 20,
   },
   loginButton: {
-    backgroundColor: '#1a1a1a',
+    backgroundColor: "#1a1a1a",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 8,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   loginButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
 
