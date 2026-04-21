@@ -17,10 +17,16 @@ import {
 import 'react-native-get-random-values';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { v4 as uuidv4 } from 'uuid';
+import { useNotification } from './context/NotificationContext.js';
 
 const CreatePlan = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { showNotification } = useNotification();
+
+  // Check if we're in update mode
+  const isUpdating = params.isUpdating === 'true';
+  const planId = params.planId || null;
 
   // Initialize state with saved data from params if available
   const [destination, setDestination] = useState(params.savedDestination || '');
@@ -36,6 +42,8 @@ const CreatePlan = () => {
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showPackingModal, setShowPackingModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [savedPlanData, setSavedPlanData] = useState(null);
   const [selectedPackingItems, setSelectedPackingItems] = useState(() => {
     if (params.savedSelectedPackingItems) {
       try {
@@ -106,7 +114,9 @@ const CreatePlan = () => {
       savedSelectedPackingItems: JSON.stringify(selectedPackingItems),
       savedBudgetEstimate: JSON.stringify(budgetEstimate),
       savedShowBudgetSummary: showBudgetSummary ? 'true' : 'false',
-      savedBudgetBreakdown: JSON.stringify(budgetBreakdown)
+      savedBudgetBreakdown: JSON.stringify(budgetBreakdown),
+      isUpdating: isUpdating ? 'true' : 'false',
+      planId: planId || ''
     };
   };
 
@@ -146,10 +156,11 @@ const CreatePlan = () => {
           total: budgetData.total
         });
 
-        Alert.alert(
-          'Budget Calculated',
-          `Total Estimated Budget: $${budgetData.total.toFixed(2)}`,
-          [{ text: 'OK' }]
+        showNotification(
+          'budget',
+          'Budget Calculated! 💰',
+          `Your trip budget is estimated at $${budgetData.total.toFixed(2)}`,
+          { budgetData }
         );
       } catch (e) {
         console.error('Error parsing budget data', e);
@@ -162,10 +173,11 @@ const CreatePlan = () => {
         const items = JSON.parse(params.selectedPackingItems);
         setSelectedPackingItems(items);
 
-        Alert.alert(
-          'Items Added',
-          `${items.length} item${items.length > 1 ? 's' : ''} added to your packing list!`,
-          [{ text: 'OK' }]
+        showNotification(
+          'packing',
+          'Packing List Ready! 🎒',
+          `${items.length} item${items.length > 1 ? 's' : ''} added to your packing list`,
+          { itemCount: items.length }
         );
       } catch (e) {
         console.error('Error parsing packing items', e);
@@ -174,7 +186,6 @@ const CreatePlan = () => {
   }, [params.budgetData, params.selectedPackingItems]);
 
   const pickImage = async () => {
-    // Request permission first
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== 'granted') {
@@ -191,6 +202,11 @@ const CreatePlan = () => {
 
     if (!result.canceled) {
       setSelectedImage(result.assets[0].uri);
+      showNotification(
+        'success',
+        'Image Selected 📸',
+        'Your image has been added to the plan'
+      );
     }
   };
 
@@ -204,7 +220,13 @@ const CreatePlan = () => {
     const total = accommodation + transportation + food + activities + miscellaneous;
     setBudgetEstimate({ ...budgetEstimate, total });
     setShowBudgetModal(false);
-    Alert.alert('Budget Calculated', `Total Estimated Budget: $${total.toFixed(2)}`);
+    
+    showNotification(
+      'budget',
+      'Budget Calculated! 💰',
+      `Total: $${total.toFixed(2)}`,
+      { total }
+    );
   };
 
   const savePlan = async () => {
@@ -217,89 +239,90 @@ const CreatePlan = () => {
     setLoading(true);
 
     try {
-      // Create a unique ID for the plan
-      const planId = uuidv4();
-
-      // Create plan data object with all information
-      const planData = {
-        id: planId,
-        destination,
-        postCaption,
-        planningLocation,
-        startedTime,
-        province,
-        startDate: startDate,
-        endDate: endDate,
-        tripNotes,
-        currentStatus,
-        budgetEstimate,
-        budgetBreakdown,
-        selectedPackingItems,
-        image: selectedImage,
-        createdAt: new Date().toISOString(),
-      };
-
       // Get existing plans from storage
       const existingPlans = await AsyncStorage.getItem('travelPlans');
-      const plans = existingPlans ? JSON.parse(existingPlans) : [];
+      let plans = existingPlans ? JSON.parse(existingPlans) : [];
 
-      // Add new plan
-      plans.push(planData);
+      let updatedPlanData;
+      let notificationMessage;
+
+      if (isUpdating && planId) {
+        // Update existing plan
+        updatedPlanData = {
+          id: planId,
+          destination,
+          postCaption,
+          planningLocation,
+          startedTime,
+          province,
+          startDate,
+          endDate,
+          tripNotes,
+          currentStatus,
+          budgetEstimate,
+          budgetBreakdown,
+          selectedPackingItems,
+          image: selectedImage,
+          updatedAt: new Date().toISOString(),
+          createdAt: params.createdAt || new Date().toISOString()
+        };
+
+        // Find and update the plan
+        const planIndex = plans.findIndex(p => p.id === planId);
+        if (planIndex !== -1) {
+          plans[planIndex] = updatedPlanData;
+          notificationMessage = `Your trip to ${destination} has been updated`;
+        } else {
+          // If plan not found, create new one
+          updatedPlanData.id = uuidv4();
+          plans.push(updatedPlanData);
+          notificationMessage = `Your trip to ${destination} has been created`;
+        }
+      } else {
+        // Create new plan
+        const newPlanId = uuidv4();
+        updatedPlanData = {
+          id: newPlanId,
+          destination,
+          postCaption,
+          planningLocation,
+          startedTime,
+          province,
+          startDate,
+          endDate,
+          tripNotes,
+          currentStatus,
+          budgetEstimate,
+          budgetBreakdown,
+          selectedPackingItems,
+          image: selectedImage,
+          createdAt: new Date().toISOString(),
+        };
+        plans.push(updatedPlanData);
+        notificationMessage = `Your trip to ${destination} has been created`;
+      }
 
       // Save back to storage
       await AsyncStorage.setItem('travelPlans', JSON.stringify(plans));
 
-      console.log('Saving plan:', planData);
-
-      Alert.alert(
-        'Success',
-        'Your travel plan has been saved!',
-        [
-          {
-            text: 'View My Itineraries',
-            onPress: () => {
-              // Save current form state before navigating
-              const savedState = saveFormState();
-              // Navigate to My Itineraries page
-              router.push({
-                pathname: '/app-pages/myItineraries',
-                params: savedState
-              });
-            }
-          },
-          {
-            text: 'Create Another',
-            onPress: () => {
-              // Reset form
-              setDestination('');
-              setPostCaption('');
-              setSelectedImage(null);
-              setPlanningLocation('');
-              setStartedTime('');
-              setProvince('');
-              setStartDate('');
-              setEndDate('');
-              setTripNotes('');
-              setCurrentStatus('Planned');
-              setBudgetEstimate({
-                accommodation: '',
-                transportation: '',
-                food: '',
-                activities: '',
-                miscellaneous: '',
-                total: 0
-              });
-              setBudgetBreakdown(null);
-              setShowBudgetSummary(false);
-              setSelectedPackingItems([]);
-            }
-          },
-          {
-            text: 'Stay Here',
-            style: 'cancel'
-          }
-        ]
+      console.log('Saving plan:', updatedPlanData);
+      
+      setSavedPlanData(updatedPlanData);
+      
+      // Show success notification
+      showNotification(
+        'plan',
+        isUpdating ? 'Plan Updated! ✨' : 'Plan Created! ✨',
+        notificationMessage,
+        { planId: updatedPlanData.id, destination }
       );
+
+      // Navigate back to myItineraries with highlight
+      router.push({
+        pathname: '/app-pages/myItineraries',
+        params: { highlightPlan: updatedPlanData.id }
+      });
+
     } catch (error) {
       console.error('Error saving plan:', error);
       Alert.alert('Error', 'Failed to save your plan. Please try again.');
@@ -308,7 +331,7 @@ const CreatePlan = () => {
     }
   };
 
-  // Define BudgetModal component BEFORE it's used in the return
+  // Define BudgetModal component
   const BudgetModal = () => (
     <Modal
       animationType="slide"
@@ -380,7 +403,7 @@ const CreatePlan = () => {
     </Modal>
   );
 
-  // Define PackingModal component BEFORE it's used in the return
+  // Define PackingModal component
   const PackingModal = () => (
     <Modal
       animationType="slide"
@@ -422,14 +445,18 @@ const CreatePlan = () => {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          <Text style={styles.pageTitle}>Plan Your Perfect Getaway</Text>
+          <Text style={styles.pageTitle}>
+            {isUpdating ? 'Update Your Plan' : 'Plan Your Perfect Getaway'}
+          </Text>
           <Text style={styles.pageSubtitle}>
-            Start organizing your dream trip with ease—choose destinations, set dates, and customize every detail
+            {isUpdating 
+              ? 'Make changes to your travel plan and save updates'
+              : '✏️ Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖'}
           </Text>
 
           {/* Destination Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Destination</Text>
+            <Text style={styles.label}> End Destination</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter destination"
@@ -443,7 +470,7 @@ const CreatePlan = () => {
             <Text style={styles.label}>Post Caption</Text>
             <TextInput
               style={styles.input}
-              placeholder="Write a caption for your post"
+              placeholder="Write a caption for your post as a long ...."
               value={postCaption}
               onChangeText={setPostCaption}
             />
@@ -471,7 +498,7 @@ const CreatePlan = () => {
               <Text style={styles.label}>Planning Location</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Location"
+                placeholder=" Planed Location"
                 value={planningLocation}
                 onChangeText={setPlanningLocation}
               />
@@ -490,10 +517,10 @@ const CreatePlan = () => {
 
           {/* Province */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Province</Text>
+            <Text style={styles.label}>Your Province</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter province"
+              placeholder="Enter province of you stay"
               value={province}
               onChangeText={setProvince}
             />
@@ -536,7 +563,7 @@ const CreatePlan = () => {
             </View>
           )}
 
-          {/* Generate Packing Checklist Button - UPDATED */}
+          {/* Generate Packing Checklist Button */}
           <TouchableOpacity
             style={styles.generateButton}
             onPress={navigateToPackingList}
@@ -557,7 +584,7 @@ const CreatePlan = () => {
                 <Text style={styles.dateLabel}>Start Date</Text>
                 <TextInput
                   style={styles.dateInput}
-                  placeholder="DD/MM/YYYY"
+                  placeholder="12 of May, 2026"
                   value={startDate}
                   onChangeText={setStartDate}
                 />
@@ -568,7 +595,7 @@ const CreatePlan = () => {
                 <Text style={styles.dateLabel}>End Date</Text>
                 <TextInput
                   style={styles.dateInput}
-                  placeholder="DD/MM/YYYY"
+                  placeholder="15 of May, 2026" 
                   value={endDate}
                   onChangeText={setEndDate}
                 />
@@ -576,7 +603,7 @@ const CreatePlan = () => {
             </View>
           </View>
 
-          {/* Budget Estimate - UPDATED */}
+          {/* Budget Estimate */}
           <View style={styles.budgetContainer}>
             <Text style={styles.label}>Estimate your Budget Plan</Text>
             <TouchableOpacity
@@ -610,7 +637,7 @@ const CreatePlan = () => {
               {/* Trip Details Summary */}
               <View style={styles.budgetDetailsGrid}>
                 <View style={styles.budgetDetailItem}>
-                  <Text style={styles.budgetDetailLabel}>Destination</Text>
+                  <Text style={styles.budgetDetailLabel}> Destination</Text>
                   <Text style={styles.budgetDetailValue}>{budgetBreakdown.destination || 'Not set'}</Text>
                 </View>
                 <View style={styles.budgetDetailItem}>
@@ -707,10 +734,10 @@ const CreatePlan = () => {
 
           {/* Collaborates */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>collaborates</Text>
+            <Text style={styles.label}>Collaborates For Your Trip</Text>
             <TextInput
               style={styles.input}
-              placeholder="Add collaborators"
+              placeholder="Add collaborators ( nimal perera , kasun deshan , .... )"
             />
           </View>
 
@@ -726,16 +753,16 @@ const CreatePlan = () => {
               onChangeText={setTripNotes}
             />
           </View>
+          <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! 🔖</Text>
 
-          
-          {/* Complete Plan Button */}
+          {/* Complete/Update Plan Button */}
           <TouchableOpacity
             style={[styles.completeButton, loading && styles.completeButtonDisabled]}
             onPress={savePlan}
             disabled={loading}
           >
             <Text style={styles.completeButtonText}>
-              {loading ? 'Saving...' : 'Complete your Plan'}
+              {loading ? 'Saving...' : (isUpdating ? 'Update Plan' : 'Complete your Plan')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -768,6 +795,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 30,
     lineHeight: 20,
+    fontStyle: 'italic',
   },
   inputGroup: {
     marginBottom: 20,
@@ -902,7 +930,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 5,
     marginBottom: 30,
   },
   completeButtonText: {
@@ -1052,7 +1080,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  // New styles for budget summary
+  // Budget summary styles
   budgetSummaryContainer: {
     backgroundColor: '#f8f9fa',
     borderRadius: 12,
@@ -1179,6 +1207,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ccc',
     opacity: 0.7,
   },
+  endtext:{
+    textAlign:'center',
+    lineHeight:25,
+    color:'#666',
+    marginBottom:20,
+    fontStyle:'italic',
+  }
 });
 
 export default CreatePlan;
