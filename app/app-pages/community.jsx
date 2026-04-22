@@ -1,11 +1,12 @@
 // app-pages/community.jsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   Alert,
   FlatList,
   Modal,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,10 +15,18 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import {
+  createGroup,
+  getAllUsers,
+  getCurrentUser,
+  getUserConversations,
+  getUserGroups,
+  joinGroup
+} from '../../lib/supabase';
 
 const CommunityPage = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('chats'); // chats, groups, users
+  const [activeTab, setActiveTab] = useState('chats');
   const [searchQuery, setSearchQuery] = useState('');
   const [chats, setChats] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -26,28 +35,36 @@ const CommunityPage = () => {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
-  const [inviteModalVisible, setInviteModalVisible] = useState(false);
-  const [inviteLink, setInviteLink] = useState('');
-  const [inviteGroupId, setInviteGroupId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [allUsersList, setAllUsersList] = useState([]);
 
-  // Load data on mount
-  useEffect(() => {
-    loadCurrentUser();
-    loadChats();
-    loadGroups();
-    loadUsers();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadAllData();
+    }, [])
+  );
+
+  const loadAllData = async () => {
+    await loadCurrentUser();
+    await loadChats();
+    await loadGroups();
+    await loadUsers();
+  };
 
   const loadCurrentUser = async () => {
     try {
-      const user = await AsyncStorage.getItem('currentUser');
-      if (user) {
-        setCurrentUser(JSON.parse(user));
+      const supabaseUser = await getCurrentUser();
+      if (supabaseUser) {
+        setCurrentUser({ id: supabaseUser.id, name: supabaseUser.user_metadata?.name || 'User', avatar: '👤' });
       } else {
-        // Demo user
-        const demoUser = { id: 'user1', name: 'Pavan Perera', avatar: '👤', isProfessional: true };
-        setCurrentUser(demoUser);
-        await AsyncStorage.setItem('currentUser', JSON.stringify(demoUser));
+        const localUser = await AsyncStorage.getItem('currentUser');
+        if (localUser) {
+          setCurrentUser(JSON.parse(localUser));
+        } else {
+          const demoUser = { id: 'user1', name: 'Pavan Perera', avatar: '👤', isProfessional: true };
+          setCurrentUser(demoUser);
+          await AsyncStorage.setItem('currentUser', JSON.stringify(demoUser));
+        }
       }
     } catch (error) {
       console.error('Error loading user:', error);
@@ -56,109 +73,90 @@ const CommunityPage = () => {
 
   const loadChats = async () => {
     try {
+      if (!currentUser?.id) return;
+      const conversations = await getUserConversations(currentUser.id);
+      setChats(conversations);
+    } catch (error) {
+      console.error('Error loading chats:', error);
+      // Fallback to local storage
       const savedChats = await AsyncStorage.getItem('directChats');
       if (savedChats) {
         setChats(JSON.parse(savedChats));
-      } else {
-        // Demo chats
-        const demoChats = [
-          { id: 'chat1', userId: 'user2', userName: 'Sarah Johnson', avatar: '👩', lastMessage: 'How are you! Doing well?', timestamp: '5:36 PM', unread: 2, isOnline: true },
-          { id: 'chat2', userId: 'user3', userName: 'Mike Chen', avatar: '👨', lastMessage: 'Ready for the trip?', timestamp: '2:30 PM', unread: 0, isOnline: false },
-          { id: 'chat3', userId: 'user4', userName: 'Emma Wilson', avatar: '👩‍🦰', lastMessage: 'Thanks for the info!', timestamp: 'Yesterday', unread: 1, isOnline: true },
-        ];
-        setChats(demoChats);
-        await AsyncStorage.setItem('directChats', JSON.stringify(demoChats));
       }
-    } catch (error) {
-      console.error('Error loading chats:', error);
     }
   };
 
   const loadGroups = async () => {
     try {
+      if (!currentUser?.id) return;
+      const userGroups = await getUserGroups(currentUser.id);
+      setGroups(userGroups);
+    } catch (error) {
+      console.error('Error loading groups:', error);
+      // Fallback to local storage
       const savedGroups = await AsyncStorage.getItem('communityGroups');
       if (savedGroups) {
         setGroups(JSON.parse(savedGroups));
-      } else {
-        // Demo groups
-        const demoGroups = [
-          { id: 'group1', name: 'Adventure Zone', members: ['user1', 'user2', 'user3'], lastMessage: 'How are You! Doin Well >', timestamp: '5:36 PM', unread: 2, memberCount: 8, avatar: '🏔️' },
-          { id: 'group2', name: 'Family Trip', members: ['user1', 'user4', 'user5'], lastMessage: 'How are You! Doin Well >', timestamp: '1:36 PM', unread: 24, memberCount: 12, avatar: '👨‍👩‍👧' },
-          { id: 'group3', name: 'Backpackers United', members: ['user2', 'user3', 'user6'], lastMessage: 'Anyone in Bali?', timestamp: '10:15 AM', unread: 5, memberCount: 45, avatar: '🎒' },
-        ];
-        setGroups(demoGroups);
-        await AsyncStorage.setItem('communityGroups', JSON.stringify(demoGroups));
       }
-    } catch (error) {
-      console.error('Error loading groups:', error);
     }
   };
 
   const loadUsers = async () => {
     try {
-      const savedUsers = await AsyncStorage.getItem('registeredUsers');
-      if (savedUsers) {
-        setUsers(JSON.parse(savedUsers));
-      } else {
-        // Demo registered users
-        const demoUsers = [
-          { id: 'user1', name: 'Pavan Perera', avatar: '👤', isProfessional: true, location: 'Colombo, Sri Lanka' },
-          { id: 'user2', name: 'Sarah Johnson', avatar: '👩', isProfessional: false, location: 'New York, USA' },
-          { id: 'user3', name: 'Mike Chen', avatar: '👨', isProfessional: false, location: 'Singapore' },
-          { id: 'user4', name: 'Emma Wilson', avatar: '👩‍🦰', isProfessional: true, location: 'London, UK' },
-          { id: 'user5', name: 'Dasun Shanaka', avatar: '🏏', isProfessional: true, location: 'Colombo, Sri Lanka' },
-          { id: 'user6', name: 'Jude Piramal', avatar: '🎨', isProfessional: false, location: 'Kandy, Sri Lanka' },
-        ];
-        setUsers(demoUsers);
-        await AsyncStorage.setItem('registeredUsers', JSON.stringify(demoUsers));
-      }
+      const allUsers = await getAllUsers();
+      const filteredUsers = allUsers.filter(user => user.id !== currentUser?.id);
+      setAllUsersList(allUsers);
+      setUsers(filteredUsers);
     } catch (error) {
       console.error('Error loading users:', error);
+      // Fallback to local storage
+      const savedUsers = await AsyncStorage.getItem('registeredUsers');
+      if (savedUsers) {
+        const parsedUsers = JSON.parse(savedUsers);
+        setAllUsersList(parsedUsers);
+        setUsers(parsedUsers.filter(u => u.id !== currentUser?.id));
+      }
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAllData();
+    setRefreshing(false);
+  };
+
   const handleStartChat = (user) => {
-    // Check if chat already exists
-    const existingChat = chats.find(chat => chat.userId === user.id);
-    if (existingChat) {
-      router.push({
-        pathname: '/app-pages/solo-chat',
-        params: { chatId: existingChat.id, userName: user.name, userId: user.id, avatar: user.avatar }
-      });
-    } else {
-      // Create new chat
-      const newChat = {
-        id: `chat_${Date.now()}`,
-        userId: user.id,
-        userName: user.name,
-        avatar: user.avatar,
-        lastMessage: '',
-        timestamp: new Date().toLocaleTimeString(),
-        unread: 0,
-        isOnline: false
-      };
-      const updatedChats = [newChat, ...chats];
-      setChats(updatedChats);
-      AsyncStorage.setItem('directChats', JSON.stringify(updatedChats));
-      
-      router.push({
-        pathname: '/app-pages/solo-chat',
-        params: { chatId: newChat.id, userName: user.name, userId: user.id, avatar: user.avatar }
-      });
-    }
+    router.push({
+      pathname: '/app-pages/solo-chat',
+      params: { 
+        chatId: `chat_${user.id}_${currentUser?.id}`,
+        userName: user.name, 
+        userId: user.id, 
+        avatar: user.avatar 
+      }
+    });
   };
 
   const handleOpenGroupChat = (group) => {
     router.push({
       pathname: '/app-pages/group-chat',
-      params: { groupId: group.id, groupName: group.name, avatar: group.avatar }
+      params: { 
+        groupId: group.id, 
+        groupName: group.name, 
+        avatar: group.avatar 
+      }
     });
   };
 
   const handleOpenDirectChat = (chat) => {
     router.push({
       pathname: '/app-pages/solo-chat',
-      params: { chatId: chat.id, userName: chat.userName, userId: chat.userId, avatar: chat.avatar }
+      params: { 
+        chatId: chat.id, 
+        userName: chat.userName, 
+        userId: chat.userId, 
+        avatar: chat.avatar 
+      }
     });
   };
 
@@ -168,40 +166,34 @@ const CommunityPage = () => {
       return;
     }
 
-    const newGroup = {
-      id: `group_${Date.now()}`,
-      name: newGroupName,
-      members: [currentUser?.id, ...selectedUsers],
-      lastMessage: 'Group created',
-      timestamp: 'Just now',
-      unread: 0,
-      memberCount: 1 + selectedUsers.length,
-      avatar: '👥',
-      createdBy: currentUser?.id,
-      createdAt: new Date().toISOString()
-    };
+    if (!currentUser?.id) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
 
-    const updatedGroups = [newGroup, ...groups];
-    setGroups(updatedGroups);
-    await AsyncStorage.setItem('communityGroups', JSON.stringify(updatedGroups));
+    const newGroup = await createGroup(newGroupName, currentUser.id, selectedUsers);
     
-    setShowCreateGroup(false);
-    setNewGroupName('');
-    setSelectedUsers([]);
-    
-    Alert.alert('Success', 'Group created successfully!');
+    if (newGroup) {
+      await loadGroups();
+      setShowCreateGroup(false);
+      setNewGroupName('');
+      setSelectedUsers([]);
+      Alert.alert('Success', 'Group created successfully!');
+    } else {
+      Alert.alert('Error', 'Failed to create group');
+    }
   };
 
-  const generateInviteLink = (groupId, groupName) => {
-    const link = `tripzy://invite/${groupId}`;
-    setInviteLink(link);
-    setInviteGroupId(groupId);
-    setInviteModalVisible(true);
-  };
-
-  const copyInviteLink = () => {
-    // In real app, use Clipboard API
-    Alert.alert('Link Copied', inviteLink);
+  const handleJoinGroup = async (groupId) => {
+    if (!currentUser?.id) return;
+    
+    const success = await joinGroup(groupId, currentUser.id);
+    if (success) {
+      await loadGroups();
+      Alert.alert('Success', 'Joined group successfully!');
+    } else {
+      Alert.alert('Error', 'Failed to join group');
+    }
   };
 
   const renderChatItem = ({ item }) => (
@@ -242,12 +234,6 @@ const CommunityPage = () => {
             <Text style={styles.unreadText}>{item.unread}</Text>
           </View>
         )}
-        <TouchableOpacity 
-          style={styles.inviteButton} 
-          onPress={() => generateInviteLink(item.id, item.name)}
-        >
-          <Text style={styles.inviteButtonText}>➕</Text>
-        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -255,12 +241,12 @@ const CommunityPage = () => {
   const renderUserItem = ({ item }) => (
     <TouchableOpacity style={styles.userItem} onPress={() => handleStartChat(item)}>
       <View style={styles.userAvatarContainer}>
-        <Text style={styles.userAvatarText}>{item.avatar}</Text>
+        <Text style={styles.userAvatarText}>{item.avatar || '👤'}</Text>
         {item.isProfessional && <View style={styles.proBadge}><Text style={styles.proBadgeText}>Pro</Text></View>}
       </View>
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
-        <Text style={styles.userLocation}>{item.location}</Text>
+        <Text style={styles.userLocation}>{item.location || 'Traveler'}</Text>
       </View>
       <TouchableOpacity style={styles.messageButton} onPress={() => handleStartChat(item)}>
         <Text style={styles.messageButtonText}>Message</Text>
@@ -269,19 +255,18 @@ const CommunityPage = () => {
   );
 
   const filteredUsers = users.filter(user => 
-    user.id !== currentUser?.id && 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase())
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredChats = chats.filter(chat => 
-    chat.userName.toLowerCase().includes(searchQuery.toLowerCase())
+    chat.userName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredGroups = groups.filter(group => 
-    group.name.toLowerCase().includes(searchQuery.toLowerCase())
+    group.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const availableUsersForGroup = users.filter(user => 
+  const availableUsersForGroup = allUsersList.filter(user => 
     user.id !== currentUser?.id && !selectedUsers.includes(user.id)
   );
 
@@ -339,6 +324,9 @@ const CommunityPage = () => {
           activeTab === 'groups' ? renderGroupItem : renderUserItem
         }
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No {activeTab === 'chats' ? 'messages' : activeTab === 'groups' ? 'groups' : 'users'} found</Text>
@@ -385,7 +373,7 @@ const CommunityPage = () => {
                   style={styles.userSelectItem}
                   onPress={() => setSelectedUsers([...selectedUsers, user.id])}
                 >
-                  <Text style={styles.userSelectAvatar}>{user.avatar}</Text>
+                  <Text style={styles.userSelectAvatar}>{user.avatar || '👤'}</Text>
                   <Text style={styles.userSelectName}>{user.name}</Text>
                   <Text style={styles.userSelectAdd}>+ Add</Text>
                 </TouchableOpacity>
@@ -397,7 +385,7 @@ const CommunityPage = () => {
                 <Text style={styles.selectedUsersTitle}>Selected ({selectedUsers.length}):</Text>
                 <View style={styles.selectedUsersList}>
                   {selectedUsers.map(userId => {
-                    const user = users.find(u => u.id === userId);
+                    const user = allUsersList.find(u => u.id === userId);
                     return user ? (
                       <View key={userId} style={styles.selectedUserChip}>
                         <Text style={styles.selectedUserText}>{user.name}</Text>
@@ -413,30 +401,6 @@ const CommunityPage = () => {
             
             <TouchableOpacity style={styles.createGroupButton} onPress={handleCreateGroup}>
               <Text style={styles.createGroupButtonText}>Create Group</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Invite Modal */}
-      <Modal
-        visible={inviteModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setInviteModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.inviteModalContent}>
-            <Text style={styles.inviteModalTitle}>Invite to Group</Text>
-            <Text style={styles.inviteModalSubtitle}>Share this link with friends to join</Text>
-            <View style={styles.inviteLinkContainer}>
-              <Text style={styles.inviteLinkText}>{inviteLink}</Text>
-            </View>
-            <TouchableOpacity style={styles.copyLinkButton} onPress={copyInviteLink}>
-              <Text style={styles.copyLinkButtonText}>Copy Link</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.closeInviteButton} onPress={() => setInviteModalVisible(false)}>
-              <Text style={styles.closeInviteButtonText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -589,14 +553,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 11,
     fontWeight: '600',
-  },
-  inviteButton: {
-    marginTop: 6,
-    padding: 4,
-  },
-  inviteButtonText: {
-    fontSize: 14,
-    color: '#007AFF',
   },
   userItem: {
     flexDirection: 'row',
@@ -792,58 +748,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  inviteModalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 24,
-    width: '85%',
-    alignItems: 'center',
-  },
-  inviteModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  inviteModalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  inviteLinkContainer: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    width: '100%',
-  },
-  inviteLinkText: {
-    fontSize: 14,
-    color: '#007AFF',
-    textAlign: 'center',
-  },
-  copyLinkButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  copyLinkButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  closeInviteButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  closeInviteButtonText: {
-    color: '#666',
-    fontSize: 14,
   },
 });
 

@@ -13,6 +13,13 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import {
+  getCurrentUser,
+  getDirectMessages,
+  getUserProfile,
+  sendDirectMessage,
+  subscribeToDirectMessages
+} from '../../lib/supabase';
 
 const SoloChatPage = () => {
   const router = useRouter();
@@ -20,50 +27,133 @@ const SoloChatPage = () => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
+  const [otherUser, setOtherUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const flatListRef = useRef(null);
+  let messageSubscription = null;
 
   useEffect(() => {
-    loadCurrentUser();
-    loadMessages();
-  }, [chatId]);
+    initializeChat();
+    
+    return () => {
+      if (messageSubscription) {
+        messageSubscription.unsubscribe();
+      }
+    };
+  }, [chatId, userId]);
+
+  const initializeChat = async () => {
+    await loadCurrentUser();
+    await loadOtherUser();
+    await loadMessages();
+    setupRealtimeSubscription();
+    setLoading(false);
+  };
 
   const loadCurrentUser = async () => {
     try {
-      const user = await AsyncStorage.getItem('currentUser');
-      if (user) {
-        setCurrentUser(JSON.parse(user));
+      const supabaseUser = await getCurrentUser();
+      if (supabaseUser) {
+        setCurrentUser({ id: supabaseUser.id, name: supabaseUser.user_metadata?.name || 'User', avatar: '👤' });
       } else {
-        setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+        const localUser = await AsyncStorage.getItem('currentUser');
+        if (localUser) {
+          setCurrentUser(JSON.parse(localUser));
+        } else {
+          setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+        }
       }
     } catch (error) {
       console.error('Error loading user:', error);
+      setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+    }
+  };
+
+  const loadOtherUser = async () => {
+    try {
+      const profile = await getUserProfile(userId);
+      if (profile) {
+        setOtherUser(profile);
+      } else {
+        setOtherUser({ id: userId, name: userName || 'User', avatar: avatar || '👤' });
+      }
+    } catch (error) {
+      console.error('Error loading other user:', error);
+      setOtherUser({ id: userId, name: userName || 'User', avatar: avatar || '👤' });
     }
   };
 
   const loadMessages = async () => {
     try {
-      const allMessages = await AsyncStorage.getItem(`chat_${chatId}_messages`);
-      if (allMessages) {
-        setMessages(JSON.parse(allMessages));
+      if (!currentUser?.id || !userId) return;
+      
+      const directMessages = await getDirectMessages(currentUser.id, userId);
+      
+      if (directMessages && directMessages.length > 0) {
+        const formattedMessages = directMessages.map(msg => ({
+          id: msg.id,
+          text: msg.message,
+          senderId: msg.sender_id,
+          timestamp: msg.created_at
+        }));
+        setMessages(formattedMessages);
       } else {
-        // Demo messages
-        const demoMessages = [
-          { id: '1', text: 'Hello my friends! Are You Free', senderId: userId, timestamp: new Date(Date.now() - 3600000).toISOString() },
-          { id: '2', text: 'Hello! I\'ve got some time what\'s going on?', senderId: 'user1', timestamp: new Date(Date.now() - 3000000).toISOString() },
-          { id: '3', text: 'I\'m planning a trip to Sri Lanka next month. Want to join?', senderId: userId, timestamp: new Date(Date.now() - 2400000).toISOString() },
-          { id: '4', text: 'That sounds amazing! I\'d love to join. When are you going?', senderId: 'user1', timestamp: new Date(Date.now() - 1800000).toISOString() },
-        ];
-        setMessages(demoMessages);
-        await AsyncStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(demoMessages));
+        // Load from local storage as fallback
+        const allMessages = await AsyncStorage.getItem(`chat_${chatId}_messages`);
+        if (allMessages) {
+          setMessages(JSON.parse(allMessages));
+        }
       }
+      
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
     } catch (error) {
       console.error('Error loading messages:', error);
     }
   };
 
-  const saveMessages = async (newMessages) => {
-    try {
-      await AsyncStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(newMessages));
+  const setupRealtimeSubscription = () => {
+    if (!currentUser?.id) return;
+    
+    messageSubscription = subscribeToDirectMessages(currentUser.id, (newMessage) => {
+      if (newMessage.senderId === userId) {
+        setMessages(prev => {
+          const updated = [...prev, newMessage];
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+          return updated;
+        });
+      }
+    });
+  };
+
+  const sendMessage = async () => {
+    if (!inputText.trim() || !currentUser?.id || !userId) return;
+
+    const newMessage = {
+      id: Date.now().toString(),
+      text: inputText.trim(),
+      senderId: currentUser.id,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Optimistically add to UI
+    setMessages(prev => [...prev, newMessage]);
+    setInputText('');
+    
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    // Send to Supabase
+    const sentMessage = await sendDirectMessage(currentUser.id, userId, inputText.trim());
+    
+    if (!sentMessage) {
+      // Save to local storage as fallback
+      const updatedMessages = [...messages, newMessage];
+      await AsyncStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(updatedMessages));
       
       // Update last message in chat list
       const chats = await AsyncStorage.getItem('directChats');
@@ -71,38 +161,16 @@ const SoloChatPage = () => {
         const parsedChats = JSON.parse(chats);
         const updatedChats = parsedChats.map(chat => 
           chat.id === chatId 
-            ? { ...chat, lastMessage: newMessages[newMessages.length - 1]?.text || '', timestamp: new Date().toLocaleTimeString() }
+            ? { ...chat, lastMessage: inputText.trim(), timestamp: new Date().toLocaleTimeString() }
             : chat
         );
         await AsyncStorage.setItem('directChats', JSON.stringify(updatedChats));
       }
-    } catch (error) {
-      console.error('Error saving messages:', error);
     }
   };
 
-  const sendMessage = () => {
-    if (!inputText.trim()) return;
-
-    const newMessage = {
-      id: Date.now().toString(),
-      text: inputText.trim(),
-      senderId: currentUser?.id || 'user1',
-      timestamp: new Date().toISOString(),
-    };
-
-    const updatedMessages = [...messages, newMessage];
-    setMessages(updatedMessages);
-    saveMessages(updatedMessages);
-    setInputText('');
-    
-    // Scroll to bottom
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
-
   const formatTime = (timestamp) => {
+    if (!timestamp) return '';
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
@@ -123,7 +191,7 @@ const SoloChatPage = () => {
       <View style={[styles.messageRow, isCurrentUser ? styles.currentUserRow : styles.otherUserRow]}>
         {!isCurrentUser && (
           <View style={styles.messageAvatar}>
-            <Text style={styles.messageAvatarText}>{avatar || '👤'}</Text>
+            <Text style={styles.messageAvatarText}>{otherUser?.avatar || avatar || '👤'}</Text>
           </View>
         )}
         <View style={[styles.messageBubble, isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble]}>
@@ -138,6 +206,16 @@ const SoloChatPage = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -146,9 +224,9 @@ const SoloChatPage = () => {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerAvatar}>{avatar || '👤'}</Text>
+          <Text style={styles.headerAvatar}>{otherUser?.avatar || avatar || '👤'}</Text>
           <View>
-            <Text style={styles.headerName}>{userName || 'User'}</Text>
+            <Text style={styles.headerName}>{otherUser?.name || userName || 'User'}</Text>
             <Text style={styles.headerStatus}>Online</Text>
           </View>
         </View>
@@ -201,6 +279,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',

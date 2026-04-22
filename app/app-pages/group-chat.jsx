@@ -14,6 +14,13 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import {
+  getCurrentUser,
+  getGroupMembers,
+  getGroupMessages,
+  sendGroupMessage,
+  subscribeToGroupMessages
+} from '../../lib/supabase';
 
 const GroupChatPage = () => {
   const router = useRouter();
@@ -23,35 +30,59 @@ const GroupChatPage = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [groupMembers, setGroupMembers] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [loading, setLoading] = useState(true);
   const flatListRef = useRef(null);
+  let messageSubscription = null;
 
   useEffect(() => {
-    loadCurrentUser();
-    loadGroupData();
-    loadMessages();
+    initializeChat();
+    
+    return () => {
+      if (messageSubscription) {
+        messageSubscription.unsubscribe();
+      }
+    };
   }, [groupId]);
+
+  const initializeChat = async () => {
+    await loadCurrentUser();
+    await loadGroupMembers();
+    await loadMessages();
+    setupRealtimeSubscription();
+    setLoading(false);
+  };
 
   const loadCurrentUser = async () => {
     try {
-      const user = await AsyncStorage.getItem('currentUser');
-      if (user) {
-        setCurrentUser(JSON.parse(user));
+      const supabaseUser = await getCurrentUser();
+      if (supabaseUser) {
+        setCurrentUser({ id: supabaseUser.id, name: supabaseUser.user_metadata?.name || 'User', avatar: '👤' });
       } else {
-        setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+        const localUser = await AsyncStorage.getItem('currentUser');
+        if (localUser) {
+          setCurrentUser(JSON.parse(localUser));
+        } else {
+          setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+        }
       }
     } catch (error) {
       console.error('Error loading user:', error);
+      setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
     }
   };
 
-  const loadGroupData = async () => {
+  const loadGroupMembers = async () => {
     try {
+      const members = await getGroupMembers(groupId);
+      setGroupMembers(members);
+    } catch (error) {
+      console.error('Error loading group members:', error);
+      // Fallback to local storage
       const groups = await AsyncStorage.getItem('communityGroups');
       if (groups) {
         const parsedGroups = JSON.parse(groups);
         const group = parsedGroups.find(g => g.id === groupId);
-        if (group) {
-          // Load member details from registered users
+        if (group && group.members) {
           const users = await AsyncStorage.getItem('registeredUsers');
           let allUsers = [];
           if (users) {
@@ -62,7 +93,6 @@ const GroupChatPage = () => {
               { id: 'user2', name: 'Sarah Johnson', avatar: '👩' },
               { id: 'user3', name: 'Mike Chen', avatar: '👨' },
               { id: 'user4', name: 'Emma Wilson', avatar: '👩‍🦰' },
-              { id: 'user5', name: 'Dasun Shanaka', avatar: '🏏' },
             ];
           }
           
@@ -73,35 +103,70 @@ const GroupChatPage = () => {
           setGroupMembers(members);
         }
       }
-    } catch (error) {
-      console.error('Error loading group data:', error);
     }
   };
 
   const loadMessages = async () => {
     try {
-      const allMessages = await AsyncStorage.getItem(`group_${groupId}_messages`);
-      if (allMessages) {
-        setMessages(JSON.parse(allMessages));
+      const groupMessages = await getGroupMessages(groupId);
+      
+      if (groupMessages && groupMessages.length > 0) {
+        setMessages(groupMessages);
       } else {
-        // Demo messages
-        const demoMessages = [
-          { id: '1', text: 'Hello everyone! Welcome to the group!', senderId: 'user2', senderName: 'Sarah Johnson', senderAvatar: '👩', timestamp: new Date(Date.now() - 7200000).toISOString() },
-          { id: '2', text: 'How are You! Doing Well?', senderId: 'user1', senderName: 'Pavan Perera', senderAvatar: '👤', timestamp: new Date(Date.now() - 3600000).toISOString() },
-          { id: '3', text: 'Hello my friends! Are You Free', senderId: 'user3', senderName: 'Mike Chen', senderAvatar: '👨', timestamp: new Date(Date.now() - 1800000).toISOString() },
-          { id: '4', text: 'Hello! I\'ve got some time what\'s going on?', senderId: 'user4', senderName: 'Emma Wilson', senderAvatar: '👩‍🦰', timestamp: new Date(Date.now() - 900000).toISOString() },
-        ];
-        setMessages(demoMessages);
-        await AsyncStorage.setItem(`group_${groupId}_messages`, JSON.stringify(demoMessages));
+        // Load from local storage as fallback
+        const allMessages = await AsyncStorage.getItem(`group_${groupId}_messages`);
+        if (allMessages) {
+          setMessages(JSON.parse(allMessages));
+        }
       }
+      
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
     } catch (error) {
       console.error('Error loading messages:', error);
     }
   };
 
-  const saveMessages = async (newMessages) => {
-    try {
-      await AsyncStorage.setItem(`group_${groupId}_messages`, JSON.stringify(newMessages));
+  const setupRealtimeSubscription = () => {
+    messageSubscription = subscribeToGroupMessages(groupId, (newMessage) => {
+      setMessages(prev => {
+        const updated = [...prev, newMessage];
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+        return updated;
+      });
+    });
+  };
+
+  const sendMessage = async () => {
+    if (!inputText.trim() || !currentUser?.id) return;
+
+    const newMessage = {
+      id: Date.now().toString(),
+      text: inputText.trim(),
+      senderId: currentUser.id,
+      senderName: currentUser.name || 'You',
+      senderAvatar: currentUser.avatar || '👤',
+      timestamp: new Date().toISOString(),
+    };
+
+    // Optimistically add to UI
+    setMessages(prev => [...prev, newMessage]);
+    setInputText('');
+    
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    // Send to Supabase
+    const sentMessage = await sendGroupMessage(groupId, currentUser.id, inputText.trim());
+    
+    if (!sentMessage) {
+      // Save to local storage as fallback
+      const updatedMessages = [...messages, newMessage];
+      await AsyncStorage.setItem(`group_${groupId}_messages`, JSON.stringify(updatedMessages));
       
       // Update last message in group list
       const groups = await AsyncStorage.getItem('communityGroups');
@@ -109,39 +174,16 @@ const GroupChatPage = () => {
         const parsedGroups = JSON.parse(groups);
         const updatedGroups = parsedGroups.map(group => 
           group.id === groupId 
-            ? { ...group, lastMessage: newMessages[newMessages.length - 1]?.text || '', timestamp: new Date().toLocaleTimeString() }
+            ? { ...group, lastMessage: inputText.trim(), timestamp: new Date().toLocaleTimeString() }
             : group
         );
         await AsyncStorage.setItem('communityGroups', JSON.stringify(updatedGroups));
       }
-    } catch (error) {
-      console.error('Error saving messages:', error);
     }
   };
 
-  const sendMessage = () => {
-    if (!inputText.trim()) return;
-
-    const newMessage = {
-      id: Date.now().toString(),
-      text: inputText.trim(),
-      senderId: currentUser?.id || 'user1',
-      senderName: currentUser?.name || 'You',
-      senderAvatar: currentUser?.avatar || '👤',
-      timestamp: new Date().toISOString(),
-    };
-
-    const updatedMessages = [...messages, newMessage];
-    setMessages(updatedMessages);
-    saveMessages(updatedMessages);
-    setInputText('');
-    
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
-  };
-
   const formatTime = (timestamp) => {
+    if (!timestamp) return '';
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
@@ -191,6 +233,16 @@ const GroupChatPage = () => {
       </View>
     </View>
   );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -280,6 +332,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
