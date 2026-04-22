@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { savePost, updatePost } from "../utils/postStorage";
+import { savePost, updatePost } from "../../utils/postStorage";
 
 export default function CreateStory() {
   const router = useRouter();
@@ -92,7 +92,7 @@ export default function CreateStory() {
       };
       await savePost(newPost);
       setModalVisible(false);
-      router.push("/app-pages/feed/?uploading=true");
+      router.push("/(tabs)/feed/?uploading=true");
     }
   };
 

@@ -1,25 +1,33 @@
-import { useRouter } from 'expo-router';
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { supabase } from '../lib/supabase'; // Adjust path as needed
+import {
+  Alert,
+  Image,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { supabase } from "../lib/supabase";
 
 const SignupPage = () => {
-    const router = useRouter();
+  const router = useRouter();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
     // Basic validation
     if (!fullName.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
+      Alert.alert("Error", "Password must be at least 6 characters long");
       return;
     }
 
@@ -32,37 +40,36 @@ const SignupPage = () => {
         options: {
           data: {
             full_name: fullName.trim(),
-          }
-        }
+          },
+        },
       });
 
       if (error) {
-        Alert.alert('Signup Error', error.message);
+        Alert.alert("Signup Error", error.message);
         return;
       }
 
       if (data.user) {
         Alert.alert(
-          'Success', 
-          'Account created successfully! Please check your email for verification.',
+          "Success",
+          "Account created successfully! Please check your email for verification.",
           [
             {
-              text: 'OK',
+              text: "OK",
               onPress: () => {
                 // Navigate to login page or clear form
-                setEmail('');
-                setPassword('');
-                setFullName('');
-                router.push('/loginpage');
-              }
-            }
-          ]
+                setEmail("");
+                setPassword("");
+                setFullName("");
+                router.push("/loginpage");
+              },
+            },
+          ],
         );
       }
-
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
-      console.error('Signup error:', error);
+      Alert.alert("Error", "An unexpected error occurred");
+      console.error("Signup error:", error);
     } finally {
       setLoading(false);
     }
@@ -72,8 +79,8 @@ const SignupPage = () => {
     <View style={styles.container}>
       {/* Image at the top */}
       <View style={styles.imageContainer}>
-        <Image 
-          source={require('../assets/images/index_back.jpg')}
+        <Image
+          source={require("../assets/images/index_back.jpg")}
           style={styles.topImage}
           resizeMode="cover"
         />
@@ -83,7 +90,8 @@ const SignupPage = () => {
       <View style={styles.textSection}>
         <Text style={styles.heading}>Create Your Account</Text>
         <Text style={styles.paragraph}>
-          Join us today and start your journey! Create an account to access exclusive features and personalized content.
+          Join us today and start your journey! Create an account to access
+          exclusive features and personalized content.
         </Text>
       </View>
 
@@ -119,13 +127,13 @@ const SignupPage = () => {
       </View>
 
       {/* Submit Button */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.submitButton, loading && styles.submitButtonDisabled]}
         onPress={handleSignup}
         disabled={loading}
       >
         <Text style={styles.submitButtonText}>
-          {loading ? 'Creating Account...' : 'Sign Up'}
+          {loading ? "Creating Account..." : "Sign Up"}
         </Text>
       </TouchableOpacity>
 
@@ -133,12 +141,17 @@ const SignupPage = () => {
       <View style={styles.loginSection}>
         <Text style={styles.loginText}>
           Already have an account?{" "}
-          <Text style={styles.loginLink} onPress={() => router.replace('/loginpage')}>Login account</Text>
+          <Text
+            style={styles.loginLink}
+            onPress={() => router.replace("/loginpage")}
+          >
+            Login account
+          </Text>
         </Text>
       </View>
     </View>
   );
-};  
+};
 
 export default SignupPage;
 
@@ -146,34 +159,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
   },
   imageContainer: {
-    width: '100%',
+    width: "100%",
     height: 200,
     marginBottom: 30,
     borderRadius: 10,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   topImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   textSection: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
   },
   heading: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    textAlign: 'center',
+    fontWeight: "bold",
+    color: "#000000",
+    textAlign: "center",
     marginBottom: 15,
   },
   paragraph: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
     lineHeight: 22,
     paddingHorizontal: 10,
   },
@@ -181,23 +194,23 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   input: {
-    backgroundColor: '#f8f8f8',
+    backgroundColor: "#f8f8f8",
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
     fontSize: 16,
     marginBottom: 15,
-    color: '#000',
+    color: "#000",
   },
   submitButton: {
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
     paddingVertical: 15,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: 2,
@@ -207,24 +220,24 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   submitButtonDisabled: {
-    backgroundColor: '#666',
+    backgroundColor: "#666",
     opacity: 0.6,
   },
   submitButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   loginSection: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   loginText: {
     fontSize: 16,
-    color: '#666',
+    color: "#666",
   },
   loginLink: {
-    color: '#3091AE',
-    fontWeight: 'bold',
-    textDecorationLine: 'none',
+    color: "#3091AE",
+    fontWeight: "bold",
+    textDecorationLine: "none",
   },
 });

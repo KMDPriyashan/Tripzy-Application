@@ -1,9 +1,9 @@
 import {
-    FlatList,
-    Image,
-    StyleSheet,
-    Text,
-    TouchableOpacity
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
 } from "react-native";
 import { users } from "../data/posts";
 

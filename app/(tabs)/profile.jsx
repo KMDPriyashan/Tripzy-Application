@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { supabase } from "../lib/supabase";
-import { getUserProfile } from "../utils/userStorage";
+import { supabase } from "../../lib/supabase";
+import { getUserProfile } from "../../utils/userStorage";
 
 const [activeTab, setActiveTab] = useState("Home");
 
@@ -50,7 +50,7 @@ const featureCardsData = [
 const navItems = [
   { name: "Home", icon: "🏠", target: null },
   { name: "Map", icon: "🗺️", target: "/app-pages/map" },
-  { name: "Feed", icon: "📰", target: "/app-pages/feed" },
+  { name: "Feed", icon: "📰", target: "/(tabs)/feed" },
   { name: "Group", icon: "👥", target: " " },
   { name: "Profile", icon: "👤", target: null },
 ];

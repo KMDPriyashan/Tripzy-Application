@@ -2,7 +2,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Button, Image, TextInput, TouchableOpacity, View } from "react-native";
-import { getUserProfile, updateUserProfile } from "../utils/userStorage";
+import { getUserProfile, updateUserProfile } from "../../utils/userStorage";
 
 export default function EditProfileScreen() {
   const [user, setUser] = useState({});

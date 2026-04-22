@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { getUserProfile } from "../utils/userStorage";
+import { getUserProfile } from "../../utils/userStorage";
 
 export default function ProfileScreen() {
   const [user, setUser] = useState(null);
