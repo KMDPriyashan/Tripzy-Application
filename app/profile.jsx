@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import BottomNav from '../components/BottomNav'; // Import the component
 import { supabase } from '../lib/supabase';
 
 // Data for the feature cards
@@ -13,25 +14,14 @@ const featureCardsData = [
   { name: 'Weather', description: 'Check the weather for your destination !.', icon: '⛅', target: '/app-pages/weather' },
 ];
 
-// Data for the bottom navigation
-const navItems = [
-  { name: 'Home', icon: '🏠', target: null },
-  { name: 'Map', icon: '🗺️', target: '/app-pages/map' },
-  { name: 'Feed', icon: '📰', target: '/app-pages/feed' },
-  { name: 'Group', icon: '👥', target: '/app-pages/community' },
-  { name: 'Profile', icon: '👤', target: '/app-pages/profile' },
-];
-
 const HomePage = () => {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is logged in
     getCurrentUser();
 
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
@@ -57,26 +47,7 @@ const HomePage = () => {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Logout error:', error);
-      } else {
-        router.replace('/loginpage');
-      }
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
   const handleFeaturePress = (targetPath) => {
-    if (targetPath) {
-      router.push(targetPath);
-    }
-  };
-
-  const handleNavPress = (targetPath) => {
     if (targetPath) {
       router.push(targetPath);
     }
@@ -110,7 +81,6 @@ const HomePage = () => {
 
   return (
     <View style={styles.container}>
-      {/* Main Content (Wrapped in ScrollView) */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
@@ -124,8 +94,6 @@ const HomePage = () => {
             </TouchableOpacity>
           </View>
 
-        
-
           <Text style={styles.tagline}>Travel Light. Feel Deep.</Text>
           <Text style={styles.subTagline}>A gentle, poetic invitation to begin the journey.</Text>
 
@@ -136,7 +104,7 @@ const HomePage = () => {
 
         {/* Feature Cards */}
         <View style={styles.featuresContainer}>
-          {featureCardsData.map((feature, index) => (
+          {featureCardsData.map((feature) => (
             <TouchableOpacity
               key={feature.name}
               style={styles.featureCard}
@@ -152,19 +120,8 @@ const HomePage = () => {
         </View>
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        {navItems.map((item) => (
-          <TouchableOpacity
-            key={item.name}
-            style={styles.navItem}
-            onPress={() => handleNavPress(item.target)}
-          >
-            <Text style={styles.navIcon}>{item.icon}</Text>
-            <Text style={styles.navText}>{item.name}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Bottom Navigation - Using the component */}
+      <BottomNav />
     </View>
   );
 };
@@ -178,7 +135,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollViewContent: {
-    paddingBottom: 90, // Space for bottom navigation
+    paddingBottom: 90,
   },
   headerSection: {
     paddingHorizontal: 24,
@@ -273,39 +230,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  navIcon: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  navText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
   },
   loadingContent: {
     flex: 1,

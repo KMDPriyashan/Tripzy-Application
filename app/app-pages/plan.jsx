@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BottomNav from '../../components/BottomNav'; // Import BottomNav component
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -185,134 +186,144 @@ const PlanPage = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Main Title Section */}
-        <View style={styles.titleSection}>
-          <Text style={styles.mainTitle}>Plan Your Perfect Getaway !</Text>
-          <Text style={styles.subtitle}>
-            🌳Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖
-          </Text>
-        </View>
-
-        {/* Calendar Section */}
-        <View style={styles.calendarSection}>
-          <View style={styles.calendarHeader}>
-            <TouchableOpacity onPress={navigateToPreviousMonth} style={styles.monthNavButton}>
-              <Text style={styles.monthNavButtonText}>‹</Text>
-            </TouchableOpacity>
-            <Text style={styles.monthTitle}>{formatMonthYear(currentDate)}</Text>
-            <TouchableOpacity onPress={navigateToNextMonth} style={styles.monthNavButton}>
-              <Text style={styles.monthNavButtonText}>›</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Calendar Grid */}
-          <View style={styles.calendarGrid}>
-            {calendarDays.map((dateInfo, index) => {
-              const isSelected = isSameDay(dateInfo.date, selectedDate);
-              const isCurrentMonthDay = isCurrentMonth(dateInfo.date);
-              
-              return (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.calendarDay,
-                    isSelected && styles.selectedDay,
-                    dateInfo.isToday && styles.todayDay,
-                    !isCurrentMonthDay && styles.otherMonthDay
-                  ]}
-                  onPress={() => handleDatePress(dateInfo)}
-                >
-                  <Text style={[
-                    styles.dayText,
-                    isSelected && styles.selectedDayText,
-                    dateInfo.isToday && !isSelected && styles.todayText,
-                    !isCurrentMonthDay && styles.otherMonthText
-                  ]}>
-                    {dateInfo.day}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          
-          {/* Calendar Legend */}
-          <View style={styles.legendContainer}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, styles.todayLegend]} />
-              <Text style={styles.legendText}>Today</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendColor, styles.selectedLegend]} />
-              <Text style={styles.legendText}>Selected</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Selected Date Info */}
-        <View style={styles.selectedDateSection}>
-          <Text style={styles.selectedDateTitle}>Selected Date:</Text>
-          <Text style={styles.selectedDateText}>
-            {selectedDate.toLocaleDateString('en-US', { 
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long', 
-              day: 'numeric'
-            })}
-          </Text>
-        </View>
-
-        {/* Previous Itineraries Section */}
-        <View style={styles.itinerariesSection}>
-          <Text style={styles.sectionTitle}>Previous Itineraries</Text>
-          
-          {previousItineraries.length > 0 ? (
-            previousItineraries.map((itinerary) => (
-              <View key={itinerary.id} style={styles.itineraryCard}>
-                <View style={styles.itineraryContent}>
-                  <Text style={styles.itineraryTitle}>{itinerary.title}</Text>
-                  <View style={styles.itineraryDetails}>
-                    <Text style={styles.itineraryDate}>{itinerary.date}</Text>
-                    {itinerary.days > 0 && (
-                      <Text style={styles.itineraryDays}>{itinerary.days} days</Text>
-                    )}
-                  </View>
-                </View>
-                <TouchableOpacity 
-                  style={styles.viewButton}
-                  onPress={() => handleViewItinerary(itinerary)}
-                >
-                  <Text style={styles.viewButtonText}>View</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          ) : (
-            <View style={styles.emptyItineraries}>
-              <Text style={styles.emptyText}>No itineraries yet</Text>
-              <Text style={styles.emptySubtext}>Create your first plan to see it here!</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Create Itinerary Button */}
-        <TouchableOpacity 
-          style={styles.createButton}
-          onPress={() => router.push('/app-pages/myItineraries')}
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.createButtonText}>View Itineraries</Text>
-          
-        </TouchableOpacity>
-        <View style={styles.buttomtext}>
-              <Text style={styles.endtext}>With every detail in place, this plan ensures a smooth journey filled with memorable experiences. 🔖</Text>    
-        </View>
+          {/* Main Title Section */}
+          <View style={styles.titleSection}>
+            <Text style={styles.mainTitle}>Plan Your Perfect Getaway !</Text>
+            <Text style={styles.subtitle}>
+              🌳Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖
+            </Text>
+          </View>
 
-      </ScrollView>
-    </SafeAreaView>
+          {/* Calendar Section */}
+          <View style={styles.calendarSection}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity onPress={navigateToPreviousMonth} style={styles.monthNavButton}>
+                <Text style={styles.monthNavButtonText}>‹</Text>
+              </TouchableOpacity>
+              <Text style={styles.monthTitle}>{formatMonthYear(currentDate)}</Text>
+              <TouchableOpacity onPress={navigateToNextMonth} style={styles.monthNavButton}>
+                <Text style={styles.monthNavButtonText}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Calendar Grid */}
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((dateInfo, index) => {
+                const isSelected = isSameDay(dateInfo.date, selectedDate);
+                const isCurrentMonthDay = isCurrentMonth(dateInfo.date);
+                
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.calendarDay,
+                      isSelected && styles.selectedDay,
+                      dateInfo.isToday && styles.todayDay,
+                      !isCurrentMonthDay && styles.otherMonthDay
+                    ]}
+                    onPress={() => handleDatePress(dateInfo)}
+                  >
+                    <Text style={[
+                      styles.dayText,
+                      isSelected && styles.selectedDayText,
+                      dateInfo.isToday && !isSelected && styles.todayText,
+                      !isCurrentMonthDay && styles.otherMonthText
+                    ]}>
+                      {dateInfo.day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            {/* Calendar Legend */}
+            <View style={styles.legendContainer}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, styles.todayLegend]} />
+                <Text style={styles.legendText}>Today</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, styles.selectedLegend]} />
+                <Text style={styles.legendText}>Selected</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Selected Date Info */}
+          <View style={styles.selectedDateSection}>
+            <Text style={styles.selectedDateTitle}>Selected Date:</Text>
+            <Text style={styles.selectedDateText}>
+              {selectedDate.toLocaleDateString('en-US', { 
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long', 
+                day: 'numeric'
+              })}
+            </Text>
+          </View>
+
+          {/* Previous Itineraries Section */}
+          <View style={styles.itinerariesSection}>
+            <Text style={styles.sectionTitle}>Previous Itineraries</Text>
+            
+            {previousItineraries.length > 0 ? (
+              previousItineraries.map((itinerary) => (
+                <View key={itinerary.id} style={styles.itineraryCard}>
+                  <View style={styles.itineraryContent}>
+                    <Text style={styles.itineraryTitle}>{itinerary.title}</Text>
+                    <View style={styles.itineraryDetails}>
+                      <Text style={styles.itineraryDate}>{itinerary.date}</Text>
+                      {itinerary.days > 0 && (
+                        <Text style={styles.itineraryDays}>{itinerary.days} days</Text>
+                      )}
+                    </View>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.viewButton}
+                    onPress={() => handleViewItinerary(itinerary)}
+                  >
+                    <Text style={styles.viewButtonText}>View</Text>
+                  </TouchableOpacity>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyItineraries}>
+                <Text style={styles.emptyText}>No itineraries yet</Text>
+                <Text style={styles.emptySubtext}>Create your first plan to see it here!</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Create Itinerary Button */}
+          <TouchableOpacity 
+            style={styles.createButton}
+            onPress={() => router.push('/app-pages/myItineraries')}
+          >
+            <Text style={styles.createButtonText}>View Itineraries</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.bottomText}>
+            <Text style={styles.endtext}>
+              With every detail in place, this plan ensures a smooth journey filled with memorable experiences. 🔖
+            </Text>    
+          </View>
+
+          {/* Add extra padding at bottom to prevent content being hidden behind bottom nav */}
+          <View style={styles.bottomPadding} />
+          
+        </ScrollView>
+      </SafeAreaView>
+      
+      {/* Bottom Navigation */}
+      <BottomNav />
+    </View>
   );
 };
 
@@ -321,12 +332,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  buttomtext: {
+  safeArea: {
+    flex: 1,
+  },
+  bottomText: {
     alignItems: 'center',
     justifyContent: 'center',
-   
   },
-
   endtext: {
     fontSize: 13,
     color: '#666',
@@ -335,8 +347,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
-
-
+  bottomPadding: {
+    height: 80, // Extra padding to prevent content being hidden behind bottom nav
+  },
   header: {
     alignItems: 'center',
     justifyContent: 'space-between',

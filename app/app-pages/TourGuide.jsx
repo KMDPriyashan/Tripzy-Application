@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import BottomNav from '../../components/BottomNav'; // Import BottomNav component
 import { supabase } from '../../lib/supabase';
 
 const TourGuidePage = () => {
@@ -297,207 +298,215 @@ const TourGuidePage = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <Text style={styles.heroTitle}>Easy Guide Booking</Text>
-          <Text style={styles.heroSubtitle}>
-            Pick your place, set your date, and book instantly
-          </Text>
-        </View>
-
-        {/* Tour Guide Name Input */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>👤 Tour Guide Name</Text>
-          <View style={styles.tourGuideInputContainer}>
-            <Ionicons name="person-outline" size={20} color="#007AFF" />
-            <TextInput
-              style={styles.tourGuideInput}
-              placeholder="Enter tour guide name (e.g., John Doe)"
-              value={tourGuideName}
-              onChangeText={setTourGuideName}
-            />
-          </View>
-        </View>
-
-        {/* Price Calculator Section */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>💰 Price Calculator</Text>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Base Price (per day):</Text>
-            <Text style={styles.priceValue}>${BASE_PRICE_PER_DAY}</Text>
-          </View>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Extra person fee:</Text>
-            <Text style={styles.priceValue}>${PRICE_PER_PERSON}/person</Text>
-          </View>
-          <View style={styles.priceDivider} />
-          <View style={styles.priceRow}>
-            <Text style={styles.totalLabel}>Total Price:</Text>
-            <Text style={styles.totalValue}>${totalPrice}</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.priceInfoButton}
-            onPress={() => setShowPriceBreakdown(!showPriceBreakdown)}
-          >
-            <Text style={styles.priceInfoText}>
-              {showPriceBreakdown ? 'Hide' : 'Show'} price breakdown
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {/* Hero Section */}
+          <View style={styles.heroSection}>
+            <Text style={styles.heroTitle}>Easy Guide Booking</Text>
+            <Text style={styles.heroSubtitle}>
+              Pick your place, set your date, and book instantly
             </Text>
-          </TouchableOpacity>
-          {showPriceBreakdown && (
-            <View style={styles.priceBreakdown}>
-              <Text style={styles.breakdownText}>
-                • Base price: ${BASE_PRICE_PER_DAY}
-                {groupSize && parseInt(groupSize) > 1 && `\n• Extra ${parseInt(groupSize) - 1} persons: $${(parseInt(groupSize) - 1) * PRICE_PER_PERSON}`}
-                {groupSize && parseInt(groupSize) > 1 && `\n• Total: $${totalPrice}`}
-              </Text>
+          </View>
+
+          {/* Tour Guide Name Input */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>👤 Tour Guide Name</Text>
+            <View style={styles.tourGuideInputContainer}>
+              <Ionicons name="person-outline" size={20} color="#007AFF" />
+              <TextInput
+                style={styles.tourGuideInput}
+                placeholder="Enter tour guide name (e.g., John Doe)"
+                value={tourGuideName}
+                onChangeText={setTourGuideName}
+              />
             </View>
-          )}
-        </View>
-
-        {/* Black Info Card */}
-        <View style={styles.blackInfoCard}>
-          <Text style={styles.blackInfoText}>
-            You should quickly find a tour guide and book after reviewing their profile.
-          </Text>
-          <TouchableOpacity 
-            style={styles.findBookingButton}
-            onPress={handleFindBooking}
-          >
-            <Text style={styles.findBookingButtonText}>Find Booking</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Destination Input */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>📍 Where do you want to go?</Text>
-          <View style={styles.destinationInputContainer}>
-            <Ionicons name="location-outline" size={20} color="#007AFF" />
-            <TextInput
-              style={styles.destinationInput}
-              placeholder="Enter destination (e.g., Kandy, Galle, Colombo)"
-              value={destination}
-              onChangeText={setDestination}
-            />
           </View>
-        </View>
 
-        {/* Calendar Section */}
-        <View style={styles.calendarCard}>
-          <Text style={styles.sectionTitle}>📅 Date Picker</Text>
-          <Text style={styles.calendarSubtitle}>
-            Pick your suitable date for booking Tour Guide
-          </Text>
-
-          <View style={styles.monthNavigation}>
-            <TouchableOpacity onPress={goToPreviousMonth} style={styles.monthNavButton}>
-              <Ionicons name="chevron-back" size={24} color="#007AFF" />
+          {/* Price Calculator Section */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>💰 Price Calculator</Text>
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Base Price (per day):</Text>
+              <Text style={styles.priceValue}>${BASE_PRICE_PER_DAY}</Text>
+            </View>
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Extra person fee:</Text>
+              <Text style={styles.priceValue}>${PRICE_PER_PERSON}/person</Text>
+            </View>
+            <View style={styles.priceDivider} />
+            <View style={styles.priceRow}>
+              <Text style={styles.totalLabel}>Total Price:</Text>
+              <Text style={styles.totalValue}>${totalPrice}</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.priceInfoButton}
+              onPress={() => setShowPriceBreakdown(!showPriceBreakdown)}
+            >
+              <Text style={styles.priceInfoText}>
+                {showPriceBreakdown ? 'Hide' : 'Show'} price breakdown
+              </Text>
             </TouchableOpacity>
-            <Text style={styles.monthYearText}>
-              {getMonthName(currentMonth)} {currentYear}
-            </Text>
-            <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavButton}>
-              <Ionicons name="chevron-forward" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.weekDaysRow}>
-            {weekDays.map((day, index) => (
-              <Text key={index} style={styles.weekDayText}>{day}</Text>
-            ))}
-          </View>
-
-          <View style={styles.calendarGrid}>
-            {calendarDays.map((item) => (
-              <TouchableOpacity
-                key={item.key}
-                style={[
-                  styles.calendarDay,
-                  !item.isCurrentMonth && styles.otherMonthDay,
-                  item.isToday && styles.todayDay,
-                  selectedDate === item.day && item.isCurrentMonth && styles.selectedDay
-                ]}
-                onPress={() => item.isCurrentMonth && setSelectedDate(item.day)}
-                disabled={!item.isCurrentMonth}
-              >
-                <Text style={[
-                  styles.calendarDayText,
-                  !item.isCurrentMonth && styles.otherMonthDayText,
-                  item.isToday && styles.todayDayText,
-                  selectedDate === item.day && item.isCurrentMonth && styles.selectedDayText
-                ]}>
-                  {item.day}
+            {showPriceBreakdown && (
+              <View style={styles.priceBreakdown}>
+                <Text style={styles.breakdownText}>
+                  • Base price: ${BASE_PRICE_PER_DAY}
+                  {groupSize && parseInt(groupSize) > 1 && `\n• Extra ${parseInt(groupSize) - 1} persons: $${(parseInt(groupSize) - 1) * PRICE_PER_PERSON}`}
+                  {groupSize && parseInt(groupSize) > 1 && `\n• Total: $${totalPrice}`}
                 </Text>
-              </TouchableOpacity>
-            ))}
+              </View>
+            )}
           </View>
-        </View>
 
-        {/* Group Size */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>👥 Group Size</Text>
-          <TextInput
-            style={styles.groupSizeInput}
-            placeholder="Enter number of people"
-            value={groupSize}
-            onChangeText={setGroupSize}
-            keyboardType="numeric"
-          />
-          <Text style={styles.helperText}>
-            Additional persons will incur extra charges
-          </Text>
-        </View>
+          {/* Black Info Card */}
+          <View style={styles.blackInfoCard}>
+            <Text style={styles.blackInfoText}>
+              You should quickly find a tour guide and book after reviewing their profile.
+            </Text>
+            <TouchableOpacity 
+              style={styles.findBookingButton}
+              onPress={handleFindBooking}
+            >
+              <Text style={styles.findBookingButtonText}>Find Booking</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* WhatsApp Number Section */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>📱 Tour Guide WhatsApp Number</Text>
-          <View style={styles.whatsappInputContainer}>
-            <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+          {/* Destination Input */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>📍 Where do you want to go?</Text>
+            <View style={styles.destinationInputContainer}>
+              <Ionicons name="location-outline" size={20} color="#007AFF" />
+              <TextInput
+                style={styles.destinationInput}
+                placeholder="Enter destination (e.g., Kandy, Galle, Colombo)"
+                value={destination}
+                onChangeText={setDestination}
+              />
+            </View>
+          </View>
+
+          {/* Calendar Section */}
+          <View style={styles.calendarCard}>
+            <Text style={styles.sectionTitle}>📅 Date Picker</Text>
+            <Text style={styles.calendarSubtitle}>
+              Pick your suitable date for booking Tour Guide
+            </Text>
+
+            <View style={styles.monthNavigation}>
+              <TouchableOpacity onPress={goToPreviousMonth} style={styles.monthNavButton}>
+                <Ionicons name="chevron-back" size={24} color="#007AFF" />
+              </TouchableOpacity>
+              <Text style={styles.monthYearText}>
+                {getMonthName(currentMonth)} {currentYear}
+              </Text>
+              <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavButton}>
+                <Ionicons name="chevron-forward" size={24} color="#007AFF" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.weekDaysRow}>
+              {weekDays.map((day, index) => (
+                <Text key={index} style={styles.weekDayText}>{day}</Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((item) => (
+                <TouchableOpacity
+                  key={item.key}
+                  style={[
+                    styles.calendarDay,
+                    !item.isCurrentMonth && styles.otherMonthDay,
+                    item.isToday && styles.todayDay,
+                    selectedDate === item.day && item.isCurrentMonth && styles.selectedDay
+                  ]}
+                  onPress={() => item.isCurrentMonth && setSelectedDate(item.day)}
+                  disabled={!item.isCurrentMonth}
+                >
+                  <Text style={[
+                    styles.calendarDayText,
+                    !item.isCurrentMonth && styles.otherMonthDayText,
+                    item.isToday && styles.todayDayText,
+                    selectedDate === item.day && item.isCurrentMonth && styles.selectedDayText
+                  ]}>
+                    {item.day}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Group Size */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>👥 Group Size</Text>
             <TextInput
-              style={styles.whatsappInput}
-              placeholder="Enter tour guide's WhatsApp number (e.g., +94771234567)"
-              value={whatsappNumber}
-              onChangeText={setWhatsappNumber}
-              keyboardType="phone-pad"
+              style={styles.groupSizeInput}
+              placeholder="Enter number of people"
+              value={groupSize}
+              onChangeText={setGroupSize}
+              keyboardType="numeric"
+            />
+            <Text style={styles.helperText}>
+              Additional persons will incur extra charges
+            </Text>
+          </View>
+
+          {/* WhatsApp Number Section */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>📱 Tour Guide WhatsApp Number</Text>
+            <View style={styles.whatsappInputContainer}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+              <TextInput
+                style={styles.whatsappInput}
+                placeholder="e.g., +94771234567"
+                value={whatsappNumber}
+                onChangeText={setWhatsappNumber}
+                keyboardType="phone-pad"
+              />
+            </View>
+            <Text style={styles.helperText}>
+              This number will receive the booking confirmation message
+            </Text>
+          </View>
+
+          {/* Special Requests */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>📝 Special Requests</Text>
+            <TextInput
+              style={[styles.groupSizeInput, styles.textArea]}
+              placeholder="Any special requirements? (dietary needs, accessibility, preferred language, etc.)"
+              value={specialRequests}
+              onChangeText={setSpecialRequests}
+              multiline
+              numberOfLines={3}
             />
           </View>
-          <Text style={styles.helperText}>
-            This number will receive the booking confirmation message
+
+          {/* Ready to Book Text */}
+          <Text style={styles.readyToBookText}>
+            Ready to book your guide? Start your journey now.
           </Text>
-        </View>
 
-        {/* Special Requests */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>📝 Special Requests</Text>
-          <TextInput
-            style={[styles.groupSizeInput, styles.textArea]}
-            placeholder="Any special requirements? (dietary needs, accessibility, preferred language, etc.)"
-            value={specialRequests}
-            onChangeText={setSpecialRequests}
-            multiline
-            numberOfLines={3}
-          />
-        </View>
+          {/* Ask Booking Button */}
+          <TouchableOpacity 
+            style={[styles.askBookingButton, (!isFormValid() || loading) && styles.disabledButton]}
+            onPress={handleBooking}
+            disabled={!isFormValid() || loading}
+          >
+            <Ionicons name="logo-whatsapp" size={24} color="#fff" style={styles.buttonIcon} />
+            <Text style={styles.askBookingButtonText}>
+              {loading ? 'Sending...' : 'Ask Booking via WhatsApp'}
+            </Text>
+          </TouchableOpacity>
 
-        {/* Ready to Book Text */}
-        <Text style={styles.readyToBookText}>
-          Ready to book your guide? Start your journey now.
-        </Text>
-
-        {/* Ask Booking Button */}
-        <TouchableOpacity 
-          style={[styles.askBookingButton, (!isFormValid() || loading) && styles.disabledButton]}
-          onPress={handleBooking}
-          disabled={!isFormValid() || loading}
-        >
-          <Ionicons name="logo-whatsapp" size={24} color="#fff" style={styles.buttonIcon} />
-          <Text style={styles.askBookingButtonText}>
-            {loading ? 'Sending...' : 'Ask Booking via WhatsApp'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Add extra padding at bottom to prevent content being hidden behind bottom nav */}
+          <View style={styles.bottomPadding} />
+        </ScrollView>
+      </SafeAreaView>
+      
+      {/* Bottom Navigation */}
+      <BottomNav />
+    </View>
   );
 };
 
@@ -505,6 +514,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 30,
+  },
+  bottomPadding: {
+    height: 80, // Extra padding to prevent content being hidden behind bottom nav
   },
   heroSection: {
     paddingHorizontal: 20,

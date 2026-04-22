@@ -7,6 +7,7 @@ import {
   Linking,
   Modal,
   Platform,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,6 +17,7 @@ import {
 } from 'react-native';
 
 // Import Supabase functions with correct path
+import BottomNav from '../../components/BottomNav'; // Import BottomNav component
 import { getPopularLocations, searchDatabaseLocations, supabase } from '../../lib/supabase';
 
 const mapPage = () => {
@@ -444,346 +446,354 @@ const mapPage = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Map Enhance</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={testDatabaseConnection} style={styles.testButton}>
-            <Text style={styles.testButtonText}>🔧</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView 
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.title}>Search along the route...</Text>
-        <Text style={styles.subtitle}>📍 Better Location, Finding Everything!</Text>
-
-        {/* Best Travel Modes */}
-        <View style={styles.modeContainer}>
-          <Text style={styles.sectionTitle}>Best travel modes</Text>
-          <View style={styles.modeButtons}>
-            <TouchableOpacity 
-              style={[styles.modeButton, travelMode === 'driving' && styles.modeActive]}
-              onPress={() => { setTravelMode('driving'); setRouteDetails(null); }}
-            >
-              <Text style={styles.modeIcon}>🚗</Text>
-              <Text style={[styles.modeText, travelMode === 'driving' && styles.modeTextActive]}>Drive</Text>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Map Enhance</Text>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity onPress={testDatabaseConnection} style={styles.testButton}>
+              <Text style={styles.testButtonText}>🔧</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.modeButton, travelMode === 'walking' && styles.modeActive]}
-              onPress={() => { setTravelMode('walking'); setRouteDetails(null); }}
-            >
-              <Text style={styles.modeIcon}>🚶</Text>
-              <Text style={[styles.modeText, travelMode === 'walking' && styles.modeTextActive]}>Walk</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.modeButton, travelMode === 'transit' && styles.modeActive]}
-              onPress={() => { setTravelMode('transit'); setRouteDetails(null); }}
-            >
-              <Text style={styles.modeIcon}>🚌</Text>
-              <Text style={[styles.modeText, travelMode === 'transit' && styles.modeTextActive]}>Transit</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={[styles.modeButton, travelMode === 'cycling' && styles.modeActive]}
-              onPress={() => { setTravelMode('cycling'); setRouteDetails(null); }}
-            >
-              <Text style={styles.modeIcon}>🚲</Text>
-              <Text style={[styles.modeText, travelMode === 'cycling' && styles.modeTextActive]}>Bike</Text>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Back</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* From Location with Search */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>From 🚀</Text>
-          <View style={styles.locationInputWrapper}>
-            <TextInput
-              style={[styles.input, styles.locationInput]}
-              placeholder="Enter starting point..."
-              placeholderTextColor="#999"
-              value={fromLocation}
-              onChangeText={(text) => {
-                setFromLocation(text);
-                handleSearchChange(text, 'from');
-              }}
-              editable={!useCurrentLocation}
-              onFocus={() => {
-                if (!useCurrentLocation) {
-                  setSelectedInput('from');
-                  if (fromLocation) handleSearchChange(fromLocation, 'from');
-                }
-              }}
-            />
-            <TouchableOpacity 
-              style={styles.currentLocationButton}
-              onPress={useCurrentLocation ? clearCurrentLocation : getCurrentLocation}
-            >
-              <Text style={styles.currentLocationText}>📍</Text>
-            </TouchableOpacity>
-          </View>
-          {useCurrentLocation && currentLocationText ? (
-            <Text style={styles.locationHint}>Using: {currentLocationText}</Text>
-          ) : null}
-          
-          {/* Search Results for "From" Section */}
-          {showSearchResults && selectedInput === 'from' && searchResults.length > 0 && (
-            <View style={styles.searchResultsPanel}>
-              <View style={styles.searchResultsHeader}>
-                <Text style={styles.searchResultsTitle}>
-                  {searchResults.filter(r => r.source === 'database').length > 0 ? 
-                    '📍 From your saved places' : '📍 Search results'}
-                </Text>
-                <TouchableOpacity onPress={clearSearchResultsManually}>
-                  <Text style={styles.clearResultsText}>✕ Cancel</Text>
-                </TouchableOpacity>
-              </View>
-              {searchResults.map((item) => (
-                <TouchableOpacity 
-                  key={item.id} 
-                  style={styles.searchResultItem}
-                  onPress={() => selectLocation(item)}
-                >
-                  <View style={styles.searchResultHeader}>
-                    <Text style={styles.searchResultName}>{item.name}</Text>
-                    {item.source === 'database' && (
-                      <Text style={styles.databaseBadge}>📌 Saved</Text>
-                    )}
-                  </View>
-                  <Text style={styles.searchResultAddress} numberOfLines={1}>
-                    {item.address}
-                  </Text>
-                  {item.rating && (
-                    <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          
-          {searching && selectedInput === 'from' && (
-            <View style={styles.searchingContainer}>
-              <ActivityIndicator size="small" color="#007AFF" />
-              <Text style={styles.searchingText}>Searching locations...</Text>
-            </View>
-          )}
-        </View>
+        <ScrollView 
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>Search along the route...</Text>
+          <Text style={styles.subtitle}>📍 Better Location, Finding Everything!</Text>
 
-        {/* Waypoints */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Stops along the route 🛑</Text>
-          {waypoints.length > 0 && (
-            <Text style={styles.stopCount}>{waypoints.length} stop(s) added</Text>
-          )}
-          {waypoints.map((waypoint, index) => (
-            <View key={waypoint.id} style={styles.waypointItem}>
-              <Text style={styles.waypointNumber}>{index + 1}</Text>
-              <Text style={styles.waypointText}>{waypoint.name}</Text>
-              <TouchableOpacity onPress={() => removeWaypoint(waypoint.id)}>
-                <Text style={styles.removeWaypoint}>✕</Text>
+          {/* Best Travel Modes */}
+          <View style={styles.modeContainer}>
+            <Text style={styles.sectionTitle}>Best travel modes</Text>
+            <View style={styles.modeButtons}>
+              <TouchableOpacity 
+                style={[styles.modeButton, travelMode === 'driving' && styles.modeActive]}
+                onPress={() => { setTravelMode('driving'); setRouteDetails(null); }}
+              >
+                <Text style={styles.modeIcon}>🚗</Text>
+                <Text style={[styles.modeText, travelMode === 'driving' && styles.modeTextActive]}>Drive</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.modeButton, travelMode === 'walking' && styles.modeActive]}
+                onPress={() => { setTravelMode('walking'); setRouteDetails(null); }}
+              >
+                <Text style={styles.modeIcon}>🚶</Text>
+                <Text style={[styles.modeText, travelMode === 'walking' && styles.modeTextActive]}>Walk</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.modeButton, travelMode === 'transit' && styles.modeActive]}
+                onPress={() => { setTravelMode('transit'); setRouteDetails(null); }}
+              >
+                <Text style={styles.modeIcon}>🚌</Text>
+                <Text style={[styles.modeText, travelMode === 'transit' && styles.modeTextActive]}>Transit</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.modeButton, travelMode === 'cycling' && styles.modeActive]}
+                onPress={() => { setTravelMode('cycling'); setRouteDetails(null); }}
+              >
+                <Text style={styles.modeIcon}>🚲</Text>
+                <Text style={[styles.modeText, travelMode === 'cycling' && styles.modeTextActive]}>Bike</Text>
               </TouchableOpacity>
             </View>
-          ))}
-          
-          <TouchableOpacity 
-            style={styles.addStopButton}
-            onPress={() => setShowAddDestination(true)}
-          >
-            <Text style={styles.addStopText}>+ Add destination</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* To Location with Search */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>To 🎯</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter destination..."
-            placeholderTextColor="#999"
-            value={toLocation}
-            onChangeText={(text) => {
-              setToLocation(text);
-              handleSearchChange(text, 'to');
-            }}
-            onFocus={() => {
-              setSelectedInput('to');
-              if (toLocation) handleSearchChange(toLocation, 'to');
-            }}
-          />
-          
-          {/* Search Results for "To" Section */}
-          {showSearchResults && selectedInput === 'to' && searchResults.length > 0 && (
-            <View style={styles.searchResultsPanel}>
-              <View style={styles.searchResultsHeader}>
-                <Text style={styles.searchResultsTitle}>
-                  {searchResults.filter(r => r.source === 'database').length > 0 ? 
-                    '📍 From your saved places' : '📍 Search results'}
-                </Text>
-                <TouchableOpacity onPress={clearSearchResultsManually}>
-                  <Text style={styles.clearResultsText}>✕ Cancel</Text>
-                </TouchableOpacity>
-              </View>
-              {searchResults.map((item) => (
-                <TouchableOpacity 
-                  key={item.id} 
-                  style={styles.searchResultItem}
-                  onPress={() => selectLocation(item)}
-                >
-                  <View style={styles.searchResultHeader}>
-                    <Text style={styles.searchResultName}>{item.name}</Text>
-                    {item.source === 'database' && (
-                      <Text style={styles.databaseBadge}>📌 Saved</Text>
-                    )}
-                  </View>
-                  <Text style={styles.searchResultAddress} numberOfLines={1}>
-                    {item.address}
-                  </Text>
-                  {item.rating && (
-                    <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          
-          {searching && selectedInput === 'to' && (
-            <View style={styles.searchingContainer}>
-              <ActivityIndicator size="small" color="#007AFF" />
-              <Text style={styles.searchingText}>Searching locations...</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Popular Locations Quick Select */}
-        {!loadingPopular && popularLocations.length > 0 && !showSearchResults && (
-          <View style={styles.popularContainer}>
-            <Text style={styles.popularTitle}>📍 Popular Places</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              style={styles.popularScroll}
-            >
-              {popularLocations.map((location) => (
-                <TouchableOpacity
-                  key={location.id}
-                  style={styles.popularItem}
-                  onPress={() => {
-                    setToLocation(location.name);
-                    setRouteDetails(null);
-                  }}
-                >
-                  <Text style={styles.popularIcon}>
-                    {location.category === 'restaurant' ? '🍽️' :
-                     location.category === 'hospital' ? '🏥' :
-                     location.category === 'hotel' ? '🏨' :
-                     location.category === 'park' ? '🌳' :
-                     location.category === 'shopping_mall' ? '🛍️' :
-                     location.category === 'temple' ? '🛕' : '📍'}
-                  </Text>
-                  <Text style={styles.popularName}>{location.name}</Text>
-                  <Text style={styles.popularAddress} numberOfLines={1}>
-                    {location.city || location.district || 'Sri Lanka'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
           </View>
-        )}
 
-        {/* Weather & Traffic Info */}
-        <View style={styles.infoPanel}>
-          <View style={styles.weatherInfo}>
-            <Text style={styles.weatherTemp}>{weatherInfo.temp}</Text>
-            <Text style={styles.weatherCondition}>{weatherInfo.condition}</Text>
-          </View>
-          <View style={styles.trafficInfo}>
-            <Text style={styles.trafficText}>🚦 {trafficInfo}</Text>
-            <Text style={styles.trafficSubText}>Updated just now</Text>
-          </View>
-        </View>
-
-        {/* Route Details */}
-        {routeDetails && (
-          <View style={styles.routeDetails}>
-            <Text style={styles.routeTitle}>
-              {routeDetails.mode} Route Details {routeDetails.mode === 'Walking' ? '🚶' : routeDetails.mode === 'Biking' ? '🚲' : routeDetails.mode === 'Transit' ? '🚌' : '🚗'}
-            </Text>
-            <Text style={styles.routeMain}>{routeDetails.duration}</Text>
-            <Text style={styles.routeText}>{routeDetails.distance}</Text>
-            <Text style={styles.routeText}>via {routeDetails.route}</Text>
-            <Text style={styles.routeText}>{routeDetails.traffic}</Text>
-            {routeDetails.stops > 0 && (
-              <Text style={styles.routeStops}>📍 {routeDetails.stops} stop(s) along the route</Text>
-            )}
-            {routeDetails.tolls && <Text style={styles.routeToll}>This route has tolls.</Text>}
-          </View>
-        )}
-
-        {/* Buttons */}
-        <TouchableOpacity style={styles.calculateButton} onPress={calculateRoute}>
-          <Text style={styles.calculateButtonText}>Preview Route</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.directionsButton} onPress={openGoogleMapsDirections}>
-          <Text style={styles.directionsButtonText}>
-            {getTravelModeInfo().icon} Get {getTravelModeInfo().label} Directions
-          </Text>
-        </TouchableOpacity>
-
-        {/* Add Destination Modal */}
-        <Modal
-          visible={showAddDestination}
-          transparent={true}
-          animationType="slide"
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Add Destination</Text>
-              
+          {/* From Location with Search */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>From 🚀</Text>
+            <View style={styles.locationInputWrapper}>
               <TextInput
-                style={styles.modalInput}
-                placeholder="Enter destination name..."
-                value={newDestination}
+                style={[styles.input, styles.locationInput]}
+                placeholder="Enter starting point..."
+                placeholderTextColor="#999"
+                value={fromLocation}
                 onChangeText={(text) => {
-                  setNewDestination(text);
-                  handleSearchChange(text, 'waypoint');
+                  setFromLocation(text);
+                  handleSearchChange(text, 'from');
                 }}
-                onFocus={() => setSelectedInput('waypoint')}
+                editable={!useCurrentLocation}
+                onFocus={() => {
+                  if (!useCurrentLocation) {
+                    setSelectedInput('from');
+                    if (fromLocation) handleSearchChange(fromLocation, 'from');
+                  }
+                }}
               />
-              
-              {searchResults.length > 0 && selectedInput === 'waypoint' && (
-                <View style={styles.modalResults}>
-                  {searchResults.slice(0, 3).map((item) => (
-                    <TouchableOpacity 
-                      key={item.id} 
-                      style={styles.modalResultItem}
-                      onPress={() => selectLocation(item)}
-                    >
-                      <Text style={styles.modalResultName}>{item.name}</Text>
-                    </TouchableOpacity>
-                  ))}
+              <TouchableOpacity 
+                style={styles.currentLocationButton}
+                onPress={useCurrentLocation ? clearCurrentLocation : getCurrentLocation}
+              >
+                <Text style={styles.currentLocationText}>📍</Text>
+              </TouchableOpacity>
+            </View>
+            {useCurrentLocation && currentLocationText ? (
+              <Text style={styles.locationHint}>Using: {currentLocationText}</Text>
+            ) : null}
+            
+            {/* Search Results for "From" Section */}
+            {showSearchResults && selectedInput === 'from' && searchResults.length > 0 && (
+              <View style={styles.searchResultsPanel}>
+                <View style={styles.searchResultsHeader}>
+                  <Text style={styles.searchResultsTitle}>
+                    {searchResults.filter(r => r.source === 'database').length > 0 ? 
+                      '📍 From your saved places' : '📍 Search results'}
+                  </Text>
+                  <TouchableOpacity onPress={clearSearchResultsManually}>
+                    <Text style={styles.clearResultsText}>✕ Cancel</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-              
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={styles.modalCancel} onPress={() => setShowAddDestination(false)}>
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.modalAdd} onPress={addWaypoint}>
-                  <Text style={styles.modalAddText}>Add</Text>
+                {searchResults.map((item) => (
+                  <TouchableOpacity 
+                    key={item.id} 
+                    style={styles.searchResultItem}
+                    onPress={() => selectLocation(item)}
+                  >
+                    <View style={styles.searchResultHeader}>
+                      <Text style={styles.searchResultName}>{item.name}</Text>
+                      {item.source === 'database' && (
+                        <Text style={styles.databaseBadge}>📌 Saved</Text>
+                      )}
+                    </View>
+                    <Text style={styles.searchResultAddress} numberOfLines={1}>
+                      {item.address}
+                    </Text>
+                    {item.rating && (
+                      <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            
+            {searching && selectedInput === 'from' && (
+              <View style={styles.searchingContainer}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.searchingText}>Searching locations...</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Waypoints */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Stops along the route 🛑</Text>
+            {waypoints.length > 0 && (
+              <Text style={styles.stopCount}>{waypoints.length} stop(s) added</Text>
+            )}
+            {waypoints.map((waypoint, index) => (
+              <View key={waypoint.id} style={styles.waypointItem}>
+                <Text style={styles.waypointNumber}>{index + 1}</Text>
+                <Text style={styles.waypointText}>{waypoint.name}</Text>
+                <TouchableOpacity onPress={() => removeWaypoint(waypoint.id)}>
+                  <Text style={styles.removeWaypoint}>✕</Text>
                 </TouchableOpacity>
               </View>
+            ))}
+            
+            <TouchableOpacity 
+              style={styles.addStopButton}
+              onPress={() => setShowAddDestination(true)}
+            >
+              <Text style={styles.addStopText}>+ Add destination</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* To Location with Search */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>To 🎯</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter destination..."
+              placeholderTextColor="#999"
+              value={toLocation}
+              onChangeText={(text) => {
+                setToLocation(text);
+                handleSearchChange(text, 'to');
+              }}
+              onFocus={() => {
+                setSelectedInput('to');
+                if (toLocation) handleSearchChange(toLocation, 'to');
+              }}
+            />
+            
+            {/* Search Results for "To" Section */}
+            {showSearchResults && selectedInput === 'to' && searchResults.length > 0 && (
+              <View style={styles.searchResultsPanel}>
+                <View style={styles.searchResultsHeader}>
+                  <Text style={styles.searchResultsTitle}>
+                    {searchResults.filter(r => r.source === 'database').length > 0 ? 
+                      '📍 From your saved places' : '📍 Search results'}
+                  </Text>
+                  <TouchableOpacity onPress={clearSearchResultsManually}>
+                    <Text style={styles.clearResultsText}>✕ Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+                {searchResults.map((item) => (
+                  <TouchableOpacity 
+                    key={item.id} 
+                    style={styles.searchResultItem}
+                    onPress={() => selectLocation(item)}
+                  >
+                    <View style={styles.searchResultHeader}>
+                      <Text style={styles.searchResultName}>{item.name}</Text>
+                      {item.source === 'database' && (
+                        <Text style={styles.databaseBadge}>📌 Saved</Text>
+                      )}
+                    </View>
+                    <Text style={styles.searchResultAddress} numberOfLines={1}>
+                      {item.address}
+                    </Text>
+                    {item.rating && (
+                      <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            
+            {searching && selectedInput === 'to' && (
+              <View style={styles.searchingContainer}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.searchingText}>Searching locations...</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Popular Locations Quick Select */}
+          {!loadingPopular && popularLocations.length > 0 && !showSearchResults && (
+            <View style={styles.popularContainer}>
+              <Text style={styles.popularTitle}>📍 Popular Places</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                style={styles.popularScroll}
+              >
+                {popularLocations.map((location) => (
+                  <TouchableOpacity
+                    key={location.id}
+                    style={styles.popularItem}
+                    onPress={() => {
+                      setToLocation(location.name);
+                      setRouteDetails(null);
+                    }}
+                  >
+                    <Text style={styles.popularIcon}>
+                      {location.category === 'restaurant' ? '🍽️' :
+                       location.category === 'hospital' ? '🏥' :
+                       location.category === 'hotel' ? '🏨' :
+                       location.category === 'park' ? '🌳' :
+                       location.category === 'shopping_mall' ? '🛍️' :
+                       location.category === 'temple' ? '🛕' : '📍'}
+                    </Text>
+                    <Text style={styles.popularName}>{location.name}</Text>
+                    <Text style={styles.popularAddress} numberOfLines={1}>
+                      {location.city || location.district || 'Sri Lanka'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Weather & Traffic Info */}
+          <View style={styles.infoPanel}>
+            <View style={styles.weatherInfo}>
+              <Text style={styles.weatherTemp}>{weatherInfo.temp}</Text>
+              <Text style={styles.weatherCondition}>{weatherInfo.condition}</Text>
+            </View>
+            <View style={styles.trafficInfo}>
+              <Text style={styles.trafficText}>🚦 {trafficInfo}</Text>
+              <Text style={styles.trafficSubText}>Updated just now</Text>
             </View>
           </View>
-        </Modal>
-      </ScrollView>
+
+          {/* Route Details */}
+          {routeDetails && (
+            <View style={styles.routeDetails}>
+              <Text style={styles.routeTitle}>
+                {routeDetails.mode} Route Details {routeDetails.mode === 'Walking' ? '🚶' : routeDetails.mode === 'Biking' ? '🚲' : routeDetails.mode === 'Transit' ? '🚌' : '🚗'}
+              </Text>
+              <Text style={styles.routeMain}>{routeDetails.duration}</Text>
+              <Text style={styles.routeText}>{routeDetails.distance}</Text>
+              <Text style={styles.routeText}>via {routeDetails.route}</Text>
+              <Text style={styles.routeText}>{routeDetails.traffic}</Text>
+              {routeDetails.stops > 0 && (
+                <Text style={styles.routeStops}>📍 {routeDetails.stops} stop(s) along the route</Text>
+              )}
+              {routeDetails.tolls && <Text style={styles.routeToll}>This route has tolls.</Text>}
+            </View>
+          )}
+
+          {/* Buttons */}
+          <TouchableOpacity style={styles.calculateButton} onPress={calculateRoute}>
+            <Text style={styles.calculateButtonText}>Preview Route</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.directionsButton} onPress={openGoogleMapsDirections}>
+            <Text style={styles.directionsButtonText}>
+              {getTravelModeInfo().icon} Get {getTravelModeInfo().label} Directions
+            </Text>
+          </TouchableOpacity>
+
+          {/* Add padding at bottom to prevent content from being hidden */}
+          <View style={styles.bottomPadding} />
+
+          {/* Add Destination Modal */}
+          <Modal
+            visible={showAddDestination}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Add Destination</Text>
+                
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Enter destination name..."
+                  value={newDestination}
+                  onChangeText={(text) => {
+                    setNewDestination(text);
+                    handleSearchChange(text, 'waypoint');
+                  }}
+                  onFocus={() => setSelectedInput('waypoint')}
+                />
+                
+                {searchResults.length > 0 && selectedInput === 'waypoint' && (
+                  <View style={styles.modalResults}>
+                    {searchResults.slice(0, 3).map((item) => (
+                      <TouchableOpacity 
+                        key={item.id} 
+                        style={styles.modalResultItem}
+                        onPress={() => selectLocation(item)}
+                      >
+                        <Text style={styles.modalResultName}>{item.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity style={styles.modalCancel} onPress={() => setShowAddDestination(false)}>
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.modalAdd} onPress={addWaypoint}>
+                    <Text style={styles.modalAddText}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </ScrollView>
+      </SafeAreaView>
+      
+      {/* Bottom Navigation */}
+      <BottomNav />
     </View>
   );
 };
@@ -793,12 +803,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
   },
+  safeArea: {
+    flex: 1,
+  },
+  bottomPadding: {
+    height: 80, // Extra padding to prevent content being hidden behind bottom nav
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
@@ -831,6 +847,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     padding: 20,
+    paddingBottom: 30,
   },
   title: {
     fontSize: 28,

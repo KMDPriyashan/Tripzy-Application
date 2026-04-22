@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 3,
-    marginTop: 20,
+    marginTop: 40,
   },
   backButton: {
     padding: 4,
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
   },
   imagePreviewWrapper: {
     position: 'relative',
-    width: 190,
+    width: 335,
     height: 180,
     borderRadius: 16,
     overflow: 'hidden',
