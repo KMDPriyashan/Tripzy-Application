@@ -7,10 +7,16 @@ import { supabase } from '../lib/supabase';
 const featureCardsData = [
   { name: 'Trip Planning', description: 'Plan your journey with ease by our Trip Planner.', icon: '📅', target: '/app-pages/plan' },
   { name: 'Travel Map', description: 'Map your travels. Nourish your soul.', icon: '🗺️', target: '/app-pages/map' },
+<<<<<<< Updated upstream
   { name: 'Travel Feed', description: 'Your Parth Begin With presence.', icon: '🔖', target: '/app-pages/feed' },
   { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TourGuide' },
   { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/community' },
   { name: 'Weather', description: 'Check the weather for your destination !.', icon: '⛅', target: '/app-pages/weather' },
+=======
+  { name: 'Weather', description: 'Check Your Journey as Previous.', icon: '⛅', target: '/app-pages/weather' },
+  { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TravelGuid' },
+  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/Community/CommunityHome' },
+>>>>>>> Stashed changes
 ];
 
 // Data for the bottom navigation
