@@ -1,4 +1,4 @@
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -25,14 +25,15 @@ export default function CreateStory() {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
 
-  const [postId, setPostId] = useState(null); // For updates
-  const [isUpdate, setIsUpdate] = useState(false); // Determines mode
+  const [postId, setPostId] = useState(null);
+  const [isUpdate, setIsUpdate] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Pre-fill data if editing
+  const [notes, setNotes] = useState([""]);
+
   useEffect(() => {
     if (params?.id && params?.data) {
-      const postData = JSON.parse(params.data); // Feed should pass post as JSON string
+      const postData = JSON.parse(params.data);
       setTitle(postData.title || "");
       setDescription(postData.description || "");
       setLocation(postData.location || "");
@@ -61,7 +62,6 @@ export default function CreateStory() {
     }
 
     if (isUpdate) {
-      // Update existing post
       const updatedPost = {
         id: postId,
         user: "Inu Jayasinghe",
@@ -78,7 +78,6 @@ export default function CreateStory() {
       setModalVisible(false);
       setShowSuccessModal(true);
     } else {
-      // Create new post
       const newPost = {
         id: Date.now(),
         user: "Inu Jayasinghe",
@@ -90,6 +89,7 @@ export default function CreateStory() {
         comments: 0,
         shares: 0,
       };
+
       await savePost(newPost);
       setModalVisible(false);
       router.push("/(tabs)/feed/?uploading=true");
@@ -100,7 +100,6 @@ export default function CreateStory() {
     <View style={{ flex: 1 }}>
       <ScrollView
         style={styles.container}
-        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 120 }}
       >
         <Image
@@ -110,80 +109,85 @@ export default function CreateStory() {
               : require("../../assets/images/placeholder.jpg")
           }
           style={styles.topImage}
-          resizeMode="cover"
         />
-
         <Text style={styles.mainTitle}>Wander & Discover</Text>
         <Text style={styles.subTitle}>Every journey begins with a story</Text>
-
+        {/* FORM */}
+        const [notes, setNotes] = useState([""]);
         <View style={styles.form}>
-          <TextInput
-            placeholder="Caption"
-            placeholderTextColor="#aaa"
-            style={styles.input}
-          />
+          <Text style={styles.label}>Caption</Text>
+          <TextInput style={styles.input} />
+
           <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
             <Ionicons name="image-outline" size={24} color="white" />
             <Text style={styles.uploadText}>Upload your image</Text>
           </TouchableOpacity>
 
+          <Text style={styles.label}>Location</Text>
           <TextInput
-            placeholder="Location"
-            placeholderTextColor="#aaa"
             style={styles.input}
             value={location}
             onChangeText={setLocation}
           />
+
+          <Text style={styles.label}>Province</Text>
+          <TextInput style={styles.input} />
+
+          <Text style={styles.label}>Date</Text>
+          <TextInput style={styles.input} />
+
+          <Text style={styles.label}>Title</Text>
           <TextInput
-            placeholder="Province"
-            placeholderTextColor="#aaa"
-            style={styles.input}
-          />
-          <TextInput
-            placeholder="Date"
-            placeholderTextColor="#aaa"
-            style={styles.input}
-          />
-          <TextInput
-            placeholder="Title"
-            placeholderTextColor="#aaa"
             style={styles.input}
             value={title}
             onChangeText={setTitle}
           />
+
+          <Text style={styles.label}>Description</Text>
           <TextInput
-            placeholder="Description"
-            placeholderTextColor="#aaa"
             style={styles.input}
             value={description}
             onChangeText={setDescription}
           />
-          <TextInput
-            placeholder="Collaborators"
-            placeholderTextColor="#aaa"
-            style={styles.input}
-          />
-          <TextInput
-            placeholder="Travel moods"
-            placeholderTextColor="#aaa"
-            style={styles.input}
-          />
-          <View style={styles.inputWithButton}>
-            <TextInput
-              placeholder="Special notes"
-              placeholderTextColor="#aaa"
-              style={styles.inputFlex}
-            />
-            <TouchableOpacity style={styles.addButton}>
-              <Ionicons name="add" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
+
+          <Text style={styles.label}>Collaborators</Text>
+          <TextInput style={styles.input} />
+
+          <Text style={styles.label}>Travel moods</Text>
+          <TextInput style={styles.input} />
+
+          <Text style={styles.label}>Trip Highlights</Text>
+          {notes.map((note, index) => (
+            <View key={index} style={styles.inputWithButton}>
+              <TextInput
+                // placeholder="Funniest moment"
+                // placeholderTextColor="#aaaaaae0"
+                style={styles.inputFlex}
+                value={note}
+                placeholder={`Unforgettable moment ${index + 1}`}
+                onChangeText={(text) => {
+                  const updated = [...notes];
+                  updated[index] = text;
+                  setNotes(updated);
+                }}
+              />
+              {index === notes.length - 1 && (
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() => setNotes([...notes, ""])}
+                >
+                  <Ionicons name="add" size={24} color="white" />
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+
           <View style={styles.warning}>
-            <MaterialIcons name="warning" size={24} color="orange" />
-            <Text style={styles.warningText}>Please enter one by one</Text>
+            <Text style={[styles.text, { color: "#0c7ae9" }]}>
+              Add a special moment, then tap + to add more ✨
+            </Text>
           </View>
         </View>
-
         <TouchableOpacity
           style={styles.submitButton}
           onPress={() => setModalVisible(true)}
@@ -195,7 +199,7 @@ export default function CreateStory() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Preview Modal */}
+      {/* PREVIEW MODAL */}
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -206,31 +210,19 @@ export default function CreateStory() {
               <Text style={styles.closeText}>✕</Text>
             </TouchableOpacity>
 
-            <View style={styles.userRow}>
-              <Image
-                source={require("../../assets/images/default-avatar.png")}
-                style={styles.profilePic}
-              />
-              <View>
-                <Text style={styles.username}>Inu Jayasinghe</Text>
-                <Text style={styles.descText}>{description}</Text>
-              </View>
-            </View>
+            <Text style={styles.storyTitle}>{title}</Text>
+            <Text style={styles.storyLocation}>{location}</Text>
 
-            <View style={styles.storyBox}>
-              <Image
-                source={
-                  image
-                    ? { uri: image }
-                    : require("../../assets/images/placeholder.jpg")
-                }
-                style={styles.storyImage}
-              />
-              <View style={{ marginLeft: 10 }}>
-                <Text style={styles.storyTitle}>{title}</Text>
-                <Text style={styles.storyLocation}>{location}</Text>
-              </View>
-            </View>
+            <Image
+              source={
+                image
+                  ? { uri: image }
+                  : require("../../assets/images/placeholder.jpg")
+              }
+              style={styles.storyImage}
+            />
+
+            <Text style={styles.descText}>{description}</Text>
 
             <TouchableOpacity
               style={styles.publishButton}
@@ -244,44 +236,23 @@ export default function CreateStory() {
         </View>
       </Modal>
 
-      {/*Update successfull msg*/}
+      {/* SUCCESS MODAL */}
       <Modal visible={showSuccessModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setModalType(null)}
-            >
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
             <Text
-              style={{
-                color: "#2b8aa3",
-                fontSize: 18,
-                fontWeight: "bold",
-                textAlign: "center",
-                marginBottom: 10,
-              }}
+              style={{ fontWeight: "bold", fontSize: 18, marginBottom: 10 }}
             >
               Updated Successfully
             </Text>
-            <Text
-              style={{ textAlign: "center", color: "#555", marginBottom: 20 }}
-            >
-              Your story has been updated!
-            </Text>
+
             <TouchableOpacity
-              style={{ alignSelf: "flex-end" }}
               onPress={() => {
                 setShowSuccessModal(false);
-                router.push("/app-pages/feed/?uploading=true");
+                router.push("/(tabs)/feed");
               }}
             >
-              <Text
-                style={{ fontWeight: "bold", fontSize: 16, color: "black" }}
-              >
-                OK
-              </Text>
+              <Text style={{ fontWeight: "bold" }}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -292,20 +263,32 @@ export default function CreateStory() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
+
   topImage: { width: "100%", height: 300 },
+
   mainTitle: {
     fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
     marginTop: 10,
   },
+
   subTitle: {
     fontSize: 16,
     textAlign: "center",
     color: "#555",
     marginBottom: 20,
   },
+
   form: { paddingHorizontal: 20 },
+
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 6,
+    color: "#333",
+  },
+
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
@@ -314,48 +297,54 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     color: "#000",
   },
+
   inputWithButton: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 15,
   },
+
   inputFlex: {
     flex: 1,
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 8,
     padding: 12,
-    color: "#000",
   },
+
   addButton: {
-    backgroundColor: "#000",
+    backgroundColor: "#1082f5",
     padding: 12,
     marginLeft: 8,
     borderRadius: 8,
   },
+
   uploadButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#000",
+    backgroundColor: "#1082f5",
     padding: 15,
     justifyContent: "center",
     borderRadius: 8,
     marginBottom: 15,
   },
-  uploadText: { color: "white", marginLeft: 10, fontSize: 16 },
-  warning: { flexDirection: "row", alignItems: "center", marginBottom: 20 },
+
+  uploadText: { color: "white", marginLeft: 10 },
+
+  warning: { flexDirection: "row", alignItems: "center" },
+
   warningText: { color: "orange", marginLeft: 5 },
+
   submitButton: {
     flexDirection: "row",
-    backgroundColor: "#000",
+    backgroundColor: "#1082f5",
     padding: 15,
     justifyContent: "center",
     borderRadius: 8,
-    marginBottom: 30,
+    margin: 20,
   },
-  submitText: { color: "white", marginLeft: 10, fontSize: 16 },
 
-  /* MODAL */
+  submitText: { color: "white", marginLeft: 10 },
 
   modalOverlay: {
     flex: 1,
@@ -371,49 +360,33 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
-  userRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 15,
+  closeButton: {
+    position: "absolute",
+    right: 10,
+    top: 10,
   },
 
-  profilePic: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 10,
-  },
-
-  username: {
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-
-  descText: {
-    color: "#555",
-  },
-
-  storyBox: {
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 20,
-  },
+  closeText: { fontSize: 18 },
 
   storyImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
+    width: "100%",
+    height: 200,
+    borderRadius: 10,
+    marginVertical: 10,
   },
 
   storyTitle: {
     fontWeight: "bold",
+    fontSize: 18,
   },
 
   storyLocation: {
     color: "#666",
+  },
+
+  descText: {
+    color: "#444",
+    marginBottom: 10,
   },
 
   publishButton: {
