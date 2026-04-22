@@ -271,18 +271,17 @@ export default function FeedCard({ post, onLongPress }) {
 
 const styles = {
   card: {
-    marginBottom: 16,
+    marginBottom: 5,
     backgroundColor: "#fff",
-    borderRadius: 16,
     overflow: "hidden",
-    elevation: 3,
-    width: "92%",
+    elevation: 5,
+    width: "100%",
     alignSelf: "center",
   },
 
   image: {
     width: "100%",
-    height: 220,
+    height: 400,
   },
 
   badge: {
