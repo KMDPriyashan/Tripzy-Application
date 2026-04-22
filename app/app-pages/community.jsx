@@ -1,7 +1,7 @@
 // app-pages/community.jsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -20,8 +20,7 @@ import {
   getAllUsers,
   getCurrentUser,
   getUserConversations,
-  getUserGroups,
-  joinGroup
+  getUserGroups
 } from '../../lib/supabase';
 
 const CommunityPage = () => {
@@ -37,18 +36,35 @@ const CommunityPage = () => {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [allUsersList, setAllUsersList] = useState([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
+  // Load user data immediately on component mount
+  useEffect(() => {
+    initializeUser();
+  }, []);
+
+  const initializeUser = async () => {
+    await loadCurrentUser();
+    setIsInitialized(true);
+  };
+
+  // Load all data when user is loaded and when page focuses
   useFocusEffect(
     useCallback(() => {
-      loadAllData();
-    }, [])
+      if (isInitialized && currentUser?.id) {
+        loadAllData();
+      }
+    }, [isInitialized, currentUser])
   );
 
   const loadAllData = async () => {
-    await loadCurrentUser();
-    await loadChats();
-    await loadGroups();
-    await loadUsers();
+    if (!currentUser?.id) return;
+    console.log('Loading all data for user:', currentUser.id);
+    await Promise.all([
+      loadChatsFromStorage(),
+      loadGroupsFromStorage(),
+      loadUsers()
+    ]);
   };
 
   const loadCurrentUser = async () => {
@@ -71,33 +87,93 @@ const CommunityPage = () => {
     }
   };
 
-  const loadChats = async () => {
+  const loadChatsFromStorage = async () => {
     try {
       if (!currentUser?.id) return;
-      const conversations = await getUserConversations(currentUser.id);
-      setChats(conversations);
+      
+      const conversationsKey = `conversations_${currentUser.id}`;
+      const savedConversations = await AsyncStorage.getItem(conversationsKey);
+      
+      if (savedConversations) {
+        const parsedConversations = JSON.parse(savedConversations);
+        // Filter to only show conversations that have at least one message
+        const activeConversations = parsedConversations.filter(conv => 
+          conv.lastMessage && conv.lastMessage !== 'Start a conversation'
+        );
+        console.log('✅ Loaded active conversations from storage:', activeConversations.length);
+        setChats(activeConversations);
+      } else {
+        console.log('No conversations in storage, checking Supabase...');
+        const conversations = await getUserConversations(currentUser.id);
+        if (conversations && conversations.length > 0) {
+          // Filter to only show conversations with actual messages
+          const activeConversations = conversations.filter(conv => 
+            conv.lastMessage && conv.lastMessage !== 'Start a conversation'
+          );
+          console.log('✅ Loaded active conversations from Supabase:', activeConversations.length);
+          setChats(activeConversations);
+          await AsyncStorage.setItem(conversationsKey, JSON.stringify(activeConversations));
+        } else {
+          setChats([]);
+        }
+      }
     } catch (error) {
       console.error('Error loading chats:', error);
-      // Fallback to local storage
-      const savedChats = await AsyncStorage.getItem('directChats');
-      if (savedChats) {
-        setChats(JSON.parse(savedChats));
-      }
+      setChats([]);
     }
   };
 
-  const loadGroups = async () => {
+  const loadGroupsFromStorage = async () => {
     try {
       if (!currentUser?.id) return;
-      const userGroups = await getUserGroups(currentUser.id);
-      setGroups(userGroups);
+      
+      const groupsKey = `groups_${currentUser.id}`;
+      const savedGroups = await AsyncStorage.getItem(groupsKey);
+      
+      if (savedGroups) {
+        const parsedGroups = JSON.parse(savedGroups);
+        console.log('✅ Loaded groups from storage:', parsedGroups.length);
+        setGroups(parsedGroups);
+      } else {
+        console.log('No groups in storage, checking Supabase...');
+        const userGroups = await getUserGroups(currentUser.id);
+        if (userGroups && userGroups.length > 0) {
+          console.log('✅ Loaded groups from Supabase:', userGroups.length);
+          setGroups(userGroups);
+          await AsyncStorage.setItem(groupsKey, JSON.stringify(userGroups));
+        } else {
+          setGroups([]);
+        }
+      }
     } catch (error) {
       console.error('Error loading groups:', error);
-      // Fallback to local storage
-      const savedGroups = await AsyncStorage.getItem('communityGroups');
-      if (savedGroups) {
-        setGroups(JSON.parse(savedGroups));
-      }
+      setGroups([]);
+    }
+  };
+
+  const saveConversationsToStorage = async (conversations) => {
+    try {
+      if (!currentUser?.id) return;
+      // Filter to only save active conversations (with actual messages)
+      const activeConversations = conversations.filter(conv => 
+        conv.lastMessage && conv.lastMessage !== 'Start a conversation'
+      );
+      const conversationsKey = `conversations_${currentUser.id}`;
+      await AsyncStorage.setItem(conversationsKey, JSON.stringify(activeConversations));
+      console.log('💾 Active conversations saved to storage:', activeConversations.length);
+    } catch (error) {
+      console.error('Error saving conversations:', error);
+    }
+  };
+
+  const saveGroupsToStorage = async (groupsToSave) => {
+    try {
+      if (!currentUser?.id) return;
+      const groupsKey = `groups_${currentUser.id}`;
+      await AsyncStorage.setItem(groupsKey, JSON.stringify(groupsToSave));
+      console.log('💾 Groups saved to storage:', groupsToSave.length);
+    } catch (error) {
+      console.error('Error saving groups:', error);
     }
   };
 
@@ -107,12 +183,14 @@ const CommunityPage = () => {
       const filteredUsers = allUsers.filter(user => user.id !== currentUser?.id);
       setAllUsersList(allUsers);
       setUsers(filteredUsers);
+      
+      // Cache users in storage
+      await AsyncStorage.setItem('all_users', JSON.stringify(allUsers));
     } catch (error) {
       console.error('Error loading users:', error);
-      // Fallback to local storage
-      const savedUsers = await AsyncStorage.getItem('registeredUsers');
-      if (savedUsers) {
-        const parsedUsers = JSON.parse(savedUsers);
+      const cachedUsers = await AsyncStorage.getItem('all_users');
+      if (cachedUsers) {
+        const parsedUsers = JSON.parse(cachedUsers);
         setAllUsersList(parsedUsers);
         setUsers(parsedUsers.filter(u => u.id !== currentUser?.id));
       }
@@ -125,16 +203,42 @@ const CommunityPage = () => {
     setRefreshing(false);
   };
 
-  const handleStartChat = (user) => {
-    router.push({
-      pathname: '/app-pages/solo-chat',
-      params: { 
-        chatId: `chat_${user.id}_${currentUser?.id}`,
-        userName: user.name, 
-        userId: user.id, 
-        avatar: user.avatar 
+  const handleStartChat = async (user) => {
+    try {
+      if (!currentUser?.id) return;
+      
+      const chatId = `chat_${currentUser.id}_${user.id}`;
+      let existingConversation = chats.find(chat => chat.userId === user.id);
+      
+      if (!existingConversation) {
+        const newConversation = {
+          id: chatId,
+          userId: user.id,
+          userName: user.name,
+          avatar: user.avatar || '👤',
+          lastMessage: 'Start a conversation',
+          timestamp: new Date().toLocaleTimeString(),
+          unread: 0,
+          isOnline: false
+        };
+        
+        // Don't add to chats yet - only add when a message is sent
+        // The conversation will appear only after first message is sent
+        console.log('New conversation will appear after first message');
       }
-    });
+      
+      router.push({
+        pathname: '/app-pages/solo-chat',
+        params: { 
+          chatId: chatId,
+          userName: user.name, 
+          userId: user.id, 
+          avatar: user.avatar || '👤'
+        }
+      });
+    } catch (error) {
+      console.error('Error starting chat:', error);
+    }
   };
 
   const handleOpenGroupChat = (group) => {
@@ -148,16 +252,40 @@ const CommunityPage = () => {
     });
   };
 
-  const handleOpenDirectChat = (chat) => {
-    router.push({
-      pathname: '/app-pages/solo-chat',
-      params: { 
-        chatId: chat.id, 
-        userName: chat.userName, 
-        userId: chat.userId, 
-        avatar: chat.avatar 
-      }
-    });
+  const handleOpenDirectChat = async (chat) => {
+    try {
+      await markConversationAsRead(chat.userId);
+      
+      router.push({
+        pathname: '/app-pages/solo-chat',
+        params: { 
+          chatId: chat.id, 
+          userName: chat.userName, 
+          userId: chat.userId, 
+          avatar: chat.avatar 
+        }
+      });
+    } catch (error) {
+      console.error('Error opening direct chat:', error);
+    }
+  };
+
+  const markConversationAsRead = async (userId) => {
+    try {
+      if (!currentUser?.id) return;
+      
+      const updatedChats = chats.map(chat => {
+        if (chat.userId === userId) {
+          return { ...chat, unread: 0 };
+        }
+        return chat;
+      });
+      
+      setChats(updatedChats);
+      await saveConversationsToStorage(updatedChats);
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+    }
   };
 
   const handleCreateGroup = async () => {
@@ -171,35 +299,79 @@ const CommunityPage = () => {
       return;
     }
 
+    console.log('Creating group:', newGroupName);
+    
     const newGroup = await createGroup(newGroupName, currentUser.id, selectedUsers);
     
     if (newGroup) {
-      await loadGroups();
+      console.log('Group created successfully:', newGroup);
+      
+      const formattedGroup = {
+        id: newGroup.id,
+        name: newGroup.name,
+        avatar: newGroup.avatar || '👥',
+        lastMessage: 'Group created',
+        timestamp: new Date().toLocaleTimeString(),
+        unread: 0,
+        memberCount: 1 + selectedUsers.length,
+        members: []
+      };
+      
+      const updatedGroups = [formattedGroup, ...groups];
+      setGroups(updatedGroups);
+      await saveGroupsToStorage(updatedGroups);
+      console.log('Group saved to storage, total groups:', updatedGroups.length);
+      
       setShowCreateGroup(false);
       setNewGroupName('');
       setSelectedUsers([]);
+      
       Alert.alert('Success', 'Group created successfully!');
     } else {
       Alert.alert('Error', 'Failed to create group');
     }
   };
 
-  const handleJoinGroup = async (groupId) => {
-    if (!currentUser?.id) return;
-    
-    const success = await joinGroup(groupId, currentUser.id);
-    if (success) {
-      await loadGroups();
-      Alert.alert('Success', 'Joined group successfully!');
-    } else {
-      Alert.alert('Error', 'Failed to join group');
+  // Function to add a conversation after first message is sent
+  const addConversationAfterFirstMessage = async (userId, userName, userAvatar) => {
+    try {
+      if (!currentUser?.id) return;
+      
+      const conversationsKey = `conversations_${currentUser.id}`;
+      const existingConversations = await AsyncStorage.getItem(conversationsKey);
+      let conversations = existingConversations ? JSON.parse(existingConversations) : [];
+      
+      // Check if conversation already exists
+      const exists = conversations.find(conv => conv.userId === userId);
+      
+      if (!exists) {
+        const newConversation = {
+          id: `chat_${currentUser.id}_${userId}`,
+          userId: userId,
+          userName: userName,
+          avatar: userAvatar || '👤',
+          lastMessage: 'Start a conversation',
+          timestamp: new Date().toLocaleTimeString(),
+          unread: 0,
+          isOnline: false
+        };
+        
+        conversations.unshift(newConversation);
+        await AsyncStorage.setItem(conversationsKey, JSON.stringify(conversations));
+        console.log('New conversation added after first message');
+        
+        // Reload chats to show the new conversation
+        await loadChatsFromStorage();
+      }
+    } catch (error) {
+      console.error('Error adding conversation:', error);
     }
   };
 
   const renderChatItem = ({ item }) => (
     <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)}>
       <View style={styles.avatarContainer}>
-        <Text style={styles.avatarText}>{item.avatar}</Text>
+        <Text style={styles.avatarText}>{item.avatar || '👤'}</Text>
         {item.isOnline && <View style={styles.onlineDot} />}
       </View>
       <View style={styles.chatInfo}>
@@ -270,15 +442,23 @@ const CommunityPage = () => {
     user.id !== currentUser?.id && !selectedUsers.includes(user.id)
   );
 
+  if (!isInitialized) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Community</Text>
         <Text style={styles.headerSubtitle}>Where every journey begins with connection</Text>
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
@@ -290,19 +470,22 @@ const CommunityPage = () => {
         />
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'chats' && styles.activeTab]} 
           onPress={() => setActiveTab('chats')}
         >
-          <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>Direct Messages</Text>
+          <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>
+            Direct Messages ({chats.length})
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'groups' && styles.activeTab]} 
           onPress={() => setActiveTab('groups')}
         >
-          <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>Community Chat</Text>
+          <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>
+            Community Chat ({groups.length})
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'users' && styles.activeTab]} 
@@ -312,7 +495,6 @@ const CommunityPage = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
       <FlatList
         data={
           activeTab === 'chats' ? filteredChats :
@@ -329,19 +511,21 @@ const CommunityPage = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No {activeTab === 'chats' ? 'messages' : activeTab === 'groups' ? 'groups' : 'users'} found</Text>
+            <Text style={styles.emptyText}>
+              {activeTab === 'chats' ? 'No conversations yet. Start a chat from "Find Travelers" tab!' : 
+               activeTab === 'groups' ? 'No groups yet. Create one!' : 
+               'No users found'}
+            </Text>
           </View>
         }
       />
 
-      {/* Create Group Button */}
       {activeTab === 'groups' && (
         <TouchableOpacity style={styles.fab} onPress={() => setShowCreateGroup(true)}>
           <Text style={styles.fabText}>+</Text>
         </TouchableOpacity>
       )}
 
-      {/* Create Group Modal */}
       <Modal
         visible={showCreateGroup}
         animationType="slide"
@@ -413,6 +597,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     paddingHorizontal: 20,
@@ -615,6 +804,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#999',
+    textAlign: 'center',
   },
   fab: {
     position: 'absolute',

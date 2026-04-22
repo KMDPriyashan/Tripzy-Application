@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -12,6 +13,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View
 } from 'react-native';
 import {
@@ -31,16 +33,30 @@ const GroupChatPage = () => {
   const [groupMembers, setGroupMembers] = useState([]);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const flatListRef = useRef(null);
   let messageSubscription = null;
 
   useEffect(() => {
     initializeChat();
     
+    // Keyboard listeners
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
     return () => {
       if (messageSubscription) {
         messageSubscription.unsubscribe();
       }
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
     };
   }, [groupId]);
 
@@ -143,9 +159,10 @@ const GroupChatPage = () => {
   const sendMessage = async () => {
     if (!inputText.trim() || !currentUser?.id) return;
 
+    const messageText = inputText.trim();
     const newMessage = {
       id: Date.now().toString(),
-      text: inputText.trim(),
+      text: messageText,
       senderId: currentUser.id,
       senderName: currentUser.name || 'You',
       senderAvatar: currentUser.avatar || '👤',
@@ -161,7 +178,7 @@ const GroupChatPage = () => {
     }, 100);
 
     // Send to Supabase
-    const sentMessage = await sendGroupMessage(groupId, currentUser.id, inputText.trim());
+    const sentMessage = await sendGroupMessage(groupId, currentUser.id, messageText);
     
     if (!sentMessage) {
       // Save to local storage as fallback
@@ -174,7 +191,7 @@ const GroupChatPage = () => {
         const parsedGroups = JSON.parse(groups);
         const updatedGroups = parsedGroups.map(group => 
           group.id === groupId 
-            ? { ...group, lastMessage: inputText.trim(), timestamp: new Date().toLocaleTimeString() }
+            ? { ...group, lastMessage: messageText, timestamp: new Date().toLocaleTimeString() }
             : group
         );
         await AsyncStorage.setItem('communityGroups', JSON.stringify(updatedGroups));
@@ -195,6 +212,10 @@ const GroupChatPage = () => {
     } else {
       return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
+  };
+
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
   };
 
   const renderMessage = ({ item }) => {
@@ -263,22 +284,29 @@ const GroupChatPage = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Messages */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.messagesList}
-        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-      />
+      {/* Messages - Dismiss keyboard on tap */}
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.messagesList}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          keyboardShouldPersistTaps="handled"
+        />
+      </TouchableWithoutFeedback>
 
-      {/* Input Area */}
+      {/* Input Area - Fixed with proper bottom padding */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        style={styles.keyboardAvoidingView}
       >
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          Platform.OS === 'android' && styles.androidInputContainer
+        ]}>
           <TouchableOpacity style={styles.attachButton}>
             <Text style={styles.attachButtonText}>+</Text>
           </TouchableOpacity>
@@ -289,6 +317,8 @@ const GroupChatPage = () => {
             value={inputText}
             onChangeText={setInputText}
             multiline
+            returnKeyType="send"
+            onSubmitEditing={sendMessage}
           />
           <TouchableOpacity 
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} 
@@ -298,6 +328,8 @@ const GroupChatPage = () => {
             <Text style={styles.sendButtonText}>➤</Text>
           </TouchableOpacity>
         </View>
+        {/* Extra bottom padding for Android gesture navigation */}
+        {Platform.OS === 'android' && !keyboardVisible && <View style={styles.bottomSpacer} />}
       </KeyboardAvoidingView>
 
       {/* Members Modal */}
@@ -384,6 +416,7 @@ const styles = StyleSheet.create({
   messagesList: {
     paddingHorizontal: 16,
     paddingVertical: 20,
+    paddingBottom: 20,
   },
   messageRow: {
     marginBottom: 16,
@@ -450,6 +483,9 @@ const styles = StyleSheet.create({
   otherUserTime: {
     color: '#999',
   },
+  keyboardAvoidingView: {
+    backgroundColor: '#ffffff',
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -458,6 +494,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+  },
+  androidInputContainer: {
+    paddingBottom: 12,
   },
   attachButton: {
     width: 40,
@@ -496,6 +535,10 @@ const styles = StyleSheet.create({
   sendButtonText: {
     fontSize: 18,
     color: '#ffffff',
+  },
+  bottomSpacer: {
+    height: 34, // Extra space for gesture navigation bar on Android
+    backgroundColor: '#ffffff',
   },
   modalOverlay: {
     flex: 1,
