@@ -1,11 +1,12 @@
 // app-pages/community.jsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
   Modal,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -14,10 +15,17 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import {
+  createGroup,
+  getAllUsers,
+  getCurrentUser,
+  getUserConversations,
+  getUserGroups
+} from '../../lib/supabase';
 
 const CommunityPage = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('chats'); // chats, groups, users
+  const [activeTab, setActiveTab] = useState('chats');
   const [searchQuery, setSearchQuery] = useState('');
   const [chats, setChats] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -26,140 +34,258 @@ const CommunityPage = () => {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
-  const [inviteModalVisible, setInviteModalVisible] = useState(false);
-  const [inviteLink, setInviteLink] = useState('');
-  const [inviteGroupId, setInviteGroupId] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [allUsersList, setAllUsersList] = useState([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Load data on mount
+  // Load user data immediately on component mount
   useEffect(() => {
-    loadCurrentUser();
-    loadChats();
-    loadGroups();
-    loadUsers();
+    initializeUser();
   }, []);
+
+  const initializeUser = async () => {
+    await loadCurrentUser();
+    setIsInitialized(true);
+  };
+
+  // Load all data when user is loaded and when page focuses
+  useFocusEffect(
+    useCallback(() => {
+      if (isInitialized && currentUser?.id) {
+        loadAllData();
+      }
+    }, [isInitialized, currentUser])
+  );
+
+  const loadAllData = async () => {
+    if (!currentUser?.id) return;
+    console.log('Loading all data for user:', currentUser.id);
+    await Promise.all([
+      loadChatsFromStorage(),
+      loadGroupsFromStorage(),
+      loadUsers()
+    ]);
+  };
 
   const loadCurrentUser = async () => {
     try {
-      const user = await AsyncStorage.getItem('currentUser');
-      if (user) {
-        setCurrentUser(JSON.parse(user));
+      const supabaseUser = await getCurrentUser();
+      if (supabaseUser) {
+        setCurrentUser({ id: supabaseUser.id, name: supabaseUser.user_metadata?.name || 'User', avatar: '👤' });
       } else {
-        // Demo user
-        const demoUser = { id: 'user1', name: 'Pavan Perera', avatar: '👤', isProfessional: true };
-        setCurrentUser(demoUser);
-        await AsyncStorage.setItem('currentUser', JSON.stringify(demoUser));
+        const localUser = await AsyncStorage.getItem('currentUser');
+        if (localUser) {
+          setCurrentUser(JSON.parse(localUser));
+        } else {
+          const demoUser = { id: 'user1', name: 'Pavan Perera', avatar: '👤', isProfessional: true };
+          setCurrentUser(demoUser);
+          await AsyncStorage.setItem('currentUser', JSON.stringify(demoUser));
+        }
       }
     } catch (error) {
       console.error('Error loading user:', error);
     }
   };
 
-  const loadChats = async () => {
+  const loadChatsFromStorage = async () => {
     try {
-      const savedChats = await AsyncStorage.getItem('directChats');
-      if (savedChats) {
-        setChats(JSON.parse(savedChats));
+      if (!currentUser?.id) return;
+      
+      const conversationsKey = `conversations_${currentUser.id}`;
+      const savedConversations = await AsyncStorage.getItem(conversationsKey);
+      
+      if (savedConversations) {
+        const parsedConversations = JSON.parse(savedConversations);
+        // Filter to only show conversations that have at least one message
+        const activeConversations = parsedConversations.filter(conv => 
+          conv.lastMessage && conv.lastMessage !== 'Start a conversation'
+        );
+        console.log('✅ Loaded active conversations from storage:', activeConversations.length);
+        setChats(activeConversations);
       } else {
-        // Demo chats
-        const demoChats = [
-          { id: 'chat1', userId: 'user2', userName: 'Sarah Johnson', avatar: '👩', lastMessage: 'How are you! Doing well?', timestamp: '5:36 PM', unread: 2, isOnline: true },
-          { id: 'chat2', userId: 'user3', userName: 'Mike Chen', avatar: '👨', lastMessage: 'Ready for the trip?', timestamp: '2:30 PM', unread: 0, isOnline: false },
-          { id: 'chat3', userId: 'user4', userName: 'Emma Wilson', avatar: '👩‍🦰', lastMessage: 'Thanks for the info!', timestamp: 'Yesterday', unread: 1, isOnline: true },
-        ];
-        setChats(demoChats);
-        await AsyncStorage.setItem('directChats', JSON.stringify(demoChats));
+        console.log('No conversations in storage, checking Supabase...');
+        const conversations = await getUserConversations(currentUser.id);
+        if (conversations && conversations.length > 0) {
+          // Filter to only show conversations with actual messages
+          const activeConversations = conversations.filter(conv => 
+            conv.lastMessage && conv.lastMessage !== 'Start a conversation'
+          );
+          console.log('✅ Loaded active conversations from Supabase:', activeConversations.length);
+          setChats(activeConversations);
+          await AsyncStorage.setItem(conversationsKey, JSON.stringify(activeConversations));
+        } else {
+          setChats([]);
+        }
       }
     } catch (error) {
       console.error('Error loading chats:', error);
+      setChats([]);
     }
   };
 
-  const loadGroups = async () => {
+  const loadGroupsFromStorage = async () => {
     try {
-      const savedGroups = await AsyncStorage.getItem('communityGroups');
+      if (!currentUser?.id) return;
+      
+      const groupsKey = `groups_${currentUser.id}`;
+      const savedGroups = await AsyncStorage.getItem(groupsKey);
+      
       if (savedGroups) {
-        setGroups(JSON.parse(savedGroups));
+        const parsedGroups = JSON.parse(savedGroups);
+        console.log('✅ Loaded groups from storage:', parsedGroups.length);
+        setGroups(parsedGroups);
       } else {
-        // Demo groups
-        const demoGroups = [
-          { id: 'group1', name: 'Adventure Zone', members: ['user1', 'user2', 'user3'], lastMessage: 'How are You! Doin Well >', timestamp: '5:36 PM', unread: 2, memberCount: 8, avatar: '🏔️' },
-          { id: 'group2', name: 'Family Trip', members: ['user1', 'user4', 'user5'], lastMessage: 'How are You! Doin Well >', timestamp: '1:36 PM', unread: 24, memberCount: 12, avatar: '👨‍👩‍👧' },
-          { id: 'group3', name: 'Backpackers United', members: ['user2', 'user3', 'user6'], lastMessage: 'Anyone in Bali?', timestamp: '10:15 AM', unread: 5, memberCount: 45, avatar: '🎒' },
-        ];
-        setGroups(demoGroups);
-        await AsyncStorage.setItem('communityGroups', JSON.stringify(demoGroups));
+        console.log('No groups in storage, checking Supabase...');
+        const userGroups = await getUserGroups(currentUser.id);
+        if (userGroups && userGroups.length > 0) {
+          console.log('✅ Loaded groups from Supabase:', userGroups.length);
+          setGroups(userGroups);
+          await AsyncStorage.setItem(groupsKey, JSON.stringify(userGroups));
+        } else {
+          setGroups([]);
+        }
       }
     } catch (error) {
       console.error('Error loading groups:', error);
+      setGroups([]);
+    }
+  };
+
+  const saveConversationsToStorage = async (conversations) => {
+    try {
+      if (!currentUser?.id) return;
+      // Filter to only save active conversations (with actual messages)
+      const activeConversations = conversations.filter(conv => 
+        conv.lastMessage && conv.lastMessage !== 'Start a conversation'
+      );
+      const conversationsKey = `conversations_${currentUser.id}`;
+      await AsyncStorage.setItem(conversationsKey, JSON.stringify(activeConversations));
+      console.log('💾 Active conversations saved to storage:', activeConversations.length);
+    } catch (error) {
+      console.error('Error saving conversations:', error);
+    }
+  };
+
+  const saveGroupsToStorage = async (groupsToSave) => {
+    try {
+      if (!currentUser?.id) return;
+      const groupsKey = `groups_${currentUser.id}`;
+      await AsyncStorage.setItem(groupsKey, JSON.stringify(groupsToSave));
+      console.log('💾 Groups saved to storage:', groupsToSave.length);
+    } catch (error) {
+      console.error('Error saving groups:', error);
     }
   };
 
   const loadUsers = async () => {
     try {
-      const savedUsers = await AsyncStorage.getItem('registeredUsers');
-      if (savedUsers) {
-        setUsers(JSON.parse(savedUsers));
-      } else {
-        // Demo registered users
-        const demoUsers = [
-          { id: 'user1', name: 'Pavan Perera', avatar: '👤', isProfessional: true, location: 'Colombo, Sri Lanka' },
-          { id: 'user2', name: 'Sarah Johnson', avatar: '👩', isProfessional: false, location: 'New York, USA' },
-          { id: 'user3', name: 'Mike Chen', avatar: '👨', isProfessional: false, location: 'Singapore' },
-          { id: 'user4', name: 'Emma Wilson', avatar: '👩‍🦰', isProfessional: true, location: 'London, UK' },
-          { id: 'user5', name: 'Dasun Shanaka', avatar: '🏏', isProfessional: true, location: 'Colombo, Sri Lanka' },
-          { id: 'user6', name: 'Jude Piramal', avatar: '🎨', isProfessional: false, location: 'Kandy, Sri Lanka' },
-        ];
-        setUsers(demoUsers);
-        await AsyncStorage.setItem('registeredUsers', JSON.stringify(demoUsers));
-      }
+      const allUsers = await getAllUsers();
+      const filteredUsers = allUsers.filter(user => user.id !== currentUser?.id);
+      setAllUsersList(allUsers);
+      setUsers(filteredUsers);
+      
+      // Cache users in storage
+      await AsyncStorage.setItem('all_users', JSON.stringify(allUsers));
     } catch (error) {
       console.error('Error loading users:', error);
+      const cachedUsers = await AsyncStorage.getItem('all_users');
+      if (cachedUsers) {
+        const parsedUsers = JSON.parse(cachedUsers);
+        setAllUsersList(parsedUsers);
+        setUsers(parsedUsers.filter(u => u.id !== currentUser?.id));
+      }
     }
   };
 
-  const handleStartChat = (user) => {
-    // Check if chat already exists
-    const existingChat = chats.find(chat => chat.userId === user.id);
-    if (existingChat) {
-      router.push({
-        pathname: '/app-pages/solo-chat',
-        params: { chatId: existingChat.id, userName: user.name, userId: user.id, avatar: user.avatar }
-      });
-    } else {
-      // Create new chat
-      const newChat = {
-        id: `chat_${Date.now()}`,
-        userId: user.id,
-        userName: user.name,
-        avatar: user.avatar,
-        lastMessage: '',
-        timestamp: new Date().toLocaleTimeString(),
-        unread: 0,
-        isOnline: false
-      };
-      const updatedChats = [newChat, ...chats];
-      setChats(updatedChats);
-      AsyncStorage.setItem('directChats', JSON.stringify(updatedChats));
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAllData();
+    setRefreshing(false);
+  };
+
+  const handleStartChat = async (user) => {
+    try {
+      if (!currentUser?.id) return;
+      
+      const chatId = `chat_${currentUser.id}_${user.id}`;
+      let existingConversation = chats.find(chat => chat.userId === user.id);
+      
+      if (!existingConversation) {
+        const newConversation = {
+          id: chatId,
+          userId: user.id,
+          userName: user.name,
+          avatar: user.avatar || '👤',
+          lastMessage: 'Start a conversation',
+          timestamp: new Date().toLocaleTimeString(),
+          unread: 0,
+          isOnline: false
+        };
+        
+        // Don't add to chats yet - only add when a message is sent
+        // The conversation will appear only after first message is sent
+        console.log('New conversation will appear after first message');
+      }
       
       router.push({
         pathname: '/app-pages/solo-chat',
-        params: { chatId: newChat.id, userName: user.name, userId: user.id, avatar: user.avatar }
+        params: { 
+          chatId: chatId,
+          userName: user.name, 
+          userId: user.id, 
+          avatar: user.avatar || '👤'
+        }
       });
+    } catch (error) {
+      console.error('Error starting chat:', error);
     }
   };
 
   const handleOpenGroupChat = (group) => {
     router.push({
       pathname: '/app-pages/group-chat',
-      params: { groupId: group.id, groupName: group.name, avatar: group.avatar }
+      params: { 
+        groupId: group.id, 
+        groupName: group.name, 
+        avatar: group.avatar 
+      }
     });
   };
 
-  const handleOpenDirectChat = (chat) => {
-    router.push({
-      pathname: '/app-pages/solo-chat',
-      params: { chatId: chat.id, userName: chat.userName, userId: chat.userId, avatar: chat.avatar }
-    });
+  const handleOpenDirectChat = async (chat) => {
+    try {
+      await markConversationAsRead(chat.userId);
+      
+      router.push({
+        pathname: '/app-pages/solo-chat',
+        params: { 
+          chatId: chat.id, 
+          userName: chat.userName, 
+          userId: chat.userId, 
+          avatar: chat.avatar 
+        }
+      });
+    } catch (error) {
+      console.error('Error opening direct chat:', error);
+    }
+  };
+
+  const markConversationAsRead = async (userId) => {
+    try {
+      if (!currentUser?.id) return;
+      
+      const updatedChats = chats.map(chat => {
+        if (chat.userId === userId) {
+          return { ...chat, unread: 0 };
+        }
+        return chat;
+      });
+      
+      setChats(updatedChats);
+      await saveConversationsToStorage(updatedChats);
+    } catch (error) {
+      console.error('Error marking conversation as read:', error);
+    }
   };
 
   const handleCreateGroup = async () => {
@@ -168,46 +294,84 @@ const CommunityPage = () => {
       return;
     }
 
-    const newGroup = {
-      id: `group_${Date.now()}`,
-      name: newGroupName,
-      members: [currentUser?.id, ...selectedUsers],
-      lastMessage: 'Group created',
-      timestamp: 'Just now',
-      unread: 0,
-      memberCount: 1 + selectedUsers.length,
-      avatar: '👥',
-      createdBy: currentUser?.id,
-      createdAt: new Date().toISOString()
-    };
+    if (!currentUser?.id) {
+      Alert.alert('Error', 'User not found');
+      return;
+    }
 
-    const updatedGroups = [newGroup, ...groups];
-    setGroups(updatedGroups);
-    await AsyncStorage.setItem('communityGroups', JSON.stringify(updatedGroups));
+    console.log('Creating group:', newGroupName);
     
-    setShowCreateGroup(false);
-    setNewGroupName('');
-    setSelectedUsers([]);
+    const newGroup = await createGroup(newGroupName, currentUser.id, selectedUsers);
     
-    Alert.alert('Success', 'Group created successfully!');
+    if (newGroup) {
+      console.log('Group created successfully:', newGroup);
+      
+      const formattedGroup = {
+        id: newGroup.id,
+        name: newGroup.name,
+        avatar: newGroup.avatar || '👥',
+        lastMessage: 'Group created',
+        timestamp: new Date().toLocaleTimeString(),
+        unread: 0,
+        memberCount: 1 + selectedUsers.length,
+        members: []
+      };
+      
+      const updatedGroups = [formattedGroup, ...groups];
+      setGroups(updatedGroups);
+      await saveGroupsToStorage(updatedGroups);
+      console.log('Group saved to storage, total groups:', updatedGroups.length);
+      
+      setShowCreateGroup(false);
+      setNewGroupName('');
+      setSelectedUsers([]);
+      
+      Alert.alert('Success', 'Group created successfully!');
+    } else {
+      Alert.alert('Error', 'Failed to create group');
+    }
   };
 
-  const generateInviteLink = (groupId, groupName) => {
-    const link = `tripzy://invite/${groupId}`;
-    setInviteLink(link);
-    setInviteGroupId(groupId);
-    setInviteModalVisible(true);
-  };
-
-  const copyInviteLink = () => {
-    // In real app, use Clipboard API
-    Alert.alert('Link Copied', inviteLink);
+  // Function to add a conversation after first message is sent
+  const addConversationAfterFirstMessage = async (userId, userName, userAvatar) => {
+    try {
+      if (!currentUser?.id) return;
+      
+      const conversationsKey = `conversations_${currentUser.id}`;
+      const existingConversations = await AsyncStorage.getItem(conversationsKey);
+      let conversations = existingConversations ? JSON.parse(existingConversations) : [];
+      
+      // Check if conversation already exists
+      const exists = conversations.find(conv => conv.userId === userId);
+      
+      if (!exists) {
+        const newConversation = {
+          id: `chat_${currentUser.id}_${userId}`,
+          userId: userId,
+          userName: userName,
+          avatar: userAvatar || '👤',
+          lastMessage: 'Start a conversation',
+          timestamp: new Date().toLocaleTimeString(),
+          unread: 0,
+          isOnline: false
+        };
+        
+        conversations.unshift(newConversation);
+        await AsyncStorage.setItem(conversationsKey, JSON.stringify(conversations));
+        console.log('New conversation added after first message');
+        
+        // Reload chats to show the new conversation
+        await loadChatsFromStorage();
+      }
+    } catch (error) {
+      console.error('Error adding conversation:', error);
+    }
   };
 
   const renderChatItem = ({ item }) => (
     <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)}>
       <View style={styles.avatarContainer}>
-        <Text style={styles.avatarText}>{item.avatar}</Text>
+        <Text style={styles.avatarText}>{item.avatar || '👤'}</Text>
         {item.isOnline && <View style={styles.onlineDot} />}
       </View>
       <View style={styles.chatInfo}>
@@ -242,12 +406,6 @@ const CommunityPage = () => {
             <Text style={styles.unreadText}>{item.unread}</Text>
           </View>
         )}
-        <TouchableOpacity 
-          style={styles.inviteButton} 
-          onPress={() => generateInviteLink(item.id, item.name)}
-        >
-          <Text style={styles.inviteButtonText}>➕</Text>
-        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -255,12 +413,12 @@ const CommunityPage = () => {
   const renderUserItem = ({ item }) => (
     <TouchableOpacity style={styles.userItem} onPress={() => handleStartChat(item)}>
       <View style={styles.userAvatarContainer}>
-        <Text style={styles.userAvatarText}>{item.avatar}</Text>
+        <Text style={styles.userAvatarText}>{item.avatar || '👤'}</Text>
         {item.isProfessional && <View style={styles.proBadge}><Text style={styles.proBadgeText}>Pro</Text></View>}
       </View>
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
-        <Text style={styles.userLocation}>{item.location}</Text>
+        <Text style={styles.userLocation}>{item.location || 'Traveler'}</Text>
       </View>
       <TouchableOpacity style={styles.messageButton} onPress={() => handleStartChat(item)}>
         <Text style={styles.messageButtonText}>Message</Text>
@@ -269,31 +427,38 @@ const CommunityPage = () => {
   );
 
   const filteredUsers = users.filter(user => 
-    user.id !== currentUser?.id && 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase())
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredChats = chats.filter(chat => 
-    chat.userName.toLowerCase().includes(searchQuery.toLowerCase())
+    chat.userName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredGroups = groups.filter(group => 
-    group.name.toLowerCase().includes(searchQuery.toLowerCase())
+    group.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const availableUsersForGroup = users.filter(user => 
+  const availableUsersForGroup = allUsersList.filter(user => 
     user.id !== currentUser?.id && !selectedUsers.includes(user.id)
   );
 
+  if (!isInitialized) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Travel Community</Text>
         <Text style={styles.headerSubtitle}>🔖 Where every journey begins with connection finding your tribe and sharing the adventure together. 🔖</Text>
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
@@ -305,19 +470,22 @@ const CommunityPage = () => {
         />
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabContainer}>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'chats' && styles.activeTab]} 
           onPress={() => setActiveTab('chats')}
         >
-          <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>Direct Messages</Text>
+          <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>
+            Direct Messages ({chats.length})
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'groups' && styles.activeTab]} 
           onPress={() => setActiveTab('groups')}
         >
-          <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>Community Chat</Text>
+          <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>
+            Community Chat ({groups.length})
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'users' && styles.activeTab]} 
@@ -327,7 +495,6 @@ const CommunityPage = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
       <FlatList
         data={
           activeTab === 'chats' ? filteredChats :
@@ -339,21 +506,26 @@ const CommunityPage = () => {
           activeTab === 'groups' ? renderGroupItem : renderUserItem
         }
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No {activeTab === 'chats' ? 'messages' : activeTab === 'groups' ? 'groups' : 'users'} found</Text>
+            <Text style={styles.emptyText}>
+              {activeTab === 'chats' ? 'No conversations yet. Start a chat from "Find Travelers" tab!' : 
+               activeTab === 'groups' ? 'No groups yet. Create one!' : 
+               'No users found'}
+            </Text>
           </View>
         }
       />
 
-      {/* Create Group Button */}
       {activeTab === 'groups' && (
         <TouchableOpacity style={styles.fab} onPress={() => setShowCreateGroup(true)}>
           <Text style={styles.fabText}>+</Text>
         </TouchableOpacity>
       )}
 
-      {/* Create Group Modal */}
       <Modal
         visible={showCreateGroup}
         animationType="slide"
@@ -385,7 +557,7 @@ const CommunityPage = () => {
                   style={styles.userSelectItem}
                   onPress={() => setSelectedUsers([...selectedUsers, user.id])}
                 >
-                  <Text style={styles.userSelectAvatar}>{user.avatar}</Text>
+                  <Text style={styles.userSelectAvatar}>{user.avatar || '👤'}</Text>
                   <Text style={styles.userSelectName}>{user.name}</Text>
                   <Text style={styles.userSelectAdd}>+ Add</Text>
                 </TouchableOpacity>
@@ -397,7 +569,7 @@ const CommunityPage = () => {
                 <Text style={styles.selectedUsersTitle}>Selected ({selectedUsers.length}):</Text>
                 <View style={styles.selectedUsersList}>
                   {selectedUsers.map(userId => {
-                    const user = users.find(u => u.id === userId);
+                    const user = allUsersList.find(u => u.id === userId);
                     return user ? (
                       <View key={userId} style={styles.selectedUserChip}>
                         <Text style={styles.selectedUserText}>{user.name}</Text>
@@ -417,30 +589,6 @@ const CommunityPage = () => {
           </View>
         </View>
       </Modal>
-
-      {/* Invite Modal */}
-      <Modal
-        visible={inviteModalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setInviteModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.inviteModalContent}>
-            <Text style={styles.inviteModalTitle}>Invite to Group</Text>
-            <Text style={styles.inviteModalSubtitle}>Share this link with friends to join</Text>
-            <View style={styles.inviteLinkContainer}>
-              <Text style={styles.inviteLinkText}>{inviteLink}</Text>
-            </View>
-            <TouchableOpacity style={styles.copyLinkButton} onPress={copyInviteLink}>
-              <Text style={styles.copyLinkButtonText}>Copy Link</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.closeInviteButton} onPress={() => setInviteModalVisible(false)}>
-              <Text style={styles.closeInviteButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -449,6 +597,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     paddingHorizontal: 20,
@@ -592,14 +745,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  inviteButton: {
-    marginTop: 6,
-    padding: 4,
-  },
-  inviteButtonText: {
-    fontSize: 14,
-    color: '#007AFF',
-  },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -661,6 +806,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#999',
+    textAlign: 'center',
   },
   fab: {
     position: 'absolute',
@@ -794,58 +940,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  inviteModalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 24,
-    width: '85%',
-    alignItems: 'center',
-  },
-  inviteModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  inviteModalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  inviteLinkContainer: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    width: '100%',
-  },
-  inviteLinkText: {
-    fontSize: 14,
-    color: '#007AFF',
-    textAlign: 'center',
-  },
-  copyLinkButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  copyLinkButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  closeInviteButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-  },
-  closeInviteButtonText: {
-    color: '#666',
-    fontSize: 14,
   },
 });
 

@@ -12,6 +12,7 @@ const featureCardsData = [
   { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TourGuide' },
   { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/community' },
   { name: 'Weather', description: 'Check the weather for your destination !.', icon: '⛅', target: '/app-pages/weather' },
+
 ];
 
 const HomePage = () => {
