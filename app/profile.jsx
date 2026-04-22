@@ -8,13 +8,12 @@ import {
   View,
 } from "react-native";
 import { supabase } from "../lib/supabase";
-import { getUserProfile } from "./utils/userStorage";
+import { getUserProfile } from "../utils/userStorage";
 
 const [activeTab, setActiveTab] = useState("Home");
 
 // Data for the feature cards
 const featureCardsData = [
-<<<<<<< HEAD
   {
     name: "Trip Planning",
     description: "Plan your journey with ease by our Trip Planner.",
@@ -43,16 +42,8 @@ const featureCardsData = [
     name: "Travel Community",
     description: "Chat with your travel partner.",
     icon: "💬",
-    target: "/app-pages/community",
+    target: " ",
   },
-=======
-  { name: 'Trip Planning', description: 'Plan your journey with ease by our Trip Planner.', icon: '📅', target: '/app-pages/plan' },
-  { name: 'Travel Map', description: 'Map your travels. Nourish your soul.', icon: '🗺️', target: '/app-pages/map' },
-  { name: 'Travel Feed', description: 'Your Parth Begin With presence.', icon: '🔖', target: '/app-pages/feed' },
-  { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TourGuide' },
-  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/community' },
-  { name: 'Weather', description: 'Check the weather for your destination.', icon: '⛅', target: '/app-pages/weather' },
->>>>>>> fac8122f5684fafa555103357c67a2a005e16bdf
 ];
 
 // Data for the bottom navigation
@@ -60,7 +51,7 @@ const navItems = [
   { name: "Home", icon: "🏠", target: null },
   { name: "Map", icon: "🗺️", target: "/app-pages/map" },
   { name: "Feed", icon: "📰", target: "/app-pages/feed" },
-  { name: "Group", icon: "👥", target: "/app-pages/community" },
+  { name: "Group", icon: "👥", target: " " },
   { name: "Profile", icon: "👤", target: null },
 ];
 
@@ -182,8 +173,6 @@ const HomePage = () => {
               <Text style={styles.profileIcon}>👤</Text>
             </TouchableOpacity>
           </View>
-
-        
 
           <Text style={styles.tagline}>Travel Light. Feel Deep.</Text>
           <Text style={styles.subTagline}>

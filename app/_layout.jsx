@@ -28,6 +28,9 @@ export default function RootLayout() {
       <Stack.Screen name="app-pages/map" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/settings" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/plan" options={{ headerShown: false }} />
+      <Stack.Screen name="app-pages/weather" options={{ headerShown: false }} />
+
+  
       </Stack>
     </NotificationProvider>
   );

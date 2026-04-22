@@ -7,13 +7,22 @@
     "scheme": "tripzyapplication",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.TripzyApplication",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk"
+        }
+      }
     },
     "web": {
       "output": "static"
@@ -33,7 +42,15 @@
         }
       ],
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Tripzy to access your location for accurate weather forecasts.",
+          "locationAlwaysPermission": "Allow Tripzy to use your location even when the app is in the background for weather updates.",
+          "locationWhenInUsePermission": "Allow Tripzy to access your location while using the app for weather forecasts."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

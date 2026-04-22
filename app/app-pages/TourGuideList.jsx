@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Directory, File, Paths } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -27,9 +28,99 @@ const TourGuideList = () => {
   const [hasOwnProfile, setHasOwnProfile] = useState(false);
   const subscriptionRef = useRef(null);
 
+  // Function to validate and fix image URIs
+  const validateImageUri = (uri) => {
+    if (!uri) return null;
+    
+    // Check if the image is a valid local file
+    if (uri.startsWith('file://') || uri.startsWith('content://')) {
+      return uri;
+    }
+    
+    // For data URLs (base64)
+    if (uri.startsWith('data:image')) {
+      return uri;
+    }
+    
+    // For remote URLs (Supabase storage URLs)
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      return uri;
+    }
+    
+    return null;
+  };
+
+  // Function to copy image to permanent storage
+  const copyImageToPermanentStorage = async (tempUri) => {
+    if (!tempUri) return null;
+    
+    try {
+      // Create a permanent directory if it doesn't exist
+      const permanentDir = new Directory(Paths.document, 'tour_guide_images');
+      
+      // Check if directory exists, create if not
+      if (!permanentDir.exists) {
+        permanentDir.create({ intermediates: true });
+      }
+      
+      // Generate unique filename
+      const filename = `guide_image_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+      const permanentFile = new File(permanentDir, filename);
+      
+      // Create source file object
+      const sourceFile = new File(tempUri);
+      
+      // Copy the file
+      sourceFile.copy(permanentFile);
+      
+      return permanentFile.uri;
+    } catch (error) {
+      console.error('Error copying image:', error);
+      return tempUri; // Return original if copy fails
+    }
+  };
+
+  // Function to clean up old/unused images
+  const cleanupOldImages = async () => {
+    try {
+      const { data: profilesData, error } = await supabase
+        .from('tour_guides')
+        .select('image');
+      
+      if (error) throw error;
+      
+      const usedImages = new Set();
+      
+      // Collect all used image URIs
+      profilesData.forEach(profile => {
+        if (profile.image && profile.image.includes('/tour_guide_images/')) {
+          usedImages.add(profile.image);
+        }
+      });
+      
+      // Get all images in the tour_guide_images directory
+      const permanentDir = new Directory(Paths.document, 'tour_guide_images');
+      
+      if (permanentDir.exists) {
+        const contents = permanentDir.list();
+        
+        // Delete unused images
+        for (const item of contents) {
+          if (item instanceof File) {
+            if (!usedImages.has(item.uri)) {
+              item.delete();
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error cleaning up images:', error);
+    }
+  };
+
   useEffect(() => {
     loadCurrentUser();
-    
+
     // Cleanup subscription on unmount
     return () => {
       if (subscriptionRef.current) {
@@ -63,15 +154,52 @@ const TourGuideList = () => {
       if (error) throw error;
 
       if (data && data.length > 0) {
+        // Validate and fix images for each profile
+        let needsUpdate = false;
+        const validatedProfiles = data.map(profile => {
+          // Check if image file still exists
+          if (profile.image && profile.image.includes('/tour_guide_images/')) {
+            try {
+              const imageFile = new File(profile.image);
+              if (!imageFile.exists) {
+                needsUpdate = true;
+                return { ...profile, image: null };
+              }
+            } catch (e) {
+              needsUpdate = true;
+              return { ...profile, image: null };
+            }
+          }
+          
+          const validatedImage = validateImageUri(profile.image);
+          if (validatedImage !== profile.image) {
+            needsUpdate = true;
+            return { ...profile, image: validatedImage };
+          }
+          return profile;
+        });
+        
+        // If any images were invalid, update the database
+        if (needsUpdate) {
+          for (const profile of validatedProfiles) {
+            if (profile.id) {
+              await supabase
+                .from('tour_guides')
+                .update({ image: profile.image })
+                .eq('id', profile.id);
+            }
+          }
+        }
+        
         // Add default ratings if not present
-        const profilesWithRatings = data.map(profile => ({
+        const profilesWithRatings = validatedProfiles.map(profile => ({
           ...profile,
           rating: profile.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
           reviewCount: profile.review_count || Math.floor(Math.random() * (200 - 50) + 50)
         }));
         setProfiles(profilesWithRatings);
         setFilteredProfiles(profilesWithRatings);
-        
+
         // Check if current user has a profile
         if (currentUser) {
           const userProfile = profilesWithRatings.find(p => p.user_id === currentUser.id);
@@ -125,15 +253,18 @@ const TourGuideList = () => {
 
     switch (eventType) {
       case 'INSERT':
+        // Validate image for new profile
+        const validatedImage = validateImageUri(newRecord.image);
         // New profile added
         const newProfile = {
           ...newRecord,
+          image: validatedImage,
           rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
           reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
         };
-        
+
         setProfiles(prevProfiles => [newProfile, ...prevProfiles]);
-        
+
         // Update filtered profiles if search query is empty
         if (searchQuery === '') {
           setFilteredProfiles(prev => [newProfile, ...prev]);
@@ -144,43 +275,54 @@ const TourGuideList = () => {
             setFilteredProfiles(prev => [newProfile, ...prev]);
           }
         }
-        
-        // Show notification (optional)
-        // Alert.alert('New Guide', `${newProfile.full_name} joined as a tour guide!`);
         break;
-        
+
       case 'UPDATE':
+        // Validate image for updated profile
+        const updatedValidatedImage = validateImageUri(newRecord.image);
         // Profile updated
         const updatedProfile = {
           ...newRecord,
+          image: updatedValidatedImage,
           rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
           reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
         };
-        
-        setProfiles(prevProfiles => 
-          prevProfiles.map(profile => 
+
+        setProfiles(prevProfiles =>
+          prevProfiles.map(profile =>
             profile.id === updatedProfile.id ? updatedProfile : profile
           )
         );
-        
-        setFilteredProfiles(prev => 
-          prev.map(profile => 
+
+        setFilteredProfiles(prev =>
+          prev.map(profile =>
             profile.id === updatedProfile.id ? updatedProfile : profile
           )
         );
         break;
-        
+
       case 'DELETE':
-        // Profile deleted
-        setProfiles(prevProfiles => 
+        // Profile deleted - also delete associated image if in permanent storage
+        if (oldRecord.image && oldRecord.image.includes('/tour_guide_images/')) {
+          try {
+            const imageFile = new File(oldRecord.image);
+            if (imageFile.exists) {
+              imageFile.delete();
+            }
+          } catch (e) {
+            console.log('Image already deleted or not found');
+          }
+        }
+        
+        setProfiles(prevProfiles =>
           prevProfiles.filter(profile => profile.id !== oldRecord.id)
         );
-        setFilteredProfiles(prev => 
+        setFilteredProfiles(prev =>
           prev.filter(profile => profile.id !== oldRecord.id)
         );
         break;
     }
-    
+
     // Update hasOwnProfile status if current user's profile changed
     if (currentUser) {
       const userProfile = profiles.find(p => p.user_id === currentUser.id);
@@ -207,7 +349,7 @@ const TourGuideList = () => {
       setFilteredProfiles(profiles);
     } else {
       const searchLower = text.toLowerCase();
-      const filtered = profiles.filter(profile => 
+      const filtered = profiles.filter(profile =>
         checkProfileMatchesSearch(profile, searchLower)
       );
       setFilteredProfiles(filtered);
@@ -256,14 +398,25 @@ const TourGuideList = () => {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Delete associated image if in permanent storage
+              if (profile.image && profile.image.includes('/tour_guide_images/')) {
+                try {
+                  const imageFile = new File(profile.image);
+                  if (imageFile.exists) {
+                    imageFile.delete();
+                  }
+                } catch (e) {
+                  console.log('Image already deleted or not found');
+                }
+              }
+              
               const { error } = await supabase
                 .from('tour_guides')
                 .delete()
                 .eq('id', profile.id);
 
               if (error) throw error;
-              
-              // No need to manually update state - real-time subscription will handle it
+
               Alert.alert('Success', 'Your profile has been deleted successfully');
             } catch (error) {
               console.error('Error deleting profile:', error);
@@ -280,11 +433,70 @@ const TourGuideList = () => {
       Alert.alert('Unauthorized', 'You can only update your own profile');
       return;
     }
-    
+
     router.push({
       pathname: '/app-pages/TGprofile',
       params: { profileId: profile.id }
     });
+  };
+
+  // Image component with error handling for guide avatars
+  const GuideAvatar = ({ imageUri, name, style }) => {
+    const [imageError, setImageError] = useState(false);
+    const [validUri, setValidUri] = useState(null);
+
+    useEffect(() => {
+      const validated = validateImageUri(imageUri);
+      setValidUri(validated);
+      setImageError(!validated);
+    }, [imageUri]);
+
+    if (imageError || !validUri) {
+      return (
+        <View style={[style, styles.avatarPlaceholder]}>
+          <Text style={styles.avatarPlaceholderText}>
+            {name?.charAt(0).toUpperCase() || '?'}
+          </Text>
+        </View>
+      );
+    }
+
+    return (
+      <Image 
+        source={{ uri: validUri }}
+        style={style}
+        onError={() => setImageError(true)}
+      />
+    );
+  };
+
+  // Image component for cover images with error handling
+  const GuideCoverImage = ({ imageUri, style }) => {
+    const [imageError, setImageError] = useState(false);
+    const [validUri, setValidUri] = useState(null);
+
+    useEffect(() => {
+      const validated = validateImageUri(imageUri);
+      setValidUri(validated);
+      setImageError(!validated);
+    }, [imageUri]);
+
+    if (imageError || !validUri) {
+      return (
+        <View style={[style, styles.coverPlaceholder]}>
+          <Ionicons name="camera-outline" size={40} color="#ccc" />
+        </View>
+      );
+    }
+
+    return (
+      <Image 
+        source={{ uri: validUri }}
+        style={style}
+        resizeMode="cover"
+        onError={() => setImageError(true)}
+      />
+    );
   };
 
   const renderStars = (rating) => {
@@ -292,7 +504,7 @@ const TourGuideList = () => {
     const numRating = parseFloat(rating);
     const fullStars = Math.floor(numRating);
     const hasHalfStar = numRating % 1 >= 0.5;
-    
+
     for (let i = 0; i < fullStars; i++) {
       stars.push(<Ionicons key={`star-${i}`} name="star" size={12} color="#FFD700" />);
     }
@@ -313,15 +525,11 @@ const TourGuideList = () => {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.headerLeft}>
-            {profile.image ? (
-              <Image source={{ uri: profile.image }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                <Text style={styles.avatarPlaceholderText}>
-                  {profile.full_name?.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
+            <GuideAvatar 
+              imageUri={profile.image}
+              name={profile.full_name}
+              style={styles.avatar}
+            />
             <View style={styles.headerInfo}>
               <Text style={styles.guideName}>{profile.full_name}</Text>
               <View style={styles.locationContainer}>
@@ -339,17 +547,14 @@ const TourGuideList = () => {
           </View>
         </View>
 
-        {profile.image ? (
-          <Image source={{ uri: profile.image }} style={styles.coverImage} />
-        ) : (
-          <View style={[styles.coverImage, styles.coverPlaceholder]}>
-            <Ionicons name="camera-outline" size={40} color="#ccc" />
-          </View>
-        )}
+        <GuideCoverImage 
+          imageUri={profile.image}
+          style={styles.coverImage}
+        />
 
         <View style={styles.cardContent}>
           <Text style={styles.guideTitle}>Official Photographer and Travel Guide</Text>
-          
+
           {profile.experience && (
             <View style={styles.experienceContainer}>
               <Ionicons name="briefcase-outline" size={14} color="#007AFF" />
@@ -387,15 +592,15 @@ const TourGuideList = () => {
         <View style={styles.actionButtons}>
           {isOwner && (
             <>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.updateButton}
                 onPress={() => handleUpdateProfile(profile)}
               >
                 <Ionicons name="create-outline" size={16} color="#fff" />
                 <Text style={styles.updateButtonText}>Update</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.deleteButton}
                 onPress={() => handleDeleteProfile(profile)}
               >
@@ -404,15 +609,15 @@ const TourGuideList = () => {
               </TouchableOpacity>
             </>
           )}
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[styles.viewButton, !isOwner && styles.fullWidthViewButton]}
             onPress={() => handleCardPress(profile)}
           >
             <Text style={styles.viewButtonText}>View Profile</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.chatButton}
             onPress={() => handleChatPress(profile)}
           >
@@ -420,7 +625,7 @@ const TourGuideList = () => {
             <Text style={styles.chatButtonText}>Chat</Text>
           </TouchableOpacity>
         </View>
-        
+
         {isOwner && (
           <View style={styles.ownerBadge}>
             <Text style={styles.ownerBadgeText}>Your Profile</Text>
@@ -437,7 +642,7 @@ const TourGuideList = () => {
       <Text style={styles.emptyText}>
         Be the first to create a tour guide profile and share your expertise with travelers!
       </Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.createButton}
         onPress={handleBecomeGuide}
       >
@@ -457,6 +662,11 @@ const TourGuideList = () => {
       </View>
     );
   };
+
+  // Clean up old images on component mount
+  useEffect(() => {
+    cleanupOldImages();
+  }, []);
 
   if (loading) {
     return (
@@ -498,7 +708,7 @@ const TourGuideList = () => {
       <SearchResultsCount />
 
       <View style={styles.becomeButtonContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.becomeButton, hasOwnProfile && styles.becomeButtonDisabled]}
           onPress={handleBecomeGuide}
           disabled={hasOwnProfile}
@@ -524,7 +734,7 @@ const TourGuideList = () => {
               <Text style={styles.noResultsText}>
                 We couldn't find any tour guides matching "{searchQuery}"
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.clearSearchButton}
                 onPress={() => handleSearch('')}
               >
@@ -541,14 +751,13 @@ const TourGuideList = () => {
 };
 
 const styles = StyleSheet.create({
-  // ... (keep all your existing styles)
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
   heroSection: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 70,
     paddingBottom: 16,
     backgroundColor: '#fff',
   },
@@ -563,7 +772,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 20,      
   },
   searchContainer: {
     paddingHorizontal: 16,
