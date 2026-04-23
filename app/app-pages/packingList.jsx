@@ -1,5 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -7,28 +7,28 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const PackingList = () => {
   const router = useRouter();
   const params = useLocalSearchParams(); // Move this to the top level
-  const [tripType, setTripType] = useState(params.savedTripType || '');
-  const [duration, setDuration] = useState(params.savedDuration || '');
-  const [groupSize, setGroupSize] = useState(params.savedGroupSize || '');
+  const [tripType, setTripType] = useState(params.savedTripType || "");
+  const [duration, setDuration] = useState(params.savedDuration || "");
+  const [groupSize, setGroupSize] = useState(params.savedGroupSize || "");
   const [packingItems, setPackingItems] = useState([]);
   const [selectedItems, setSelectedItems] = useState({});
-  const [newItem, setNewItem] = useState('');
+  const [newItem, setNewItem] = useState("");
   const [isEditing, setIsEditing] = useState(false);
 
   // Bottom navigation items
   const navItems = [
-    { name: 'Home', icon: '🏠', target: '/profile' },
-    { name: 'Map', icon: '🗺️', target: '/app-pages/map' },
-    { name: 'Feed', icon: '📰', target: '/app-pages/feed' },
-    { name: 'Group', icon: '👥', target: '/app-pages/community' },
-    { name: 'Profile', icon: '👤', target: '/app-pages/profile' },
+    { name: "Home", icon: "🏠", target: "/profile" },
+    { name: "Map", icon: "🗺️", target: "/app-pages/map" },
+    { name: "Feed", icon: "📰", target: "/(tabs)/feed" },
+    { name: "Group", icon: "👥", target: "/app-pages/community" },
+    { name: "Profile", icon: "👤", target: "/app-pages/profile" },
   ];
 
   // Check if we're returning from main form with selected items
@@ -38,67 +38,103 @@ const PackingList = () => {
         const returnedSelectedItems = JSON.parse(params.selectedItems);
         // Mark items as selected based on returned data
         const newSelectedState = {};
-        returnedSelectedItems.forEach(item => {
+        returnedSelectedItems.forEach((item) => {
           newSelectedState[item] = true;
         });
         setSelectedItems(newSelectedState);
       } catch (e) {
-        console.error('Error parsing selected items', e);
+        console.error("Error parsing selected items", e);
       }
     }
   }, [params.selectedItems]);
 
   const generatePackingList = () => {
     if (!tripType || !duration || !groupSize) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     // Generate packing list based on trip type
     const baseItems = [
-      'Passport/ID',
-      'Travel documents',
-      'Phone charger',
-      'Power bank',
-      'First aid kit',
+      "Passport/ID",
+      "Travel documents",
+      "Phone charger",
+      "Power bank",
+      "First aid kit",
     ];
 
     const clothingItems = [
-      'T-shirts',
-      'Pants/Jeans',
-      'Underwear',
-      'Socks',
-      'Sleepwear',
+      "T-shirts",
+      "Pants/Jeans",
+      "Underwear",
+      "Socks",
+      "Sleepwear",
     ];
 
     const toiletries = [
-      'Toothbrush',
-      'Toothpaste',
-      'Shampoo',
-      'Soap',
-      'Deodorant',
+      "Toothbrush",
+      "Toothpaste",
+      "Shampoo",
+      "Soap",
+      "Deodorant",
     ];
 
-    const typeSpecific = tripType.toLowerCase().includes('beach') 
-      ? ['Swimsuit', 'Sunscreen', 'Beach towel', 'Flip flops', 'Sun hat', 'Sunglasses']
-      : tripType.toLowerCase().includes('mountain') || tripType.toLowerCase().includes('hiking')
-      ? ['Hiking boots', 'Jacket', 'Warm clothes', 'Raincoat', 'Backpack', 'Water bottle']
-      : tripType.toLowerCase().includes('business')
-      ? ['Business cards', 'Laptop', 'Formal wear', 'Notebook', 'Presentation materials']
-      : tripType.toLowerCase().includes('family')
-      ? ['Kids clothes', 'Baby wipes', 'Snacks', 'Entertainment items', 'First aid for kids']
-      : ['Comfortable shoes', 'Weather appropriate clothing', 'Camera'];
+    const typeSpecific = tripType.toLowerCase().includes("beach")
+      ? [
+          "Swimsuit",
+          "Sunscreen",
+          "Beach towel",
+          "Flip flops",
+          "Sun hat",
+          "Sunglasses",
+        ]
+      : tripType.toLowerCase().includes("mountain") ||
+          tripType.toLowerCase().includes("hiking")
+        ? [
+            "Hiking boots",
+            "Jacket",
+            "Warm clothes",
+            "Raincoat",
+            "Backpack",
+            "Water bottle",
+          ]
+        : tripType.toLowerCase().includes("business")
+          ? [
+              "Business cards",
+              "Laptop",
+              "Formal wear",
+              "Notebook",
+              "Presentation materials",
+            ]
+          : tripType.toLowerCase().includes("family")
+            ? [
+                "Kids clothes",
+                "Baby wipes",
+                "Snacks",
+                "Entertainment items",
+                "First aid for kids",
+              ]
+            : ["Comfortable shoes", "Weather appropriate clothing", "Camera"];
 
     // Adjust quantities based on duration and group size
     const durationNum = parseInt(duration) || 1;
     const groupSizeNum = parseInt(groupSize) || 1;
-    
-    let adjustedItems = [...baseItems, ...clothingItems, ...toiletries, ...typeSpecific];
-    
+
+    let adjustedItems = [
+      ...baseItems,
+      ...clothingItems,
+      ...toiletries,
+      ...typeSpecific,
+    ];
+
     // Add quantity indicators for multi-day trips
     if (durationNum > 3) {
-      adjustedItems = adjustedItems.map(item => {
-        if (clothingItems.includes(item) || item === 'Underwear' || item === 'Socks') {
+      adjustedItems = adjustedItems.map((item) => {
+        if (
+          clothingItems.includes(item) ||
+          item === "Underwear" ||
+          item === "Socks"
+        ) {
           return `${item} (${Math.min(durationNum, 7)} sets)`;
         }
         return item;
@@ -107,8 +143,8 @@ const PackingList = () => {
 
     // Add group size indicators
     if (groupSizeNum > 1) {
-      adjustedItems = adjustedItems.map(item => {
-        if (item.includes('Passport') || item.includes('Travel documents')) {
+      adjustedItems = adjustedItems.map((item) => {
+        if (item.includes("Passport") || item.includes("Travel documents")) {
           return `${item} (for ${groupSizeNum} people)`;
         }
         return item;
@@ -116,10 +152,10 @@ const PackingList = () => {
     }
 
     setPackingItems(adjustedItems);
-    
+
     // Reset selected items when generating new list
     const initialSelected = {};
-    adjustedItems.forEach(item => {
+    adjustedItems.forEach((item) => {
       initialSelected[item] = false;
     });
     setSelectedItems(initialSelected);
@@ -129,8 +165,8 @@ const PackingList = () => {
     if (newItem.trim()) {
       const newItemText = newItem.trim();
       setPackingItems([...packingItems, newItemText]);
-      setSelectedItems({...selectedItems, [newItemText]: false});
-      setNewItem('');
+      setSelectedItems({ ...selectedItems, [newItemText]: false });
+      setNewItem("");
     }
   };
 
@@ -139,9 +175,9 @@ const PackingList = () => {
     const updatedList = [...packingItems];
     updatedList.splice(index, 1);
     setPackingItems(updatedList);
-    
+
     // Remove from selected items
-    const updatedSelected = {...selectedItems};
+    const updatedSelected = { ...selectedItems };
     delete updatedSelected[itemToRemove];
     setSelectedItems(updatedSelected);
   };
@@ -149,25 +185,28 @@ const PackingList = () => {
   const toggleSelectItem = (item) => {
     setSelectedItems({
       ...selectedItems,
-      [item]: !selectedItems[item]
+      [item]: !selectedItems[item],
     });
   };
 
   const handleAddToForm = () => {
     // Get selected items
-    const itemsToAdd = packingItems.filter(item => selectedItems[item]);
-    
+    const itemsToAdd = packingItems.filter((item) => selectedItems[item]);
+
     if (itemsToAdd.length === 0) {
-      Alert.alert('No Items Selected', 'Please select at least one item to add to your plan.');
+      Alert.alert(
+        "No Items Selected",
+        "Please select at least one item to add to your plan.",
+      );
       return;
     }
 
     // Navigate back to create plan with selected items AND saved form state
     router.push({
-      pathname: '/app-pages/createPlan',
-      params: { 
+      pathname: "/app-pages/createPlan",
+      params: {
         selectedPackingItems: JSON.stringify(itemsToAdd),
-        fromPackingList: 'true',
+        fromPackingList: "true",
         // Pass back all the saved form data from createPlan
         savedDestination: params.savedDestination,
         savedPostCaption: params.savedPostCaption,
@@ -182,14 +221,14 @@ const PackingList = () => {
         savedSelectedPackingItems: params.savedSelectedPackingItems,
         savedBudgetEstimate: params.savedBudgetEstimate,
         savedShowBudgetSummary: params.savedShowBudgetSummary,
-        savedBudgetBreakdown: params.savedBudgetBreakdown
-      }
+        savedBudgetBreakdown: params.savedBudgetBreakdown,
+      },
     });
   };
 
   const handleUpdateList = () => {
     // This could be used to save changes to the current list
-    Alert.alert('Success', 'Your packing list has been updated!');
+    Alert.alert("Success", "Your packing list has been updated!");
     setIsEditing(false);
   };
 
@@ -201,22 +240,32 @@ const PackingList = () => {
 
   const renderPackingItem = ({ item, index }) => (
     <View style={styles.packingItemContainer}>
-      <TouchableOpacity 
-        style={styles.packingItemContent} 
+      <TouchableOpacity
+        style={styles.packingItemContent}
         onPress={() => toggleSelectItem(item)}
       >
-        <Text style={[styles.checkbox, selectedItems[item] && styles.checkboxSelected]}>
-          {selectedItems[item] ? '✓' : '□'}
+        <Text
+          style={[
+            styles.checkbox,
+            selectedItems[item] && styles.checkboxSelected,
+          ]}
+        >
+          {selectedItems[item] ? "✓" : "□"}
         </Text>
-        <Text style={[
-          styles.packingItemText,
-          selectedItems[item] && styles.selectedItemText
-        ]}>
+        <Text
+          style={[
+            styles.packingItemText,
+            selectedItems[item] && styles.selectedItemText,
+          ]}
+        >
           {item}
         </Text>
       </TouchableOpacity>
       {isEditing && (
-        <TouchableOpacity onPress={() => removeItem(index)} style={styles.removeButton}>
+        <TouchableOpacity
+          onPress={() => removeItem(index)}
+          style={styles.removeButton}
+        >
           <Text style={styles.removeButtonText}>✕</Text>
         </TouchableOpacity>
       )}
@@ -230,7 +279,10 @@ const PackingList = () => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Packing List</Text>
@@ -288,7 +340,10 @@ const PackingList = () => {
               </View>
 
               {/* Generate Button */}
-              <TouchableOpacity style={styles.generateButton} onPress={generatePackingList}>
+              <TouchableOpacity
+                style={styles.generateButton}
+                onPress={generatePackingList}
+              >
                 <Text style={styles.generateButtonText}>Generate</Text>
               </TouchableOpacity>
             </View>
@@ -304,34 +359,38 @@ const PackingList = () => {
                       value={newItem}
                       onChangeText={setNewItem}
                     />
-                    <TouchableOpacity style={styles.addButton} onPress={addItemToList}>
+                    <TouchableOpacity
+                      style={styles.addButton}
+                      onPress={addItemToList}
+                    >
                       <Text style={styles.addButtonText}>Add</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.editButton]} 
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.editButton]}
                     onPress={() => setIsEditing(!isEditing)}
                   >
                     <Text style={styles.editButtonText}>
-                      {isEditing ? 'Done' : 'Edit'}
+                      {isEditing ? "Done" : "Edit"}
                     </Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* Add to Form and Update Buttons */}
                 <View style={styles.formActionButtons}>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.addToFormButton]} 
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.addToFormButton]}
                     onPress={handleAddToForm}
                   >
                     <Text style={styles.addToFormButtonText}>
-                      Add to this form {selectedCount > 0 ? `(${selectedCount})` : ''}
+                      Add to this form{" "}
+                      {selectedCount > 0 ? `(${selectedCount})` : ""}
                     </Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.updateButton]} 
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.updateButton]}
                     onPress={handleUpdateList}
                   >
                     <Text style={styles.updateButtonText}>Update</Text>
@@ -344,7 +403,8 @@ const PackingList = () => {
             {packingItems.length > 0 && (
               <View style={styles.listHeader}>
                 <Text style={styles.listHeaderTitle}>
-                  Your Packing List {selectedCount > 0 ? `- ${selectedCount} selected` : ''}
+                  Your Packing List{" "}
+                  {selectedCount > 0 ? `- ${selectedCount} selected` : ""}
                 </Text>
               </View>
             )}
@@ -352,7 +412,9 @@ const PackingList = () => {
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Fill in the details and click Generate to create your packing list</Text>
+            <Text style={styles.emptyText}>
+              Fill in the details and click Generate to create your packing list
+            </Text>
           </View>
         }
         contentContainerStyle={styles.listContent}
@@ -378,56 +440,56 @@ const PackingList = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   backButton: {
     padding: 8,
   },
   backButtonText: {
     fontSize: 16,
-    color: '#007AFF',
+    color: "#007AFF",
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
+    fontWeight: "600",
+    color: "#000",
   },
   titleSection: {
     paddingHorizontal: 20,
     paddingTop: 30,
     paddingBottom: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     marginBottom: 10,
   },
   mainTitle: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#1a1a1a',
+    fontWeight: "700",
+    color: "#1a1a1a",
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
   },
   inputSection: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     marginHorizontal: 20,
     marginBottom: 20,
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
@@ -438,45 +500,45 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 8,
   },
   generateButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     paddingVertical: 14,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
   },
   generateButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginHorizontal: 20,
     marginBottom: 12,
   },
   formActionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginHorizontal: 20,
     marginBottom: 16,
   },
@@ -484,62 +546,62 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   addToContainer: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: "row",
     marginRight: 10,
   },
   addInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     padding: 10,
     fontSize: 14,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     marginRight: 8,
   },
   addButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: "#34C759",
     paddingHorizontal: 15,
     paddingVertical: 10,
     borderRadius: 8,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   addButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   editButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: "#FF6B6B",
   },
   editButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   addToFormButton: {
-    backgroundColor: '#5856D6',
+    backgroundColor: "#5856D6",
     flex: 1,
     marginRight: 8,
   },
   addToFormButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   updateButton: {
-    backgroundColor: '#FF9500',
+    backgroundColor: "#FF9500",
     flex: 0.5,
   },
   updateButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   listHeader: {
     marginHorizontal: 20,
@@ -547,22 +609,22 @@ const styles = StyleSheet.create({
   },
   listHeaderTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   listContent: {
     paddingBottom: 100,
   },
   packingItemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ffffff",
     marginHorizontal: 20,
     marginBottom: 8,
     padding: 15,
     borderRadius: 10,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -570,64 +632,64 @@ const styles = StyleSheet.create({
   },
   packingItemContent: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   checkbox: {
     fontSize: 20,
-    color: '#007AFF',
+    color: "#007AFF",
     marginRight: 12,
     width: 24,
-    textAlign: 'center',
+    textAlign: "center",
   },
   checkboxSelected: {
-    color: '#34C759',
+    color: "#34C759",
   },
   packingItemText: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
     flex: 1,
   },
   selectedItemText: {
-    color: '#34C759',
-    fontWeight: '500',
+    color: "#34C759",
+    fontWeight: "500",
   },
   removeButton: {
     padding: 5,
   },
   removeButtonText: {
     fontSize: 18,
-    color: '#FF6B6B',
-    fontWeight: '600',
+    color: "#FF6B6B",
+    fontWeight: "600",
   },
   emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: 50,
     marginHorizontal: 20,
   },
   emptyText: {
     fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
+    color: "#999",
+    textAlign: "center",
   },
   bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
     paddingVertical: 16,
     paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    position: 'absolute',
+    borderTopColor: "#f0f0f0",
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
   },
   navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
   },
   navIcon: {
@@ -636,8 +698,8 @@ const styles = StyleSheet.create({
   },
   navText: {
     fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
+    color: "#666",
+    fontWeight: "500",
   },
 });
 

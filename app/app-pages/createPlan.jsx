@@ -1,7 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -12,12 +12,12 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
-} from 'react-native';
-import 'react-native-get-random-values';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { v4 as uuidv4 } from 'uuid';
-import { useNotification } from './context/NotificationContext.js';
+  View,
+} from "react-native";
+import "react-native-get-random-values";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { v4 as uuidv4 } from "uuid";
+import { useNotification } from "../../context/NotificationContext.js";
 
 const CreatePlan = () => {
   const router = useRouter();
@@ -25,20 +25,26 @@ const CreatePlan = () => {
   const { showNotification } = useNotification();
 
   // Check if we're in update mode
-  const isUpdating = params.isUpdating === 'true';
+  const isUpdating = params.isUpdating === "true";
   const planId = params.planId || null;
 
   // Initialize state with saved data from params if available
-  const [destination, setDestination] = useState(params.savedDestination || '');
-  const [postCaption, setPostCaption] = useState(params.savedPostCaption || '');
-  const [selectedImage, setSelectedImage] = useState(params.savedSelectedImage || null);
-  const [planningLocation, setPlanningLocation] = useState(params.savedPlanningLocation || '');
-  const [startedTime, setStartedTime] = useState(params.savedStartedTime || '');
-  const [province, setProvince] = useState(params.savedProvince || '');
-  const [startDate, setStartDate] = useState(params.savedStartDate || '');
-  const [endDate, setEndDate] = useState(params.savedEndDate || '');
-  const [tripNotes, setTripNotes] = useState(params.savedTripNotes || '');
-  const [currentStatus, setCurrentStatus] = useState(params.savedCurrentStatus || 'Planned');
+  const [destination, setDestination] = useState(params.savedDestination || "");
+  const [postCaption, setPostCaption] = useState(params.savedPostCaption || "");
+  const [selectedImage, setSelectedImage] = useState(
+    params.savedSelectedImage || null,
+  );
+  const [planningLocation, setPlanningLocation] = useState(
+    params.savedPlanningLocation || "",
+  );
+  const [startedTime, setStartedTime] = useState(params.savedStartedTime || "");
+  const [province, setProvince] = useState(params.savedProvince || "");
+  const [startDate, setStartDate] = useState(params.savedStartDate || "");
+  const [endDate, setEndDate] = useState(params.savedEndDate || "");
+  const [tripNotes, setTripNotes] = useState(params.savedTripNotes || "");
+  const [currentStatus, setCurrentStatus] = useState(
+    params.savedCurrentStatus || "Planned",
+  );
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showPackingModal, setShowPackingModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -60,22 +66,22 @@ const CreatePlan = () => {
         return JSON.parse(params.savedBudgetEstimate);
       } catch (e) {
         return {
-          accommodation: '',
-          transportation: '',
-          food: '',
-          activities: '',
-          miscellaneous: '',
-          total: 0
+          accommodation: "",
+          transportation: "",
+          food: "",
+          activities: "",
+          miscellaneous: "",
+          total: 0,
         };
       }
     }
     return {
-      accommodation: '',
-      transportation: '',
-      food: '',
-      activities: '',
-      miscellaneous: '',
-      total: 0
+      accommodation: "",
+      transportation: "",
+      food: "",
+      activities: "",
+      miscellaneous: "",
+      total: 0,
     };
   });
   const [packingList, setPackingList] = useState([]);
@@ -83,7 +89,7 @@ const CreatePlan = () => {
   // New state for budget summary
   const [showBudgetSummary, setShowBudgetSummary] = useState(() => {
     if (params.savedShowBudgetSummary) {
-      return params.savedShowBudgetSummary === 'true';
+      return params.savedShowBudgetSummary === "true";
     }
     return false;
   });
@@ -113,10 +119,10 @@ const CreatePlan = () => {
       savedCurrentStatus: currentStatus,
       savedSelectedPackingItems: JSON.stringify(selectedPackingItems),
       savedBudgetEstimate: JSON.stringify(budgetEstimate),
-      savedShowBudgetSummary: showBudgetSummary ? 'true' : 'false',
+      savedShowBudgetSummary: showBudgetSummary ? "true" : "false",
       savedBudgetBreakdown: JSON.stringify(budgetBreakdown),
-      isUpdating: isUpdating ? 'true' : 'false',
-      planId: planId || ''
+      isUpdating: isUpdating ? "true" : "false",
+      planId: planId || "",
     };
   };
 
@@ -124,8 +130,8 @@ const CreatePlan = () => {
   const navigateToBudgetEstimate = () => {
     const savedState = saveFormState();
     router.push({
-      pathname: '/app-pages/budgetEstimate',
-      params: savedState
+      pathname: "/app-pages/budgetEstimate",
+      params: savedState,
     });
   };
 
@@ -133,8 +139,8 @@ const CreatePlan = () => {
   const navigateToPackingList = () => {
     const savedState = saveFormState();
     router.push({
-      pathname: '/app-pages/packingList',
-      params: savedState
+      pathname: "/app-pages/packingList",
+      params: savedState,
     });
   };
 
@@ -152,18 +158,18 @@ const CreatePlan = () => {
           transportation: budgetData.transport.cost.toString(),
           food: budgetData.food.cost.toString(),
           activities: budgetData.activities.cost.toString(),
-          miscellaneous: '0',
-          total: budgetData.total
+          miscellaneous: "0",
+          total: budgetData.total,
         });
 
         showNotification(
-          'budget',
-          'Budget Calculated! 💰',
+          "budget",
+          "Budget Calculated! 💰",
           `Your trip budget is estimated at $${budgetData.total.toFixed(2)}`,
-          { budgetData }
+          { budgetData },
         );
       } catch (e) {
-        console.error('Error parsing budget data', e);
+        console.error("Error parsing budget data", e);
       }
     }
 
@@ -174,13 +180,13 @@ const CreatePlan = () => {
         setSelectedPackingItems(items);
 
         showNotification(
-          'packing',
-          'Packing List Ready! 🎒',
-          `${items.length} item${items.length > 1 ? 's' : ''} added to your packing list`,
-          { itemCount: items.length }
+          "packing",
+          "Packing List Ready! 🎒",
+          `${items.length} item${items.length > 1 ? "s" : ""} added to your packing list`,
+          { itemCount: items.length },
         );
       } catch (e) {
-        console.error('Error parsing packing items', e);
+        console.error("Error parsing packing items", e);
       }
     }
   }, [params.budgetData, params.selectedPackingItems]);
@@ -188,13 +194,16 @@ const CreatePlan = () => {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'We need access to your photos to upload images.');
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission Required",
+        "We need access to your photos to upload images.",
+      );
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
@@ -203,9 +212,9 @@ const CreatePlan = () => {
     if (!result.canceled) {
       setSelectedImage(result.assets[0].uri);
       showNotification(
-        'success',
-        'Image Selected 📸',
-        'Your image has been added to the plan'
+        "success",
+        "Image Selected 📸",
+        "Your image has been added to the plan",
       );
     }
   };
@@ -217,22 +226,23 @@ const CreatePlan = () => {
     const activities = parseFloat(budgetEstimate.activities) || 0;
     const miscellaneous = parseFloat(budgetEstimate.miscellaneous) || 0;
 
-    const total = accommodation + transportation + food + activities + miscellaneous;
+    const total =
+      accommodation + transportation + food + activities + miscellaneous;
     setBudgetEstimate({ ...budgetEstimate, total });
     setShowBudgetModal(false);
-    
+
     showNotification(
-      'budget',
-      'Budget Calculated! 💰',
+      "budget",
+      "Budget Calculated! 💰",
       `Total: $${total.toFixed(2)}`,
-      { total }
+      { total },
     );
   };
 
   const savePlan = async () => {
     // Validate required fields
     if (!destination.trim()) {
-      Alert.alert('Error', 'Please enter a destination');
+      Alert.alert("Error", "Please enter a destination");
       return;
     }
 
@@ -240,7 +250,7 @@ const CreatePlan = () => {
 
     try {
       // Get existing plans from storage
-      const existingPlans = await AsyncStorage.getItem('travelPlans');
+      const existingPlans = await AsyncStorage.getItem("travelPlans");
       let plans = existingPlans ? JSON.parse(existingPlans) : [];
 
       let updatedPlanData;
@@ -264,11 +274,11 @@ const CreatePlan = () => {
           selectedPackingItems,
           image: selectedImage,
           updatedAt: new Date().toISOString(),
-          createdAt: params.createdAt || new Date().toISOString()
+          createdAt: params.createdAt || new Date().toISOString(),
         };
 
         // Find and update the plan
-        const planIndex = plans.findIndex(p => p.id === planId);
+        const planIndex = plans.findIndex((p) => p.id === planId);
         if (planIndex !== -1) {
           plans[planIndex] = updatedPlanData;
           notificationMessage = `Your trip to ${destination} has been updated`;
@@ -303,29 +313,28 @@ const CreatePlan = () => {
       }
 
       // Save back to storage
-      await AsyncStorage.setItem('travelPlans', JSON.stringify(plans));
+      await AsyncStorage.setItem("travelPlans", JSON.stringify(plans));
 
-      console.log('Saving plan:', updatedPlanData);
-      
+      console.log("Saving plan:", updatedPlanData);
+
       setSavedPlanData(updatedPlanData);
-      
+
       // Show success notification
       showNotification(
-        'plan',
-        isUpdating ? 'Plan Updated! ✨' : 'Plan Created! ✨',
+        "plan",
+        isUpdating ? "Plan Updated! ✨" : "Plan Created! ✨",
         notificationMessage,
-        { planId: updatedPlanData.id, destination }
+        { planId: updatedPlanData.id, destination },
       );
 
       // Navigate back to myItineraries with highlight
       router.push({
-        pathname: '/app-pages/myItineraries',
-        params: { highlightPlan: updatedPlanData.id }
+        pathname: "/app-pages/myItineraries",
+        params: { highlightPlan: updatedPlanData.id },
       });
-
     } catch (error) {
-      console.error('Error saving plan:', error);
-      Alert.alert('Error', 'Failed to save your plan. Please try again.');
+      console.error("Error saving plan:", error);
+      Alert.alert("Error", "Failed to save your plan. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -348,7 +357,9 @@ const CreatePlan = () => {
             placeholder="Accommodation ($)"
             keyboardType="numeric"
             value={budgetEstimate.accommodation}
-            onChangeText={(text) => setBudgetEstimate({ ...budgetEstimate, accommodation: text })}
+            onChangeText={(text) =>
+              setBudgetEstimate({ ...budgetEstimate, accommodation: text })
+            }
           />
 
           <TextInput
@@ -356,7 +367,9 @@ const CreatePlan = () => {
             placeholder="Transportation ($)"
             keyboardType="numeric"
             value={budgetEstimate.transportation}
-            onChangeText={(text) => setBudgetEstimate({ ...budgetEstimate, transportation: text })}
+            onChangeText={(text) =>
+              setBudgetEstimate({ ...budgetEstimate, transportation: text })
+            }
           />
 
           <TextInput
@@ -364,7 +377,9 @@ const CreatePlan = () => {
             placeholder="Food ($)"
             keyboardType="numeric"
             value={budgetEstimate.food}
-            onChangeText={(text) => setBudgetEstimate({ ...budgetEstimate, food: text })}
+            onChangeText={(text) =>
+              setBudgetEstimate({ ...budgetEstimate, food: text })
+            }
           />
 
           <TextInput
@@ -372,7 +387,9 @@ const CreatePlan = () => {
             placeholder="Activities ($)"
             keyboardType="numeric"
             value={budgetEstimate.activities}
-            onChangeText={(text) => setBudgetEstimate({ ...budgetEstimate, activities: text })}
+            onChangeText={(text) =>
+              setBudgetEstimate({ ...budgetEstimate, activities: text })
+            }
           />
 
           <TextInput
@@ -380,7 +397,9 @@ const CreatePlan = () => {
             placeholder="Miscellaneous ($)"
             keyboardType="numeric"
             value={budgetEstimate.miscellaneous}
-            onChangeText={(text) => setBudgetEstimate({ ...budgetEstimate, miscellaneous: text })}
+            onChangeText={(text) =>
+              setBudgetEstimate({ ...budgetEstimate, miscellaneous: text })
+            }
           />
 
           <View style={styles.modalButtons}>
@@ -443,15 +462,18 @@ const CreatePlan = () => {
       <BudgetModal />
       <PackingModal />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.content}>
           <Text style={styles.pageTitle}>
-            {isUpdating ? 'Update Your Plan' : 'Plan Your Perfect Getaway'}
+            {isUpdating ? "Update Your Plan" : "Plan Your Perfect Getaway"}
           </Text>
           <Text style={styles.pageSubtitle}>
-            {isUpdating 
-              ? 'Make changes to your travel plan and save updates'
-              : '✏️ Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖'}
+            {isUpdating
+              ? "Make changes to your travel plan and save updates"
+              : "✏️ Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖"}
           </Text>
 
           {/* Destination Input */}
@@ -481,7 +503,10 @@ const CreatePlan = () => {
             <Text style={styles.label}>Upload Your Image</Text>
             <TouchableOpacity style={styles.uploadArea} onPress={pickImage}>
               {selectedImage ? (
-                <Image source={{ uri: selectedImage }} style={styles.previewImage} />
+                <Image
+                  source={{ uri: selectedImage }}
+                  style={styles.previewImage}
+                />
               ) : (
                 <>
                   <Text style={styles.uploadText}>Drag and drop Here</Text>
@@ -530,7 +555,9 @@ const CreatePlan = () => {
           {selectedPackingItems.length > 0 && (
             <View style={styles.selectedItemsContainer}>
               <View style={styles.selectedItemsHeader}>
-                <Text style={styles.selectedItemsTitle}>Packing Items Selected</Text>
+                <Text style={styles.selectedItemsTitle}>
+                  Packing Items Selected
+                </Text>
                 <TouchableOpacity
                   onPress={() => setSelectedPackingItems([])}
                   style={styles.clearButton}
@@ -546,19 +573,22 @@ const CreatePlan = () => {
                 ))}
               </View>
               <Text style={styles.selectedItemsCount}>
-                {selectedPackingItems.length} item{selectedPackingItems.length > 1 ? 's' : ''} ready for your trip
+                {selectedPackingItems.length} item
+                {selectedPackingItems.length > 1 ? "s" : ""} ready for your trip
               </Text>
               <TouchableOpacity
                 style={styles.viewSelectedButton}
                 onPress={() => {
                   Alert.alert(
-                    'Selected Packing Items',
-                    selectedPackingItems.join('\n• '),
-                    [{ text: 'OK' }]
+                    "Selected Packing Items",
+                    selectedPackingItems.join("\n• "),
+                    [{ text: "OK" }],
                   );
                 }}
               >
-                <Text style={styles.viewSelectedButtonText}>View Selected Items</Text>
+                <Text style={styles.viewSelectedButtonText}>
+                  View Selected Items
+                </Text>
               </TouchableOpacity>
             </View>
           )}
@@ -570,8 +600,8 @@ const CreatePlan = () => {
           >
             <Text style={styles.generateButtonText}>
               {selectedPackingItems.length > 0
-                ? 'Update Packing Checklist'
-                : 'Generate Packing Checklist'}
+                ? "Update Packing Checklist"
+                : "Generate Packing Checklist"}
             </Text>
           </TouchableOpacity>
 
@@ -595,7 +625,7 @@ const CreatePlan = () => {
                 <Text style={styles.dateLabel}>End Date</Text>
                 <TextInput
                   style={styles.dateInput}
-                  placeholder="15 of May, 2026" 
+                  placeholder="15 of May, 2026"
                   value={endDate}
                   onChangeText={setEndDate}
                 />
@@ -618,7 +648,9 @@ const CreatePlan = () => {
           {showBudgetSummary && budgetBreakdown && (
             <View style={styles.budgetSummaryContainer}>
               <View style={styles.budgetSummaryHeader}>
-                <Text style={styles.budgetSummaryTitle}>Your Budget Summary</Text>
+                <Text style={styles.budgetSummaryTitle}>
+                  Your Budget Summary
+                </Text>
                 <TouchableOpacity
                   onPress={navigateToBudgetEstimate}
                   style={styles.editBudgetButton}
@@ -630,7 +662,9 @@ const CreatePlan = () => {
               {/* Budget Style Badge */}
               <View style={styles.budgetStyleBadge}>
                 <Text style={styles.budgetStyleBadgeText}>
-                  {budgetBreakdown.budgetStyle.charAt(0).toUpperCase() + budgetBreakdown.budgetStyle.slice(1)} Style
+                  {budgetBreakdown.budgetStyle.charAt(0).toUpperCase() +
+                    budgetBreakdown.budgetStyle.slice(1)}{" "}
+                  Style
                 </Text>
               </View>
 
@@ -638,15 +672,21 @@ const CreatePlan = () => {
               <View style={styles.budgetDetailsGrid}>
                 <View style={styles.budgetDetailItem}>
                   <Text style={styles.budgetDetailLabel}> Destination</Text>
-                  <Text style={styles.budgetDetailValue}>{budgetBreakdown.destination || 'Not set'}</Text>
+                  <Text style={styles.budgetDetailValue}>
+                    {budgetBreakdown.destination || "Not set"}
+                  </Text>
                 </View>
                 <View style={styles.budgetDetailItem}>
                   <Text style={styles.budgetDetailLabel}>Duration</Text>
-                  <Text style={styles.budgetDetailValue}>{budgetBreakdown.duration || '0'} days</Text>
+                  <Text style={styles.budgetDetailValue}>
+                    {budgetBreakdown.duration || "0"} days
+                  </Text>
                 </View>
                 <View style={styles.budgetDetailItem}>
                   <Text style={styles.budgetDetailLabel}>Group Size</Text>
-                  <Text style={styles.budgetDetailValue}>{budgetBreakdown.groupSize}</Text>
+                  <Text style={styles.budgetDetailValue}>
+                    {budgetBreakdown.groupSize}
+                  </Text>
                 </View>
               </View>
 
@@ -654,52 +694,78 @@ const CreatePlan = () => {
               <View style={styles.costBreakdown}>
                 <View style={styles.costItem}>
                   <View style={styles.costItemLeft}>
-                    <View style={[styles.costDot, { backgroundColor: '#FF6B6B' }]} />
+                    <View
+                      style={[styles.costDot, { backgroundColor: "#FF6B6B" }]}
+                    />
                     <Text style={styles.costItemLabel}>Transport</Text>
                   </View>
                   <View style={styles.costItemRight}>
-                    <Text style={styles.costItemOption}>{budgetBreakdown.transport.option}</Text>
-                    <Text style={styles.costItemValue}>${budgetBreakdown.transport.cost}</Text>
+                    <Text style={styles.costItemOption}>
+                      {budgetBreakdown.transport.option}
+                    </Text>
+                    <Text style={styles.costItemValue}>
+                      ${budgetBreakdown.transport.cost}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.costItem}>
                   <View style={styles.costItemLeft}>
-                    <View style={[styles.costDot, { backgroundColor: '#34C759' }]} />
+                    <View
+                      style={[styles.costDot, { backgroundColor: "#34C759" }]}
+                    />
                     <Text style={styles.costItemLabel}>Accommodation</Text>
                   </View>
                   <View style={styles.costItemRight}>
-                    <Text style={styles.costItemOption}>{budgetBreakdown.accommodation.option}</Text>
-                    <Text style={styles.costItemValue}>${budgetBreakdown.accommodation.cost}</Text>
+                    <Text style={styles.costItemOption}>
+                      {budgetBreakdown.accommodation.option}
+                    </Text>
+                    <Text style={styles.costItemValue}>
+                      ${budgetBreakdown.accommodation.cost}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.costItem}>
                   <View style={styles.costItemLeft}>
-                    <View style={[styles.costDot, { backgroundColor: '#007AFF' }]} />
+                    <View
+                      style={[styles.costDot, { backgroundColor: "#007AFF" }]}
+                    />
                     <Text style={styles.costItemLabel}>Food</Text>
                   </View>
                   <View style={styles.costItemRight}>
-                    <Text style={styles.costItemOption}>{budgetBreakdown.food.option}</Text>
-                    <Text style={styles.costItemValue}>${budgetBreakdown.food.cost}</Text>
+                    <Text style={styles.costItemOption}>
+                      {budgetBreakdown.food.option}
+                    </Text>
+                    <Text style={styles.costItemValue}>
+                      ${budgetBreakdown.food.cost}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.costItem}>
                   <View style={styles.costItemLeft}>
-                    <View style={[styles.costDot, { backgroundColor: '#FF9500' }]} />
+                    <View
+                      style={[styles.costDot, { backgroundColor: "#FF9500" }]}
+                    />
                     <Text style={styles.costItemLabel}>Activities</Text>
                   </View>
                   <View style={styles.costItemRight}>
-                    <Text style={styles.costItemOption}>{budgetBreakdown.activities.option}</Text>
-                    <Text style={styles.costItemValue}>${budgetBreakdown.activities.cost}</Text>
+                    <Text style={styles.costItemOption}>
+                      {budgetBreakdown.activities.option}
+                    </Text>
+                    <Text style={styles.costItemValue}>
+                      ${budgetBreakdown.activities.cost}
+                    </Text>
                   </View>
                 </View>
 
                 {/* Total */}
                 <View style={styles.totalContainer}>
                   <Text style={styles.totalLabel}>Total Estimated Budget</Text>
-                  <Text style={styles.totalValue}>${budgetBreakdown.total.toFixed(2)}</Text>
+                  <Text style={styles.totalValue}>
+                    ${budgetBreakdown.total.toFixed(2)}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -710,24 +776,54 @@ const CreatePlan = () => {
             <Text style={styles.label}>Current Status</Text>
             <View style={styles.statusContainer}>
               <TouchableOpacity
-                style={[styles.statusButton, currentStatus === 'Planned' && styles.activeStatus]}
-                onPress={() => setCurrentStatus('Planned')}
+                style={[
+                  styles.statusButton,
+                  currentStatus === "Planned" && styles.activeStatus,
+                ]}
+                onPress={() => setCurrentStatus("Planned")}
               >
-                <Text style={[styles.statusText, currentStatus === 'Planned' && styles.activeStatusText]}>Planned</Text>
+                <Text
+                  style={[
+                    styles.statusText,
+                    currentStatus === "Planned" && styles.activeStatusText,
+                  ]}
+                >
+                  Planned
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.statusButton, currentStatus === 'In Progress' && styles.activeStatus]}
-                onPress={() => setCurrentStatus('In Progress')}
+                style={[
+                  styles.statusButton,
+                  currentStatus === "In Progress" && styles.activeStatus,
+                ]}
+                onPress={() => setCurrentStatus("In Progress")}
               >
-                <Text style={[styles.statusText, currentStatus === 'In Progress' && styles.activeStatusText]}>In Progress</Text>
+                <Text
+                  style={[
+                    styles.statusText,
+                    currentStatus === "In Progress" && styles.activeStatusText,
+                  ]}
+                >
+                  In Progress
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.statusButton, currentStatus === 'completed' && styles.activeStatus]}
-                onPress={() => setCurrentStatus('completed')}
+                style={[
+                  styles.statusButton,
+                  currentStatus === "completed" && styles.activeStatus,
+                ]}
+                onPress={() => setCurrentStatus("completed")}
               >
-                <Text style={[styles.statusText, currentStatus === 'completed' && styles.activeStatusText]}>completed</Text>
+                <Text
+                  style={[
+                    styles.statusText,
+                    currentStatus === "completed" && styles.activeStatusText,
+                  ]}
+                >
+                  completed
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -753,16 +849,26 @@ const CreatePlan = () => {
               onChangeText={setTripNotes}
             />
           </View>
-          <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! 🔖</Text>
+          <Text style={styles.endtext}>
+            Get all the correct information, verify it, create your plan, praise
+            it, and create a new plan ! 🔖
+          </Text>
 
           {/* Complete/Update Plan Button */}
           <TouchableOpacity
-            style={[styles.completeButton, loading && styles.completeButtonDisabled]}
+            style={[
+              styles.completeButton,
+              loading && styles.completeButtonDisabled,
+            ]}
             onPress={savePlan}
             disabled={loading}
           >
             <Text style={styles.completeButtonText}>
-              {loading ? 'Saving...' : (isUpdating ? 'Update Plan' : 'Complete your Plan')}
+              {loading
+                ? "Saving..."
+                : isUpdating
+                  ? "Update Plan"
+                  : "Complete your Plan"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -774,7 +880,7 @@ const CreatePlan = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   scrollView: {
     flex: 1,
@@ -784,86 +890,86 @@ const styles = StyleSheet.create({
   },
   pageTitle: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: "700",
+    color: "#333",
     marginBottom: 10,
-    textAlign: 'center',
+    textAlign: "center",
   },
   pageSubtitle: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
     marginBottom: 30,
     lineHeight: 20,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   inputGroup: {
     marginBottom: 20,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     padding: 12,
     fontSize: 14,
-    color: '#333',
-    backgroundColor: '#fff',
+    color: "#333",
+    backgroundColor: "#fff",
   },
   uploadArea: {
     borderWidth: 2,
-    borderColor: '#ddd',
-    borderStyle: 'dashed',
+    borderColor: "#ddd",
+    borderStyle: "dashed",
     borderRadius: 8,
     padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f9f9f9',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f9f9f9",
   },
   uploadText: {
     fontSize: 14,
-    color: '#999',
+    color: "#999",
     marginBottom: 5,
   },
   uploadOr: {
     fontSize: 12,
-    color: '#ccc',
+    color: "#ccc",
     marginBottom: 5,
   },
   uploadButton: {
     fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
+    color: "#007AFF",
+    fontWeight: "500",
   },
   previewImage: {
-    width: '100%',
+    width: "100%",
     height: 200,
     borderRadius: 8,
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 0,
   },
   generateButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: "#34C759",
     padding: 15,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
   },
   generateButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   planningContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   dateInputContainer: {
     flex: 1,
@@ -871,137 +977,137 @@ const styles = StyleSheet.create({
   },
   dateLabel: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginBottom: 5,
   },
   dateInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     padding: 10,
     fontSize: 14,
   },
   budgetContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 20,
   },
   estimateButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 8,
   },
   estimateButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   statusContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
   },
   statusButton: {
     flex: 1,
     paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    alignItems: "center",
+    backgroundColor: "#f0f0f0",
     marginHorizontal: 2,
     borderRadius: 8,
   },
   activeStatus: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
   },
   statusText: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
   },
   activeStatusText: {
-    color: '#fff',
-    fontWeight: '500',
+    color: "#fff",
+    fontWeight: "500",
   },
   notesInput: {
     height: 100,
-    textAlignVertical: 'top',
+    textAlignVertical: "top",
   },
   completeButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: "#FF6B6B",
     padding: 18,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 5,
     marginBottom: 30,
   },
   completeButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 12,
     padding: 20,
-    width: '90%',
-    maxHeight: '80%',
+    width: "90%",
+    maxHeight: "80%",
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: "700",
+    color: "#333",
     marginBottom: 20,
-    textAlign: 'center',
+    textAlign: "center",
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 8,
     padding: 12,
     marginBottom: 12,
     fontSize: 14,
   },
   modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 20,
   },
   modalButton: {
     flex: 1,
     padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
   },
   cancelButtonText: {
-    color: '#666',
+    color: "#666",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   calculateButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
   },
   calculateButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   closeButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: "#34C759",
     marginTop: 15,
   },
   closeButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   checklist: {
     maxHeight: 300,
@@ -1009,155 +1115,155 @@ const styles = StyleSheet.create({
   checklistItem: {
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   checklistText: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
   },
   // Styles for selected packing items
   selectedItemsContainer: {
-    backgroundColor: '#f0f8ff',
+    backgroundColor: "#f0f8ff",
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: "#007AFF",
   },
   selectedItemsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 10,
   },
   selectedItemsTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
+    fontWeight: "600",
+    color: "#007AFF",
   },
   clearButton: {
     padding: 5,
   },
   clearButtonText: {
     fontSize: 14,
-    color: '#FF6B6B',
-    fontWeight: '500',
+    color: "#FF6B6B",
+    fontWeight: "500",
   },
   selectedItemsBadges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     marginBottom: 8,
   },
   selectedItemBadge: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#34C759',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#34C759",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 8,
     marginBottom: 8,
   },
   selectedItemBadgeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   selectedItemsCount: {
     fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
+    color: "#666",
+    fontStyle: "italic",
     marginBottom: 10,
   },
   viewSelectedButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     padding: 10,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   viewSelectedButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   // Budget summary styles
   budgetSummaryContainer: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: "#f8f9fa",
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: "#007AFF",
   },
   budgetSummaryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   budgetSummaryTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   editBudgetButton: {
     padding: 5,
   },
   editBudgetButtonText: {
     fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
+    color: "#007AFF",
+    fontWeight: "500",
   },
   budgetStyleBadge: {
-    backgroundColor: '#007AFF',
+    backgroundColor: "#007AFF",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 16,
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
     marginBottom: 16,
   },
   budgetStyleBadgeText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   budgetDetailsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
   budgetDetailItem: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   budgetDetailLabel: {
     fontSize: 12,
-    color: '#666',
+    color: "#666",
     marginBottom: 4,
   },
   budgetDetailValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   costBreakdown: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 8,
     padding: 12,
   },
   costItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: "#f0f0f0",
   },
   costItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   costDot: {
@@ -1168,52 +1274,52 @@ const styles = StyleSheet.create({
   },
   costItemLabel: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
     flex: 1,
   },
   costItemRight: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   costItemOption: {
     fontSize: 12,
-    color: '#666',
+    color: "#666",
     marginBottom: 2,
   },
   costItemValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 2,
-    borderTopColor: '#007AFF',
+    borderTopColor: "#007AFF",
   },
   totalLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: "600",
+    color: "#333",
   },
   totalValue: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#007AFF',
+    fontWeight: "700",
+    color: "#007AFF",
   },
   completeButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: "#ccc",
     opacity: 0.7,
   },
-  endtext:{
-    textAlign:'center',
-    lineHeight:25,
-    color:'#666',
-    marginBottom:20,
-    fontStyle:'italic',
-  }
+  endtext: {
+    textAlign: "center",
+    lineHeight: 25,
+    color: "#666",
+    marginBottom: 20,
+    fontStyle: "italic",
+  },
 });
 
 export default CreatePlan;

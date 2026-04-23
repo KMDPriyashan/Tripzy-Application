@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { saveUserProfile } from "../utils/userStorage";
+import { saveUserProfile } from "../../utils/userStorage";
 
 export default function CreateProfileScreen() {
   const [name, setName] = useState("");

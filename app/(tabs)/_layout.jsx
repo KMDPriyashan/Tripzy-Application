@@ -5,6 +5,7 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        headerShown: false,
         tabBarActiveTintColor: "#007AFF",
         tabBarInactiveTintColor: "#666",
         tabBarStyle: {
@@ -37,6 +38,12 @@ export default function TabLayout() {
           headerShown: false,
         }}
       />
+    </Tabs>
+  );
+}
+
+{
+  /*
       <Tabs.Screen
         name="myItineraries"
         options={{
@@ -47,6 +54,7 @@ export default function TabLayout() {
           headerShown: false,
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
@@ -57,6 +65,6 @@ export default function TabLayout() {
           headerShown: false,
         }}
       />
-    </Tabs>
-  );
+    
+    */
 }
