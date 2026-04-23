@@ -1,19 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
-  FlatList,
-  Modal,
+  Clipboard,
+  Linking,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
+import BottomNav from '../../components/BottomNav'; // Import BottomNav component
 import { supabase } from '../../lib/supabase';
 
 const TourGuidePage = () => {
@@ -23,35 +23,27 @@ const TourGuidePage = () => {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [destination, setDestination] = useState('');
   const [groupSize, setGroupSize] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [tourGuideName, setTourGuideName] = useState('');
   
   // States for enhanced functionality
-  const [tourGuides, setTourGuides] = useState([]);
-  const [filteredGuides, setFilteredGuides] = useState([]);
-  const [selectedGuide, setSelectedGuide] = useState(null);
-  const [showGuideModal, setShowGuideModal] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [specialRequests, setSpecialRequests] = useState('');
   const [totalPrice, setTotalPrice] = useState(0);
   const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   
-  const searchInputRef = useRef(null);
-  const debounceTimeout = useRef(null);
-
-  // Price rates (example)
+  // Price rates
   const BASE_PRICE_PER_DAY = 50;
   const PRICE_PER_PERSON = 25;
 
   useEffect(() => {
     loadCurrentUser();
-    loadTourGuides();
   }, []);
 
   useEffect(() => {
     calculatePrice();
-  }, [groupSize, selectedGuide]);
+  }, [groupSize]);
 
   const loadCurrentUser = async () => {
     try {
@@ -59,26 +51,6 @@ const TourGuidePage = () => {
       setCurrentUser(user);
     } catch (error) {
       console.error('Error loading user:', error);
-    }
-  };
-
-  const loadTourGuides = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('tour_guides')
-        .select('*')
-        .eq('is_tour_guide', true)
-        .order('full_name');
-
-      if (error) throw error;
-      setTourGuides(data || []);
-      setFilteredGuides(data || []);
-    } catch (error) {
-      console.error('Error loading tour guides:', error);
-      Alert.alert('Error', 'Failed to load tour guides');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -90,66 +62,74 @@ const TourGuidePage = () => {
     setTotalPrice(price);
   };
 
-  // Handle search input change with debouncing
-  const handleSearchChange = (text) => {
-    setSearchQuery(text);
-    
-    // Clear previous timeout
-    if (debounceTimeout.current) {
-      clearTimeout(debounceTimeout.current);
+  const sendWhatsAppMessage = async () => {
+    if (!whatsappNumber) {
+      Alert.alert('Warning', 'Please enter tour guide WhatsApp number to send confirmation');
+      return false;
     }
-    
-    // Debounce search to avoid too many re-renders
-    debounceTimeout.current = setTimeout(() => {
-      if (text.trim() === '') {
-        setFilteredGuides(tourGuides);
-        setShowSuggestions(false);
-      } else {
-        const filtered = tourGuides.filter(guide =>
-          guide.full_name?.toLowerCase().includes(text.toLowerCase())
-        );
-        setFilteredGuides(filtered);
-        // Only show suggestions if there are results and user is still typing
-        if (filtered.length > 0) {
-          setShowSuggestions(true);
-        } else {
-          setShowSuggestions(false);
-        }
-      }
-    }, 300);
-  };
 
-  const handleSelectGuide = (guide) => {
-    setSearchQuery(guide.full_name);
-    setSelectedGuide(guide);
-    setShowSuggestions(false);
-    // Dismiss keyboard after selection
-    searchInputRef.current?.blur();
-  };
+    // Clean the WhatsApp number (remove any spaces, ensure it starts with country code)
+    let cleanNumber = whatsappNumber.replace(/\s/g, '');
+    if (!cleanNumber.startsWith('+')) {
+      cleanNumber = '+' + cleanNumber;
+    }
 
-  const checkAvailability = async () => {
-    if (!selectedGuide || !selectedDate) return true;
+    // Create the message content with user details highlighted (without User ID)
+    const message = `*🏖️ TOUR GUIDE BOOKING REQUEST* 🎉\n\n` +
+      `*👤 FROM: ${currentUser?.user_metadata?.full_name || 'Guest User'}* \n` +
+      `*📧 Email: ${currentUser?.email || 'N/A'}*\n\n` +
+      `*📋 Booking Details:*\n` +
+      `• *Tour Guide:* ${tourGuideName}\n` +
+      `• *📍 Destination:* ${destination}\n` +
+      `• *📅 Date:* ${selectedDate}/${currentMonth + 1}/${currentYear}\n` +
+      `• *👥 Group Size:* ${groupSize} person(s)\n` +
+      `• *💰 Total Price:* $${totalPrice}\n` +
+      `• *📝 Special Requests:* ${specialRequests || 'None'}\n\n` +
+      `*✨ Booking Status:* Pending Confirmation\n` +
+      `*🕐 Request Time:* ${new Date().toLocaleString()}\n\n` +
+      `Please confirm this booking request. Thank you! 🙏`;
+
+    // Encode the message for URL
+    const encodedMessage = encodeURIComponent(message);
     
+    // Create WhatsApp URL
+    const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
+    
+    // Open WhatsApp or WhatsApp Web
     try {
-      const { data, error } = await supabase
-        .from('tour_guide_bookings')
-        .select('*')
-        .eq('tour_guide_id', selectedGuide.id)
-        .eq('booking_date', `${selectedDate}/${currentMonth + 1}/${currentYear}`)
-        .eq('status', 'confirmed');
-
-      if (error) throw error;
-      return data.length === 0;
+      const supported = await Linking.canOpenURL(whatsappUrl);
+      
+      if (supported) {
+        await Linking.openURL(whatsappUrl);
+        return true;
+      } else {
+        Alert.alert(
+          'WhatsApp Not Installed',
+          'Please install WhatsApp to send the message, or copy the number manually.',
+          [
+            { text: 'Copy Number', onPress: () => copyToClipboard(cleanNumber) },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+        return false;
+      }
     } catch (error) {
-      console.error('Error checking availability:', error);
-      return true;
+      console.error('Error opening WhatsApp:', error);
+      Alert.alert('Error', 'Could not open WhatsApp. Please check if WhatsApp is installed.');
+      return false;
     }
+  };
+
+  // Helper function to copy to clipboard
+  const copyToClipboard = (text) => {
+    Clipboard.setString(text);
+    Alert.alert('Copied!', 'WhatsApp number copied to clipboard');
   };
 
   const handleBooking = async () => {
-    // Validation
-    if (!selectedGuide) {
-      Alert.alert('Error', 'Please select a tour guide');
+    // Validation - Check all required fields
+    if (!tourGuideName) {
+      Alert.alert('Error', 'Please enter tour guide name');
       return;
     }
     
@@ -168,34 +148,32 @@ const TourGuidePage = () => {
       return;
     }
 
-    // Check availability
-    const isAvailable = await checkAvailability();
-    if (!isAvailable) {
-      Alert.alert('Not Available', 'This tour guide is already booked on this date. Please select another date.');
+    if (!whatsappNumber) {
+      Alert.alert('Error', 'Please enter tour guide WhatsApp number');
       return;
     }
     
-    // Show booking summary
-    Alert.alert(
-      'Confirm Booking',
-      `📋 Booking Summary:\n\n` +
-      `Guide: ${selectedGuide.full_name}\n` +
-      `📍 Destination: ${destination}\n` +
-      `📅 Date: ${selectedDate}/${currentMonth + 1}/${currentYear}\n` +
-      `👥 Group Size: ${groupSize}\n` +
-      `💰 Total Price: $${totalPrice}\n` +
-      `${specialRequests ? `📝 Special Requests: ${specialRequests}\n` : ''}\n` +
-      `Confirm your booking?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Confirm', onPress: submitBooking }
-      ]
-    );
+    // Send WhatsApp message
+    setLoading(true);
+    const whatsappSent = await sendWhatsAppMessage();
+    
+    if (whatsappSent) {
+      // If WhatsApp sent successfully, save to database
+      await saveBookingToDatabase();
+    } else {
+      // If WhatsApp failed, ask if user wants to continue with booking
+      Alert.alert(
+        'WhatsApp Message Failed',
+        'Failed to send WhatsApp message. Do you want to continue with the booking?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => setLoading(false) },
+          { text: 'Continue', onPress: saveBookingToDatabase }
+        ]
+      );
+    }
   };
 
-  const submitBooking = async () => {
-    setLoading(true);
-    
+  const saveBookingToDatabase = async () => {
     // Generate UUID for booking
     const generateUUID = () => {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -207,8 +185,7 @@ const TourGuidePage = () => {
     
     const bookingData = {
       id: generateUUID(),
-      tour_guide_id: selectedGuide.id,
-      tour_guide_name: selectedGuide.full_name,
+      tour_guide_name: tourGuideName,
       user_id: currentUser?.id,
       user_name: currentUser?.user_metadata?.full_name || 'Guest',
       user_email: currentUser?.email,
@@ -217,6 +194,7 @@ const TourGuidePage = () => {
       group_size: parseInt(groupSize),
       total_price: totalPrice,
       special_requests: specialRequests,
+      whatsapp_number: whatsappNumber,
       status: 'pending',
       created_at: new Date().toISOString(),
     };
@@ -229,24 +207,24 @@ const TourGuidePage = () => {
       if (error) throw error;
 
       Alert.alert(
-        'Booking Successful! 🎉',
-        `Your booking request has been sent to ${selectedGuide.full_name}. They will contact you soon.`,
+        'Booking Request Sent! 🎉',
+        `Your booking request has been sent to ${tourGuideName} via WhatsApp.\n\nThey will contact you shortly on WhatsApp to confirm the booking.`,
         [{ text: 'OK', onPress: resetForm }]
       );
     } catch (error) {
       console.error('Error booking:', error);
-      Alert.alert('Error', 'Failed to submit booking. Please try again.');
+      Alert.alert('Error', 'Failed to save booking. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const resetForm = () => {
-    setSearchQuery('');
-    setSelectedGuide(null);
+    setTourGuideName('');
     setDestination('');
     setGroupSize('');
     setSpecialRequests('');
+    setWhatsappNumber('');
     setSelectedDate(new Date().getDate());
     setTotalPrice(0);
   };
@@ -309,91 +287,43 @@ const TourGuidePage = () => {
     setSelectedDate(null);
   };
 
-  const renderSuggestionItem = ({ item }) => (
-    <TouchableOpacity style={styles.suggestionItem} onPress={() => handleSelectGuide(item)}>
-      <Ionicons name="person-circle-outline" size={30} color="#007AFF" />
-      <View style={styles.suggestionContent}>
-        <Text style={styles.suggestionName}>{item.full_name}</Text>
-        <Text style={styles.suggestionDetails}>
-          {item.experience || 'N/A'} exp • {item.languages || 'Multiple languages'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  // Check if all required fields are filled
+  const isFormValid = () => {
+    return tourGuideName && 
+           destination && 
+           selectedDate && 
+           groupSize && 
+           parseInt(groupSize) > 0 && 
+           whatsappNumber;
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <Text style={styles.heroTitle}>Easy Guide Booking</Text>
-          <Text style={styles.heroSubtitle}>
-            Pick your place, set your date, and book instantly
-          </Text>
-        </View>
-
-        {/* Search Tour Guide Section */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>👤 Who did you select?</Text>
-          <View style={styles.searchContainer}>
-            <Ionicons name="search-outline" size={20} color="#8E8E93" />
-            <TextInput
-              ref={searchInputRef}
-              style={styles.searchInput}
-              placeholder="Search tour guide name..."
-              value={searchQuery}
-              onChangeText={handleSearchChange}
-              onFocus={() => {
-                // Only show suggestions if there's text and filtered results
-                if (searchQuery.trim() !== '' && filteredGuides.length > 0) {
-                  setShowSuggestions(true);
-                }
-              }}
-            />
-            {loading && <ActivityIndicator size="small" color="#007AFF" />}
-            {!loading && searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => {
-                setSearchQuery('');
-                setFilteredGuides(tourGuides);
-                setShowSuggestions(false);
-              }}>
-                <Ionicons name="close-circle" size={18} color="#8E8E93" />
-              </TouchableOpacity>
-            )}
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+          {/* Hero Section */}
+          <View style={styles.heroSection}>
+            <Text style={styles.heroTitle}>Easy Guide Booking</Text>
+            <Text style={styles.heroSubtitle}>
+              Pick your place, set your date, and book instantly
+            </Text>
           </View>
 
-          {/* Selected Guide Info */}
-          {selectedGuide && (
-            <TouchableOpacity 
-              style={styles.selectedGuideCard}
-              onPress={() => setShowGuideModal(true)}
-            >
-              <View style={styles.selectedGuideHeader}>
-                <Ionicons name="checkmark-circle" size={20} color="#34C759" />
-                <Text style={styles.selectedGuideTitle}>Selected Guide</Text>
-              </View>
-              <Text style={styles.selectedGuideName}>{selectedGuide.full_name}</Text>
-              <View style={styles.selectedGuideTags}>
-                <View style={styles.tag}>
-                  <Ionicons name="star" size={12} color="#FFD700" />
-                  <Text style={styles.tagText}>4.8 ★</Text>
-                </View>
-                <View style={styles.tag}>
-                  <Ionicons name="language" size={12} color="#007AFF" />
-                  <Text style={styles.tagText}>Multi-lingual</Text>
-                </View>
-                <View style={styles.tag}>
-                  <Ionicons name="cash" size={12} color="#34C759" />
-                  <Text style={styles.tagText}>${BASE_PRICE_PER_DAY}/day</Text>
-                </View>
-              </View>
-              <Text style={styles.viewProfileText}>Tap to view full profile →</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+          {/* Tour Guide Name Input */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>👤 Tour Guide Name</Text>
+            <View style={styles.tourGuideInputContainer}>
+              <Ionicons name="person-outline" size={20} color="#007AFF" />
+              <TextInput
+                style={styles.tourGuideInput}
+                placeholder="Enter tour guide name (e.g., John Doe)"
+                value={tourGuideName}
+                onChangeText={setTourGuideName}
+              />
+            </View>
+          </View>
 
-        {/* Price Calculator Section */}
-        {selectedGuide && (
+          {/* Price Calculator Section */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>💰 Price Calculator</Text>
             <View style={styles.priceRow}>
@@ -427,229 +357,156 @@ const TourGuidePage = () => {
               </View>
             )}
           </View>
-        )}
 
-        {/* Black Info Card */}
-        <View style={styles.blackInfoCard}>
-          <Text style={styles.blackInfoText}>
-            You should quickly find a tour guide and book after reviewing their profile.
-          </Text>
-          <TouchableOpacity 
-            style={styles.findBookingButton}
-            onPress={handleFindBooking}
-          >
-            <Text style={styles.findBookingButtonText}>Find Booking</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Destination Input */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>📍 Where do you want to go?</Text>
-          <View style={styles.destinationInputContainer}>
-            <Ionicons name="location-outline" size={20} color="#007AFF" />
-            <TextInput
-              style={styles.destinationInput}
-              placeholder="Enter destination (e.g., Kandy, Galle, Colombo)"
-              value={destination}
-              onChangeText={setDestination}
-            />
-          </View>
-        </View>
-
-        {/* Calendar Section */}
-        <View style={styles.calendarCard}>
-          <Text style={styles.sectionTitle}>📅 Date Picker</Text>
-          <Text style={styles.calendarSubtitle}>
-            Pick your suitable date for booking Tour Guide
-          </Text>
-
-          <View style={styles.monthNavigation}>
-            <TouchableOpacity onPress={goToPreviousMonth} style={styles.monthNavButton}>
-              <Ionicons name="chevron-back" size={24} color="#007AFF" />
-            </TouchableOpacity>
-            <Text style={styles.monthYearText}>
-              {getMonthName(currentMonth)} {currentYear}
-            </Text>
-            <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavButton}>
-              <Ionicons name="chevron-forward" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.weekDaysRow}>
-            {weekDays.map((day, index) => (
-              <Text key={index} style={styles.weekDayText}>{day}</Text>
-            ))}
-          </View>
-
-          <View style={styles.calendarGrid}>
-            {calendarDays.map((item) => (
-              <TouchableOpacity
-                key={item.key}
-                style={[
-                  styles.calendarDay,
-                  !item.isCurrentMonth && styles.otherMonthDay,
-                  item.isToday && styles.todayDay,
-                  selectedDate === item.day && item.isCurrentMonth && styles.selectedDay
-                ]}
-                onPress={() => item.isCurrentMonth && setSelectedDate(item.day)}
-                disabled={!item.isCurrentMonth}
-              >
-                <Text style={[
-                  styles.calendarDayText,
-                  !item.isCurrentMonth && styles.otherMonthDayText,
-                  item.isToday && styles.todayDayText,
-                  selectedDate === item.day && item.isCurrentMonth && styles.selectedDayText
-                ]}>
-                  {item.day}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Group Size */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>👥 Group Size</Text>
-          <TextInput
-            style={styles.groupSizeInput}
-            placeholder="Enter number of people"
-            value={groupSize}
-            onChangeText={setGroupSize}
-            keyboardType="numeric"
-          />
-          <Text style={styles.helperText}>
-            Additional persons will incur extra charges
-          </Text>
-        </View>
-
-        {/* Special Requests */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>📝 Special Requests</Text>
-          <TextInput
-            style={[styles.groupSizeInput, styles.textArea]}
-            placeholder="Any special requirements? (dietary needs, accessibility, preferred language, etc.)"
-            value={specialRequests}
-            onChangeText={setSpecialRequests}
-            multiline
-            numberOfLines={3}
-          />
-        </View>
-
-        {/* Ready to Book Text */}
-        <Text style={styles.readyToBookText}>
-          Ready to book your guide? Start your journey now.
-        </Text>
-
-        {/* Ask Booking Button */}
-        <TouchableOpacity 
-          style={[styles.askBookingButton, (!selectedGuide || loading) && styles.disabledButton]}
-          onPress={handleBooking}
-          disabled={!selectedGuide || loading}
-        >
-          <Text style={styles.askBookingButtonText}>
-            {loading ? 'Processing...' : 'Ask Booking'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Suggestions Modal */}
-      <Modal
-        visible={showSuggestions && filteredGuides.length > 0}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowSuggestions(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowSuggestions(false)}
-        >
-          <View style={styles.suggestionsModal}>
-            <View style={styles.suggestionsHeader}>
-              <Text style={styles.suggestionsHeaderText}>
-                Select a Tour Guide ({filteredGuides.length} found)
-              </Text>
-              <TouchableOpacity onPress={() => setShowSuggestions(false)}>
-                <Ionicons name="close" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={filteredGuides}
-              renderItem={renderSuggestionItem}
-              keyExtractor={(item) => item.id.toString()}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="always"
-              initialNumToRender={10}
-              maxToRenderPerBatch={10}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* No Results Modal */}
-      <Modal
-        visible={showSuggestions && searchQuery.trim() !== '' && filteredGuides.length === 0 && !loading}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowSuggestions(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowSuggestions(false)}
-        >
-          <View style={styles.noResultsModal}>
-            <Ionicons name="person-outline" size={50} color="#ccc" />
-            <Text style={styles.noResultsText}>No tour guides found</Text>
-            <Text style={styles.noResultsSubtext}>
-              No registered tour guides match "{searchQuery}"
+          {/* Black Info Card */}
+          <View style={styles.blackInfoCard}>
+            <Text style={styles.blackInfoText}>
+              You should quickly find a tour guide and book after reviewing their profile.
             </Text>
             <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={() => setShowSuggestions(false)}
+              style={styles.findBookingButton}
+              onPress={handleFindBooking}
             >
-              <Text style={styles.closeButtonText}>Close</Text>
+              <Text style={styles.findBookingButtonText}>Find Booking</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
 
-      {/* Tour Guide Profile Modal */}
-      <Modal visible={showGuideModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.profileModal}>
-            <View style={styles.profileHeader}>
-              <Text style={styles.profileTitle}>Tour Guide Profile</Text>
-              <TouchableOpacity onPress={() => setShowGuideModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
+          {/* Destination Input */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>📍 Where do you want to go?</Text>
+            <View style={styles.destinationInputContainer}>
+              <Ionicons name="location-outline" size={20} color="#007AFF" />
+              <TextInput
+                style={styles.destinationInput}
+                placeholder="Enter destination (e.g., Kandy, Galle, Colombo)"
+                value={destination}
+                onChangeText={setDestination}
+              />
+            </View>
+          </View>
+
+          {/* Calendar Section */}
+          <View style={styles.calendarCard}>
+            <Text style={styles.sectionTitle}>📅 Date Picker</Text>
+            <Text style={styles.calendarSubtitle}>
+              Pick your suitable date for booking Tour Guide
+            </Text>
+
+            <View style={styles.monthNavigation}>
+              <TouchableOpacity onPress={goToPreviousMonth} style={styles.monthNavButton}>
+                <Ionicons name="chevron-back" size={24} color="#007AFF" />
+              </TouchableOpacity>
+              <Text style={styles.monthYearText}>
+                {getMonthName(currentMonth)} {currentYear}
+              </Text>
+              <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavButton}>
+                <Ionicons name="chevron-forward" size={24} color="#007AFF" />
               </TouchableOpacity>
             </View>
-            <ScrollView>
-              <View style={styles.profileContent}>
-                <Ionicons name="person-circle" size={80} color="#007AFF" />
-                <Text style={styles.profileName}>{selectedGuide?.full_name}</Text>
-                <Text style={styles.profileEmail}>{selectedGuide?.user_email}</Text>
-                
-                <View style={styles.profileSection}>
-                  <Text style={styles.profileSectionTitle}>Experience</Text>
-                  <Text>{selectedGuide?.experience || 'Not specified'} years</Text>
-                </View>
-                
-                <View style={styles.profileSection}>
-                  <Text style={styles.profileSectionTitle}>Languages</Text>
-                  <Text>{selectedGuide?.languages || 'Not specified'}</Text>
-                </View>
-                
-                <View style={styles.profileSection}>
-                  <Text style={styles.profileSectionTitle}>Description</Text>
-                  <Text>{selectedGuide?.description || 'No description provided'}</Text>
-                </View>
-              </View>
-            </ScrollView>
+
+            <View style={styles.weekDaysRow}>
+              {weekDays.map((day, index) => (
+                <Text key={index} style={styles.weekDayText}>{day}</Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {calendarDays.map((item) => (
+                <TouchableOpacity
+                  key={item.key}
+                  style={[
+                    styles.calendarDay,
+                    !item.isCurrentMonth && styles.otherMonthDay,
+                    item.isToday && styles.todayDay,
+                    selectedDate === item.day && item.isCurrentMonth && styles.selectedDay
+                  ]}
+                  onPress={() => item.isCurrentMonth && setSelectedDate(item.day)}
+                  disabled={!item.isCurrentMonth}
+                >
+                  <Text style={[
+                    styles.calendarDayText,
+                    !item.isCurrentMonth && styles.otherMonthDayText,
+                    item.isToday && styles.todayDayText,
+                    selectedDate === item.day && item.isCurrentMonth && styles.selectedDayText
+                  ]}>
+                    {item.day}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+
+          {/* Group Size */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>👥 Group Size</Text>
+            <TextInput
+              style={styles.groupSizeInput}
+              placeholder="Enter number of people"
+              value={groupSize}
+              onChangeText={setGroupSize}
+              keyboardType="numeric"
+            />
+            <Text style={styles.helperText}>
+              Additional persons will incur extra charges
+            </Text>
+          </View>
+
+          {/* WhatsApp Number Section */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>📱 Tour Guide WhatsApp Number</Text>
+            <View style={styles.whatsappInputContainer}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+              <TextInput
+                style={styles.whatsappInput}
+                placeholder="e.g., +94771234567"
+                value={whatsappNumber}
+                onChangeText={setWhatsappNumber}
+                keyboardType="phone-pad"
+              />
+            </View>
+            <Text style={styles.helperText}>
+              This number will receive the booking confirmation message
+            </Text>
+          </View>
+
+          {/* Special Requests */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>📝 Special Requests</Text>
+            <TextInput
+              style={[styles.groupSizeInput, styles.textArea]}
+              placeholder="Any special requirements? (dietary needs, accessibility, preferred language, etc.)"
+              value={specialRequests}
+              onChangeText={setSpecialRequests}
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+
+          {/* Ready to Book Text */}
+          <Text style={styles.readyToBookText}>
+            Ready to book your guide? Start your journey now.
+          </Text>
+
+          {/* Ask Booking Button */}
+          <TouchableOpacity 
+            style={[styles.askBookingButton, (!isFormValid() || loading) && styles.disabledButton]}
+            onPress={handleBooking}
+            disabled={!isFormValid() || loading}
+          >
+            <Ionicons name="logo-whatsapp" size={24} color="#fff" style={styles.buttonIcon} />
+            <Text style={styles.askBookingButtonText}>
+              {loading ? 'Sending...' : 'Ask Booking via WhatsApp'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Add extra padding at bottom to prevent content being hidden behind bottom nav */}
+          <View style={styles.bottomPadding} />
+        </ScrollView>
+      </SafeAreaView>
+      
+      {/* Bottom Navigation */}
+      <BottomNav />
+    </View>
   );
 };
 
@@ -657,6 +514,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 30,
+  },
+  bottomPadding: {
+    height: 80, // Extra padding to prevent content being hidden behind bottom nav
   },
   heroSection: {
     paddingHorizontal: 20,
@@ -696,7 +562,7 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 12,
   },
-  searchContainer: {
+  tourGuideInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
@@ -706,60 +572,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f0f0f0',
   },
-  searchInput: {
+  tourGuideInput: {
     flex: 1,
     fontSize: 13,
     color: '#333',
     marginLeft: 8,
     paddingVertical: 0,
-  },
-  selectedGuideCard: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: '#E8F1FF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#007AFF20',
-  },
-  selectedGuideHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  selectedGuideTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#007AFF',
-    marginLeft: 4,
-  },
-  selectedGuideName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  selectedGuideTags: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-  },
-  tagText: {
-    fontSize: 11,
-    color: '#666',
-    marginLeft: 4,
-  },
-  viewProfileText: {
-    fontSize: 12,
-    color: '#007AFF',
-    marginTop: 8,
   },
   priceRow: {
     flexDirection: 'row',
@@ -956,7 +774,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 13,
     color: '#333',
-    
     borderWidth: 1,
     borderColor: '#f0f0f0',
   },
@@ -978,17 +795,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   askBookingButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#25D366',
     marginHorizontal: 20,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#007AFF',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#25D366',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 5,
     marginBottom: 30,
+  },
+  buttonIcon: {
+    marginRight: 10,
   },
   disabledButton: {
     backgroundColor: '#ccc',
@@ -999,128 +821,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+  whatsappInputContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  suggestionsModal: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
     borderRadius: 12,
-    width: '90%',
-    maxHeight: '70%',
-    overflow: 'hidden',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
-  suggestionsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  suggestionsHeaderText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  suggestionContent: {
-    marginLeft: 12,
+  whatsappInput: {
     flex: 1,
-  },
-  suggestionName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 13,
     color: '#333',
-  },
-  suggestionDetails: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  noResultsModal: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '80%',
-    alignItems: 'center',
-  },
-  noResultsText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
-  },
-  noResultsSubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  closeButton: {
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  profileModal: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    width: '90%',
-    maxHeight: '80%',
-    overflow: 'hidden',
-  },
-  profileHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  profileTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-  },
-  profileContent: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  profileName: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 10,
-  },
-  profileEmail: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  profileSection: {
-    alignSelf: 'stretch',
-    marginTop: 20,
-  },
-  profileSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+    marginLeft: 8,
+    paddingVertical: 0,
   },
 });
 
