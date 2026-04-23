@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
   },
   coverImage: {
     width: '100%',
-    height: 180,
+    height: 220,
     backgroundColor: '#f5f5f5',
   },
   coverPlaceholder: {

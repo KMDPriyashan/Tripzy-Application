@@ -32,6 +32,7 @@ export default function WeatherPage() {
   const [searchCity, setSearchCity] = useState('');
   const [useCurrentLocation, setUseCurrentLocation] = useState(true);
   const [selectedHourlyIndex, setSelectedHourlyIndex] = useState(0);
+  const [searchError, setSearchError] = useState('');
 
   // Load weather on component mount
   useEffect(() => {
@@ -60,31 +61,55 @@ export default function WeatherPage() {
     }
   };
 
-  // Get weather by city name
+  // Get weather by city name - IMPROVED with better search
   const getWeatherByCity = async (cityName) => {
     try {
+      // First attempt: Direct search with geocoding API
       const geoResponse = await axios.get(`${GEOCODING_API_BASE}/search`, {
         params: {
           name: cityName,
-          count: 1,
+          count: 5,
           language: 'en',
           format: 'json'
-        }
+        },
+        timeout: 10000
       });
       
       if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
-        throw new Error('City not found');
+        // Second attempt: Try with different formatting
+        const formattedCity = cityName.trim().replace(/\s+/g, ' ');
+        const retryResponse = await axios.get(`${GEOCODING_API_BASE}/search`, {
+          params: {
+            name: formattedCity,
+            count: 5,
+            language: 'en',
+            format: 'json'
+          },
+          timeout: 10000
+        });
+        
+        if (!retryResponse.data.results || retryResponse.data.results.length === 0) {
+          throw new Error(`City "${cityName}" not found. Please check spelling or try a nearby city.`);
+        }
+        
+        var results = retryResponse.data.results;
+      } else {
+        var results = geoResponse.data.results;
       }
       
-      const { latitude, longitude, name, country } = geoResponse.data.results[0];
+      // Take the best match (first result)
+      const { latitude, longitude, name, country, admin1 } = results[0];
+      const displayCity = name || cityName;
+      const displayRegion = admin1 || country || '';
+      
       const weatherData = await getWeatherByCoordinates(latitude, longitude);
       
       return {
         ...weatherData,
-        location: { name, country, latitude, longitude }
+        location: { name: displayCity, country: displayRegion, latitude, longitude }
       };
     } catch (error) {
-      console.error('Error fetching weather by city:', error);
+      console.error('Error fetching weather by city:', error.message);
       throw error;
     }
   };
@@ -103,14 +128,14 @@ export default function WeatherPage() {
       
       const { latitude, longitude } = location.coords;
       const reverseGeo = await Location.reverseGeocodeAsync({ latitude, longitude });
-      const cityName = reverseGeo[0]?.city || reverseGeo[0]?.region || '';
+      const cityName = reverseGeo[0]?.city || reverseGeo[0]?.region || reverseGeo[0]?.subregion || '';
       const country = reverseGeo[0]?.country || '';
       
       const weatherData = await getWeatherByCoordinates(latitude, longitude);
       
       return {
         ...weatherData,
-        location: { name: cityName, country, latitude, longitude }
+        location: { name: cityName || 'Current Location', country, latitude, longitude }
       };
     } catch (error) {
       console.error('Error getting current location weather:', error);
@@ -207,10 +232,17 @@ export default function WeatherPage() {
   const loadWeather = async () => {
     try {
       setLoading(true);
+      setSearchError('');
       let data;
       
       if (useCurrentLocation) {
-        data = await getCurrentLocationWeather();
+        try {
+          data = await getCurrentLocationWeather();
+        } catch (locationError) {
+          console.log('Location failed, falling back to default city');
+          data = await getWeatherByCity('Colombo');
+          Alert.alert('Info', 'Using default location (Colombo). Please enable location services for current weather.');
+        }
       } else if (searchCity.trim()) {
         data = await getWeatherByCity(searchCity);
       } else {
@@ -218,15 +250,20 @@ export default function WeatherPage() {
       }
       
       setWeatherData(data);
+      setSearchError('');
     } catch (error) {
       console.error('Error loading weather:', error);
-      Alert.alert('Weather Error', error.message || 'Could not fetch weather data');
-      // Fallback to default city
-      try {
-        const fallbackData = await getWeatherByCity('Colombo');
-        setWeatherData(fallbackData);
-      } catch (e) {
-        console.error('Fallback also failed:', e);
+      setSearchError(error.message || 'Could not fetch weather data');
+      Alert.alert('Weather Error', error.message || 'Could not fetch weather data. Please try another city name.');
+      
+      // Fallback to default city only if we don't have data
+      if (!weatherData) {
+        try {
+          const fallbackData = await getWeatherByCity('Colombo');
+          setWeatherData(fallbackData);
+        } catch (e) {
+          console.error('Fallback also failed:', e);
+        }
       }
     } finally {
       setLoading(false);
@@ -251,6 +288,7 @@ export default function WeatherPage() {
   const handleUseCurrentLocation = () => {
     setUseCurrentLocation(true);
     setSearchCity('');
+    setSearchError('');
     loadWeather();
   };
 
@@ -448,7 +486,7 @@ export default function WeatherPage() {
 
       {/* Hero Section - Centered Heading */}
       <View style={styles.heroSection}>
-        <Text style={styles.heroTitle}>Weather Forecast</Text>
+        <Text style={styles.heroTitle}>Weather Forecast 🌦️</Text>
         <View style={styles.titleUnderline}>
           
         </View>
@@ -465,13 +503,12 @@ export default function WeatherPage() {
           </View>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search city..."
-            placeholderTextColor="#rgba(255,255,255,0.7)"
+            placeholder="Search any city worldwide..."
+            placeholderTextColor="rgba(255,255,255,0.7)"
             value={searchCity}
             onChangeText={setSearchCity}
             onSubmitEditing={handleSearch}
             returnKeyType="search"
-            
           />
           {searchCity.length > 0 && (
             <TouchableOpacity onPress={() => setSearchCity('')} style={styles.clearButton}>
