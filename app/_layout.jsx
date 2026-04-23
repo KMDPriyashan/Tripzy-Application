@@ -30,6 +30,9 @@ export default function RootLayout() {
       <Stack.Screen name="app-pages/plan" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/weather" options={{ headerShown: false }} />
       <Stack.Screen name="app-pages/community" options={{ headerShown: false }} />
+      <Stack.Screen name="app-pages/feedProfile" options={{ headerShown: false }} />
+      <Stack.Screen name="app-pages/feedFeeling" options={{ headerShown: false }} />
+      <Stack.Screen name="app-pages/group-chat" options={{ headerShown: false }} />
 
   
       </Stack>
