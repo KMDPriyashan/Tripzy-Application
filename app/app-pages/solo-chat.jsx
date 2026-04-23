@@ -3,16 +3,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View
 } from 'react-native';
+import {
+  getCurrentUser,
+  getDirectMessages,
+  getUserProfile,
+  sendDirectMessage,
+  subscribeToDirectMessages
+} from '../../lib/supabase';
 
 const SoloChatPage = () => {
   const router = useRouter();
@@ -20,89 +29,292 @@ const SoloChatPage = () => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
+  const [otherUser, setOtherUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const flatListRef = useRef(null);
+  const messageSubscriptionRef = useRef(null);
 
+  // Load current user first
   useEffect(() => {
     loadCurrentUser();
-    loadMessages();
-  }, [chatId]);
+  }, []);
+
+  // Once current user is loaded, load everything else
+  useEffect(() => {
+    if (currentUser?.id && userId && !isInitialized) {
+      initializeChat();
+    }
+    
+    // Cleanup subscription on unmount
+    return () => {
+      if (messageSubscriptionRef.current) {
+        console.log('Cleaning up subscription...');
+        messageSubscriptionRef.current.unsubscribe();
+        messageSubscriptionRef.current = null;
+      }
+    };
+  }, [currentUser, userId]);
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
 
   const loadCurrentUser = async () => {
     try {
-      const user = await AsyncStorage.getItem('currentUser');
-      if (user) {
-        setCurrentUser(JSON.parse(user));
+      const supabaseUser = await getCurrentUser();
+      if (supabaseUser) {
+        setCurrentUser({ id: supabaseUser.id, name: supabaseUser.user_metadata?.name || 'User', avatar: '👤' });
       } else {
-        setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+        const localUser = await AsyncStorage.getItem('currentUser');
+        if (localUser) {
+          setCurrentUser(JSON.parse(localUser));
+        } else {
+          setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+        }
       }
     } catch (error) {
       console.error('Error loading user:', error);
+      setCurrentUser({ id: 'user1', name: 'Pavan Perera', avatar: '👤' });
+    }
+  };
+
+  const initializeChat = async () => {
+    await loadOtherUser();
+    await loadMessages();
+    await setupRealtimeSubscription();
+    setIsInitialized(true);
+    setLoading(false);
+  };
+
+  const loadOtherUser = async () => {
+    try {
+      const profile = await getUserProfile(userId);
+      if (profile) {
+        setOtherUser(profile);
+      } else {
+        setOtherUser({ id: userId, name: userName || 'User', avatar: avatar || '👤' });
+      }
+    } catch (error) {
+      console.error('Error loading other user:', error);
+      setOtherUser({ id: userId, name: userName || 'User', avatar: avatar || '👤' });
     }
   };
 
   const loadMessages = async () => {
     try {
-      const allMessages = await AsyncStorage.getItem(`chat_${chatId}_messages`);
-      if (allMessages) {
-        setMessages(JSON.parse(allMessages));
+      if (!currentUser?.id || !userId) {
+        console.log('Cannot load messages: missing user data');
+        return;
+      }
+      
+      const storageKey = `messages_${currentUser.id}_${userId}`;
+      console.log('🔑 Loading from key:', storageKey);
+      
+      const savedMessages = await AsyncStorage.getItem(storageKey);
+      
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        console.log('✅ Found messages in storage:', parsedMessages.length);
+        setMessages(parsedMessages);
       } else {
-        // Demo messages
-        const demoMessages = [
-          { id: '1', text: 'Hello my friends! Are You Free', senderId: userId, timestamp: new Date(Date.now() - 3600000).toISOString() },
-          { id: '2', text: 'Hello! I\'ve got some time what\'s going on?', senderId: 'user1', timestamp: new Date(Date.now() - 3000000).toISOString() },
-          { id: '3', text: 'I\'m planning a trip to Sri Lanka next month. Want to join?', senderId: userId, timestamp: new Date(Date.now() - 2400000).toISOString() },
-          { id: '4', text: 'That sounds amazing! I\'d love to join. When are you going?', senderId: 'user1', timestamp: new Date(Date.now() - 1800000).toISOString() },
-        ];
-        setMessages(demoMessages);
-        await AsyncStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(demoMessages));
+        console.log('No messages found in storage, checking Supabase...');
+        
+        const directMessages = await getDirectMessages(currentUser.id, userId);
+        
+        if (directMessages && directMessages.length > 0) {
+          const formattedMessages = directMessages.map(msg => ({
+            id: msg.id,
+            text: msg.message,
+            senderId: msg.sender_id,
+            timestamp: msg.created_at
+          }));
+          console.log('✅ Found messages in Supabase:', formattedMessages.length);
+          setMessages(formattedMessages);
+          await AsyncStorage.setItem(storageKey, JSON.stringify(formattedMessages));
+        } else {
+          console.log('No messages found anywhere');
+          setMessages([]);
+        }
       }
     } catch (error) {
       console.error('Error loading messages:', error);
+      setMessages([]);
     }
   };
 
   const saveMessages = async (newMessages) => {
     try {
-      await AsyncStorage.setItem(`chat_${chatId}_messages`, JSON.stringify(newMessages));
-      
-      // Update last message in chat list
-      const chats = await AsyncStorage.getItem('directChats');
-      if (chats) {
-        const parsedChats = JSON.parse(chats);
-        const updatedChats = parsedChats.map(chat => 
-          chat.id === chatId 
-            ? { ...chat, lastMessage: newMessages[newMessages.length - 1]?.text || '', timestamp: new Date().toLocaleTimeString() }
-            : chat
-        );
-        await AsyncStorage.setItem('directChats', JSON.stringify(updatedChats));
+      if (!currentUser?.id || !userId) {
+        return false;
       }
+      
+      const storageKey = `messages_${currentUser.id}_${userId}`;
+      await AsyncStorage.setItem(storageKey, JSON.stringify(newMessages));
+      console.log('💾 Saved:', newMessages.length, 'messages');
+      return true;
     } catch (error) {
       console.error('Error saving messages:', error);
+      return false;
     }
   };
 
-  const sendMessage = () => {
-    if (!inputText.trim()) return;
+  const updateConversationLastMessage = async (lastMessage) => {
+    try {
+      if (!lastMessage || !currentUser?.id) return;
+      
+      const conversationsKey = `conversations_${currentUser.id}`;
+      const existingConversations = await AsyncStorage.getItem(conversationsKey);
+      let conversations = existingConversations ? JSON.parse(existingConversations) : [];
+      
+      const existingIndex = conversations.findIndex(conv => conv.userId === userId);
+      
+      const conversationData = {
+        id: chatId || `conv_${userId}`,
+        userId: userId,
+        userName: otherUser?.name || userName,
+        avatar: otherUser?.avatar || avatar,
+        lastMessage: lastMessage.text,
+        timestamp: new Date().toLocaleTimeString(),
+        unread: existingIndex >= 0 ? (conversations[existingIndex].unread || 0) + 1 : 1,
+        isOnline: false
+      };
+      
+      if (existingIndex >= 0) {
+        conversations[existingIndex] = conversationData;
+      } else {
+        conversations.unshift(conversationData);
+      }
+      
+      await AsyncStorage.setItem(conversationsKey, JSON.stringify(conversations));
+      await AsyncStorage.setItem('directChats', JSON.stringify(conversations));
+      console.log('📝 Updated conversation list');
+    } catch (error) {
+      console.error('Error updating conversation:', error);
+    }
+  };
 
+  // New function to update global conversations for community page
+  const updateGlobalConversations = async (messageText) => {
+    try {
+      if (!currentUser?.id || !userId) return;
+      
+      const conversationsKey = `conversations_${currentUser.id}`;
+      const existingConversations = await AsyncStorage.getItem(conversationsKey);
+      let conversations = existingConversations ? JSON.parse(existingConversations) : [];
+      
+      const existingIndex = conversations.findIndex(conv => conv.userId === userId);
+      
+      if (existingIndex >= 0) {
+        conversations[existingIndex].lastMessage = messageText;
+        conversations[existingIndex].timestamp = new Date().toLocaleTimeString();
+        conversations[existingIndex].unread = (conversations[existingIndex].unread || 0) + 1;
+      } else {
+        // Create new conversation if it doesn't exist
+        const newConversation = {
+          id: chatId || `conv_${userId}`,
+          userId: userId,
+          userName: otherUser?.name || userName,
+          avatar: otherUser?.avatar || avatar,
+          lastMessage: messageText,
+          timestamp: new Date().toLocaleTimeString(),
+          unread: 1,
+          isOnline: false
+        };
+        conversations.unshift(newConversation);
+      }
+      
+      await AsyncStorage.setItem(conversationsKey, JSON.stringify(conversations));
+      await AsyncStorage.setItem('directChats', JSON.stringify(conversations));
+      console.log('🌐 Updated global conversations for community page');
+    } catch (error) {
+      console.error('Error updating global conversations:', error);
+    }
+  };
+
+  const setupRealtimeSubscription = async () => {
+    if (!currentUser?.id) {
+      console.log('Cannot setup subscription: no current user');
+      return;
+    }
+    
+    // Clean up existing subscription if any
+    if (messageSubscriptionRef.current) {
+      console.log('Cleaning up existing subscription...');
+      messageSubscriptionRef.current.unsubscribe();
+      messageSubscriptionRef.current = null;
+    }
+    
+    console.log('Setting up new subscription for user:', currentUser.id);
+    
+    // Create new subscription
+    const subscription = subscribeToDirectMessages(currentUser.id, async (newMessage) => {
+      if (newMessage.senderId === userId) {
+        console.log('📨 Received new message:', newMessage.text);
+        setMessages(prevMessages => {
+          const updatedMessages = [...prevMessages, newMessage];
+          saveMessages(updatedMessages);
+          // Update global conversations for received message
+          updateGlobalConversations(newMessage.text);
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+          return updatedMessages;
+        });
+      }
+    });
+    
+    messageSubscriptionRef.current = subscription;
+  };
+
+  const sendMessage = async () => {
+    if (!inputText.trim() || !currentUser?.id || !userId) return;
+
+    const messageText = inputText.trim();
     const newMessage = {
       id: Date.now().toString(),
-      text: inputText.trim(),
-      senderId: currentUser?.id || 'user1',
+      text: messageText,
+      senderId: currentUser.id,
       timestamp: new Date().toISOString(),
     };
 
+    console.log('📤 Sending message:', messageText);
+    
     const updatedMessages = [...messages, newMessage];
     setMessages(updatedMessages);
-    saveMessages(updatedMessages);
     setInputText('');
     
-    // Scroll to bottom
+    await saveMessages(updatedMessages);
+    await updateConversationLastMessage(newMessage);
+    // Update global conversations for sent message
+    await updateGlobalConversations(messageText);
+    
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
+
+    // Send to Supabase (don't await)
+    sendDirectMessage(currentUser.id, userId, messageText).catch(error => {
+      console.error('Supabase error:', error);
+    });
   };
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return '';
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
@@ -116,6 +328,10 @@ const SoloChatPage = () => {
     }
   };
 
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
   const renderMessage = ({ item }) => {
     const isCurrentUser = item.senderId === (currentUser?.id || 'user1');
     
@@ -123,7 +339,7 @@ const SoloChatPage = () => {
       <View style={[styles.messageRow, isCurrentUser ? styles.currentUserRow : styles.otherUserRow]}>
         {!isCurrentUser && (
           <View style={styles.messageAvatar}>
-            <Text style={styles.messageAvatarText}>{avatar || '👤'}</Text>
+            <Text style={styles.messageAvatarText}>{otherUser?.avatar || avatar || '👤'}</Text>
           </View>
         )}
         <View style={[styles.messageBubble, isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble]}>
@@ -138,17 +354,26 @@ const SoloChatPage = () => {
     );
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Loading messages...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerAvatar}>{avatar || '👤'}</Text>
+          <Text style={styles.headerAvatar}>{otherUser?.avatar || avatar || '👤'}</Text>
           <View>
-            <Text style={styles.headerName}>{userName || 'User'}</Text>
+            <Text style={styles.headerName}>{otherUser?.name || userName || 'User'}</Text>
             <Text style={styles.headerStatus}>Online</Text>
           </View>
         </View>
@@ -157,22 +382,27 @@ const SoloChatPage = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Messages */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={styles.messagesList}
-        onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-      />
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={styles.messagesList}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          keyboardShouldPersistTaps="handled"
+        />
+      </TouchableWithoutFeedback>
 
-      {/* Input Area */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        style={styles.keyboardAvoidingView}
       >
-        <View style={styles.inputContainer}>
+        <View style={[
+          styles.inputContainer,
+          Platform.OS === 'android' && styles.androidInputContainer
+        ]}>
           <TouchableOpacity style={styles.attachButton}>
             <Text style={styles.attachButtonText}>+</Text>
           </TouchableOpacity>
@@ -183,6 +413,8 @@ const SoloChatPage = () => {
             value={inputText}
             onChangeText={setInputText}
             multiline
+            returnKeyType="send"
+            onSubmitEditing={sendMessage}
           />
           <TouchableOpacity 
             style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} 
@@ -192,6 +424,7 @@ const SoloChatPage = () => {
             <Text style={styles.sendButtonText}>➤</Text>
           </TouchableOpacity>
         </View>
+        {Platform.OS === 'android' && !keyboardVisible && <View style={styles.bottomSpacer} />}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -201,6 +434,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -248,6 +486,7 @@ const styles = StyleSheet.create({
   messagesList: {
     paddingHorizontal: 16,
     paddingVertical: 20,
+    paddingBottom: 20,
   },
   messageRow: {
     flexDirection: 'row',
@@ -301,6 +540,9 @@ const styles = StyleSheet.create({
   otherUserTime: {
     color: '#999',
   },
+  keyboardAvoidingView: {
+    backgroundColor: '#ffffff',
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -309,6 +551,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+  },
+  androidInputContainer: {
+    paddingBottom: 12,
   },
   attachButton: {
     width: 40,
@@ -347,6 +592,10 @@ const styles = StyleSheet.create({
   sendButtonText: {
     fontSize: 18,
     color: '#ffffff',
+  },
+  bottomSpacer: {
+    height: 34,
+    backgroundColor: '#ffffff',
   },
 });
 
