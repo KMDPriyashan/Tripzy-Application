@@ -14,44 +14,13 @@ const [activeTab, setActiveTab] = useState("Home");
 
 // Data for the feature cards
 const featureCardsData = [
-<<<<<<< Updated upstream
-  {
-    name: "Trip Planning",
-    description: "Plan your journey with ease by our Trip Planner.",
-    icon: "📅",
-    target: "/app-pages/plan",
-  },
-  {
-    name: "Travel Map",
-    description: "Map your travels. Nourish your soul.",
-    icon: "🗺️",
-    target: "/app-pages/map",
-  },
-  {
-    name: "Weather",
-    description: "Check Your Journey as Previous.",
-    icon: "⛅",
-    target: "/app-pages/weather",
-  },
-  {
-    name: "Travel Guide",
-    description: "Let your itinerary breathe with intention.",
-    icon: "📖",
-    target: "/app-pages/TourGuide",
-  },
-  {
-    name: "Travel Community",
-    description: "Chat with your travel partner.",
-    icon: "💬",
-    target: " ",
-  },
-=======
+
   { name: 'Trip Planning', description: 'Plan your journey with ease by our Trip Planner.', icon: '📅', target: '/app-pages/plan' },
   { name: 'Travel Map', description: 'Map your travels. Nourish your soul.', icon: '🗺️', target: '/app-pages/map' },
   { name: 'Weather', description: 'Check Your Journey as Previous.', icon: '⛅', target: '/app-pages/weather' },
   { name: 'Travel Guide', description: 'Let your itinerary breathe with intention.', icon: '📖', target: '/app-pages/TourGuide' },
-  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/feed' },
->>>>>>> Stashed changes
+  { name: 'Travel Community', description: 'Chat with your travel partner.', icon: '💬', target: '/app-pages/community' },
+
 ];
 
 // Data for the bottom navigation
