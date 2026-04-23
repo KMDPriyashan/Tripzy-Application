@@ -104,7 +104,7 @@ const BudgetEstimate = () => {
         savedCurrentStatus: params.savedCurrentStatus,
         savedSelectedPackingItems: params.savedSelectedPackingItems,
         savedBudgetEstimate: params.savedBudgetEstimate,
-        savedShowBudgetSummary: params.savedShowBudgetSummary,
+        savedShowBudgetSummary: params.savedShowBudgetSummary === 'true' || params.savedShowBudgetSummary === true,
         savedBudgetBreakdown: params.savedBudgetBreakdown
       }
     });

@@ -25,11 +25,13 @@ const CreatePlan = () => {
   const { showNotification } = useNotification();
 
   // Check if we're in update mode
-  const isUpdating = params.isUpdating === "true";
+  const isUpdating = params.isUpdating === 'true' || params.isUpdating === true;
   const planId = params.planId || null;
 
   // Initialize state with saved data from params if available
-  const [destination, setDestination] = useState(params.savedDestination || "");
+  const [destination, setDestination] = useState(
+    params.savedDestination || params.destination || ""
+  );
   const [postCaption, setPostCaption] = useState(params.savedPostCaption || "");
   const [selectedImage, setSelectedImage] = useState(
     params.savedSelectedImage || null,
@@ -89,7 +91,7 @@ const CreatePlan = () => {
   // New state for budget summary
   const [showBudgetSummary, setShowBudgetSummary] = useState(() => {
     if (params.savedShowBudgetSummary) {
-      return params.savedShowBudgetSummary === "true";
+      return params.savedShowBudgetSummary === 'true' || params.savedShowBudgetSummary === true;
     }
     return false;
   });
@@ -119,9 +121,9 @@ const CreatePlan = () => {
       savedCurrentStatus: currentStatus,
       savedSelectedPackingItems: JSON.stringify(selectedPackingItems),
       savedBudgetEstimate: JSON.stringify(budgetEstimate),
-      savedShowBudgetSummary: showBudgetSummary ? "true" : "false",
+      savedShowBudgetSummary: showBudgetSummary ? true : false,
       savedBudgetBreakdown: JSON.stringify(budgetBreakdown),
-      isUpdating: isUpdating ? "true" : "false",
+      isUpdating: isUpdating ? true : false,
       planId: planId || "",
     };
   };

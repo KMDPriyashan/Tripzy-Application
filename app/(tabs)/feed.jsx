@@ -35,7 +35,7 @@ export default function Feed() {
 
   const [feedPosts, setFeedPosts] = useState([]);
 
-  const uploading = params?.uploading ?? "false";
+  const uploading = params?.uploading === 'true' || params?.uploading === true;
   const storyTitle = params?.storyTitle ?? "";
   const userAvatar = params?.userAvatar ?? "";
 
@@ -53,7 +53,7 @@ export default function Feed() {
   useEffect(() => {
     let interval;
 
-    if (uploading === "true") {
+    if (uploading === true) {
       setShowLoader(true);
       setProgress(0);
 

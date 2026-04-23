@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { NotificationProvider } from './app-pages/context/NotificationContext.js';
+import { NotificationProvider } from '../context//NotificationContext.js';
 
 
 export default function RootLayout() {

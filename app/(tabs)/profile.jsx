@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import BottomNav from '../components/BottomNav'; // Import the component
-import { supabase } from '../lib/supabase';
+import BottomNav from '../../components/BottomNav'; // Import the component
+import { supabase } from '../../lib/supabase';
 
 // Data for the feature cards
 const featureCardsData = [

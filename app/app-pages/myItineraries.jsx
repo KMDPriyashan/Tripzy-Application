@@ -298,9 +298,9 @@ const MyItineraries = () => {
       savedCurrentStatus: item.currentStatus,
       savedSelectedPackingItems: JSON.stringify(item.selectedPackingItems || []),
       savedBudgetEstimate: JSON.stringify(item.budgetEstimate || {}),
-      savedShowBudgetSummary: item.budgetBreakdown ? 'true' : 'false',
+      savedShowBudgetSummary: item.budgetBreakdown ? true : false,
       savedBudgetBreakdown: JSON.stringify(item.budgetBreakdown || null),
-      isUpdating: 'true',
+      isUpdating: true,
       planId: item.id
     };
 
