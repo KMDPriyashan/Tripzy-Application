@@ -1,9 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter } from "expo-router";
 import { useRef } from "react";
-import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
+import {
+  Animated,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-export const navItems = [
+const navItems = [
   {
     name: "Home",
     icon: "home-outline",
@@ -41,34 +47,19 @@ const BottomNav = () => {
   const pathname = usePathname();
 
   const scaleAnims = useRef(navItems.map(() => new Animated.Value(1))).current;
-  const translateY = useRef(navItems.map(() => new Animated.Value(0))).current;
 
   const animateIcon = (index) => {
-    Animated.parallel([
-      Animated.sequence([
-        Animated.timing(scaleAnims[index], {
-          toValue: 1.2,
-          duration: 120,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnims[index], {
-          toValue: 1,
-          friction: 5,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.sequence([
-        Animated.timing(translateY[index], {
-          toValue: -6,
-          duration: 120,
-          useNativeDriver: true,
-        }),
-        Animated.spring(translateY[index], {
-          toValue: 0,
-          friction: 5,
-          useNativeDriver: true,
-        }),
-      ]),
+    Animated.sequence([
+      Animated.timing(scaleAnims[index], {
+        toValue: 1.15,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnims[index], {
+        toValue: 1,
+        friction: 5,
+        useNativeDriver: true,
+      }),
     ]).start();
   };
 
@@ -91,32 +82,27 @@ const BottomNav = () => {
             onPress={() => handleNavPress(item.target, index)}
             activeOpacity={0.8}
           >
-            <Animated.View
-              style={[
-                styles.iconWrapper,
-                {
-                  transform: [
-                    { scale: scaleAnims[index] },
-                    { translateY: translateY[index] },
-                  ],
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.iconContainer,
-                  isActive && styles.activeIconContainer,
-                ]}
-              >
-                <Ionicons
-                  name={isActive ? item.activeIcon : item.icon}
-                  size={24}
-                  color={isActive ? "#1877F2" : "#8E8E93"}
-                />
-              </View>
-            </Animated.View>
+            {/* 🔵 TOP LINE (fixed, not moving with icon) */}
+            <View
+              style={[styles.topIndicator, { opacity: isActive ? 1 : 0 }]}
+            />
 
-            {isActive && <View style={styles.activeIndicator} />}
+            <Animated.View
+              style={{
+                transform: [{ scale: scaleAnims[index] }],
+                alignItems: "center",
+              }}
+            >
+              <Ionicons
+                name={isActive ? item.activeIcon : item.icon}
+                size={24}
+                color={isActive ? "#1877F2" : "#8E8E93"}
+              />
+
+              <Text style={[styles.label, isActive && styles.activeLabel]}>
+                {item.name}
+              </Text>
+            </Animated.View>
           </TouchableOpacity>
         );
       })}
@@ -124,18 +110,21 @@ const BottomNav = () => {
   );
 };
 
+export default BottomNav;
+
 const styles = StyleSheet.create({
   bottomNav: {
+    position: "absolute",
+    bottom: 0, // 🔥 force to bottom
+    left: 0,
+    right: 0,
+
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingBottom: 20,
+
+    height: 70, // fixed height = no jumping
     backgroundColor: "#FFFFFF",
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
 
     borderTopWidth: 0.5,
     borderTopColor: "#E5E5E5",
@@ -150,37 +139,26 @@ const styles = StyleSheet.create({
   navItem: {
     flex: 1,
     alignItems: "center",
-  },
-
-  iconWrapper: {
-    alignItems: "center",
     justifyContent: "center",
   },
 
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: "center",
-    justifyContent: "center",
+  label: {
+    fontSize: 11,
+    color: "#8E8E93",
+    marginTop: 2,
+    fontWeight: "500",
   },
 
-  activeIconContainer: {
-    backgroundColor: "#E7F0FF",
-    shadowColor: "#1877F2",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+  activeLabel: {
+    color: "#1877F2",
+    fontWeight: "600",
   },
 
-  activeIndicator: {
+  topIndicator: {
     position: "absolute",
-    bottom: -6,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    top: -8,
+    height: 3,
+    width: "50%",
     backgroundColor: "#1877F2",
   },
 });
-
-export default BottomNav;
