@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 30,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#007AFF',
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     marginBottom: 20,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1a1a1a',
+    color: 'white',
   },
   profileButton: {
     width: 40,
