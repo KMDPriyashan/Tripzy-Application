@@ -95,7 +95,7 @@ const BottomNav = () => {
             >
               <Ionicons
                 name={isActive ? item.activeIcon : item.icon}
-                size={24}
+                size={27}
                 color={isActive ? "#1877F2" : "#8E8E93"}
               />
 
@@ -115,7 +115,7 @@ export default BottomNav;
 const styles = StyleSheet.create({
   bottomNav: {
     position: "absolute",
-    bottom: 0, // 🔥 force to bottom
+    bottom: 0,
     left: 0,
     right: 0,
 
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
 
-    height: 70, // fixed height = no jumping
+    height: 80,
     backgroundColor: "#FFFFFF",
 
     borderTopWidth: 0.5,
@@ -140,12 +140,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    transform: [{ translateY: -7 }],
   },
 
   label: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#8E8E93",
-    marginTop: 2,
+    marginTop: 6,
     fontWeight: "500",
   },
 
@@ -156,9 +157,9 @@ const styles = StyleSheet.create({
 
   topIndicator: {
     position: "absolute",
-    top: -8,
+    top: -9,
     height: 3,
-    width: "50%",
+    width: "60%",
     backgroundColor: "#1877F2",
   },
 });
