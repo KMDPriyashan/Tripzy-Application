@@ -13,6 +13,43 @@ const feedPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   
+  // Comment and Share States
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [selectedPostForComment, setSelectedPostForComment] = useState(null);
+  const [commentText, setCommentText] = useState('');
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+  const [selectedPostForShare, setSelectedPostForShare] = useState(null);
+  const [shareMessage, setShareMessage] = useState('');
+  
+  // Format Date/Time Function
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return 'Just now';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    const months = Math.floor(days / 30);
+    const years = Math.floor(days / 365);
+
+    if (seconds < 60) {
+      return 'Just now';
+    } else if (minutes < 60) {
+      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+    } else if (hours < 24) {
+      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    } else if (days < 7) {
+      return `${days} day${days > 1 ? 's' : ''} ago`;
+    } else if (months < 12) {
+      return `${months} month${months > 1 ? 's' : ''} ago`;
+    } else {
+      return `${years} year${years > 1 ? 's' : ''} ago`;
+    }
+  };
+  
   // New states for Check-In and Hashtags
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState('');
@@ -139,7 +176,7 @@ const feedPage = () => {
     website: "www.johndoe.com"
   });
 
-  // Sample travel feed data (other users' posts)
+  // Sample travel feed data (other users' posts) with comments and timestamps
   const [feedData, setFeedData] = useState([
     {
       id: 1,
@@ -148,12 +185,14 @@ const feedPage = () => {
       username: "sarahj",
       avatar: "https://randomuser.me/api/portraits/women/1.jpg",
       location: "Bali, Indonesia",
-      time: "2 hours ago",
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800",
       caption: "Paradise found! The beaches of Bali are absolutely breathtaking. 🌴☀️",
       hashtags: ["#TravelDiaries", "#BeachLife"],
       likes: 1245,
-      comments: 89,
+      comments: [
+        { id: 1, userId: 10, userName: "Traveler Joe", text: "Amazing view!", timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString() }
+      ],
       shares: 34,
     },
     {
@@ -163,12 +202,12 @@ const feedPage = () => {
       username: "mikechen",
       avatar: "https://randomuser.me/api/portraits/men/2.jpg",
       location: "Swiss Alps, Switzerland",
-      time: "5 hours ago",
+      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
       image: "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=800",
       caption: "The view from the top of Jungfraujoch is unforgettable! ❄️🏔️",
       hashtags: ["#MountainViews", "#Adventure"],
       likes: 3421,
-      comments: 156,
+      comments: [],
       shares: 89,
     },
     {
@@ -178,12 +217,12 @@ const feedPage = () => {
       username: "emmarod",
       avatar: "https://randomuser.me/api/portraits/women/3.jpg",
       location: "Kyoto, Japan",
-      time: "Yesterday",
+      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800",
       caption: "Cherry blossom season in Kyoto is magical! 🌸✨",
       hashtags: ["#CherryBlossom", "#JapanTravel"],
       likes: 2891,
-      comments: 203,
+      comments: [],
       shares: 67,
     },
     {
@@ -193,12 +232,12 @@ const feedPage = () => {
       username: "davidk",
       avatar: "https://randomuser.me/api/portraits/men/4.jpg",
       location: "Santorini, Greece",
-      time: "Yesterday",
+      timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
       image: "https://images.unsplash.com/photo-1613395877344-13d4a8e0d49e?w=800",
       caption: "Santorini sunsets are everything they're cracked up to be! 🇬🇷",
       hashtags: ["#Santorini", "#GreekIslands"],
       likes: 4567,
-      comments: 312,
+      comments: [],
       shares: 123,
     },
     {
@@ -208,17 +247,17 @@ const feedPage = () => {
       username: "lisat",
       avatar: "https://randomuser.me/api/portraits/women/5.jpg",
       location: "Machu Picchu, Peru",
-      time: "2 days ago",
+      timestamp: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
       image: "https://images.unsplash.com/photo-1526392060635-9d6019884377?w=800",
       caption: "Ancient wonders and new adventures! 🏔️",
       hashtags: ["#MachuPicchu", "#Wanderlust"],
       likes: 1876,
-      comments: 98,
+      comments: [],
       shares: 45,
     },
   ]);
 
-  // Current user posts (stored separately - these will show in "Your Recent Stories" section AND in profile)
+  // Current user posts
   const [currentUserPosts, setCurrentUserPosts] = useState([]);
 
   // Load enrolled events and user created events from storage
@@ -315,17 +354,14 @@ const feedPage = () => {
           text: 'Delete', 
           style: 'destructive',
           onPress: async () => {
-            // Remove from travelEvents
             const updatedEvents = travelEvents.filter(e => e.id !== eventId);
             setTravelEvents(updatedEvents);
             await saveTravelEvents(updatedEvents);
             
-            // Remove from userCreatedEvents
             const updatedUserEvents = userCreatedEvents.filter(e => e.id !== eventId);
             setUserCreatedEvents(updatedUserEvents);
             await saveUserCreatedEvents(updatedUserEvents);
             
-            // Also remove from enrolledEvents if anyone enrolled
             const updatedEnrolled = enrolledEvents.filter(e => e.id !== eventId);
             setEnrolledEvents(updatedEnrolled);
             await saveEnrolledEvents(updatedEnrolled);
@@ -352,7 +388,6 @@ const feedPage = () => {
             setEnrolledEvents(updatedEnrolled);
             await saveEnrolledEvents(updatedEnrolled);
             
-            // Update event enrolled count
             const updatedEvents = travelEvents.map(e => {
               if (e.id === eventId) {
                 return { ...e, enrolled: Math.max(0, e.enrolled - 1) };
@@ -379,12 +414,12 @@ const feedPage = () => {
         username: currentUser.username,
         avatar: currentUser.avatar,
         location: currentUser.location,
-        time: "Just now",
+        timestamp: new Date().toISOString(),
         image: null,
         caption: `🎉 I just enrolled in "${eventTitle}"! ✈️\n\nCan't wait for this amazing travel experience! 🌍\n\n#TravelEnrollment #Excited #Tripzy`,
         hashtags: ["#TravelEnrollment", "#Excited", "#Tripzy"],
         likes: 0,
-        comments: 0,
+        comments: [],
         shares: 0,
         type: 'enrollment',
         enrollmentEvent: eventTitle
@@ -563,12 +598,12 @@ const feedPage = () => {
             username: currentUser.username,
             avatar: currentUser.avatar,
             location: "Paris, France",
-            time: "1 day ago",
+            timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
             image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800",
             caption: "The Eiffel Tower at night is absolutely magical! 🗼✨",
             hashtags: ["#Paris", "#EiffelTower"],
             likes: 234,
-            comments: 45,
+            comments: [],
             shares: 12,
           },
           {
@@ -578,12 +613,12 @@ const feedPage = () => {
             username: currentUser.username,
             avatar: currentUser.avatar,
             location: "Rome, Italy",
-            time: "3 days ago",
+            timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
             image: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800",
             caption: "Exploring the ancient Colosseum! 🏛️",
             hashtags: ["#Rome", "#Colosseum"],
             likes: 567,
-            comments: 89,
+            comments: [],
             shares: 34,
           },
           {
@@ -593,12 +628,12 @@ const feedPage = () => {
             username: currentUser.username,
             avatar: currentUser.avatar,
             location: "Barcelona, Spain",
-            time: "5 days ago",
+            timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
             image: "https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800",
             caption: "Beautiful architecture in Barcelona! 🏰",
             hashtags: ["#Barcelona", "#SagradaFamilia"],
             likes: 432,
-            comments: 67,
+            comments: [],
             shares: 23,
           },
           {
@@ -608,12 +643,12 @@ const feedPage = () => {
             username: currentUser.username,
             avatar: currentUser.avatar,
             location: "Amsterdam, Netherlands",
-            time: "1 week ago",
+            timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
             image: "https://images.unsplash.com/photo-1534351590666-13e3e96b5017?w=800",
             caption: "Canal cruises are the best! 🚤",
             hashtags: ["#Amsterdam", "#CanalCruise"],
             likes: 345,
-            comments: 56,
+            comments: [],
             shares: 18,
           },
           {
@@ -623,12 +658,12 @@ const feedPage = () => {
             username: currentUser.username,
             avatar: currentUser.avatar,
             location: "London, UK",
-            time: "2 weeks ago",
+            timestamp: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
             image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=800",
             caption: "Big Ben is stunning! 🇬🇧",
             hashtags: ["#London", "#BigBen"],
             likes: 678,
-            comments: 92,
+            comments: [],
             shares: 45,
           },
         ];
@@ -693,6 +728,100 @@ const feedPage = () => {
     } catch (error) {
       console.log('Error saving user posts:', error);
     }
+  };
+
+  // Add Comment Function
+  const handleAddComment = async () => {
+    if (!commentText.trim() || !selectedPostForComment) return;
+    
+    const newComment = {
+      id: Date.now(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      text: commentText.trim(),
+      timestamp: new Date().toISOString()
+    };
+    
+    const updatedFeed = feedData.map(post => {
+      if (post.id === selectedPostForComment.id) {
+        const updatedComments = [...(post.comments || []), newComment];
+        return { ...post, comments: updatedComments };
+      }
+      return post;
+    });
+    
+    setFeedData(updatedFeed);
+    await saveFeedPosts(updatedFeed);
+    
+    // Also update user posts if it's current user's post
+    if (selectedPostForComment.userId === 'current') {
+      const updatedUserPosts = currentUserPosts.map(post => {
+        if (post.id === selectedPostForComment.id) {
+          const updatedComments = [...(post.comments || []), newComment];
+          return { ...post, comments: updatedComments };
+        }
+        return post;
+      });
+      setCurrentUserPosts(updatedUserPosts);
+      
+      const allUserPosts = await AsyncStorage.getItem('userPosts');
+      if (allUserPosts) {
+        const parsed = JSON.parse(allUserPosts);
+        const updatedAll = parsed.map(post => {
+          if (post.id === selectedPostForComment.id) {
+            const updatedComments = [...(post.comments || []), newComment];
+            return { ...post, comments: updatedComments };
+          }
+          return post;
+        });
+        await AsyncStorage.setItem('userPosts', JSON.stringify(updatedAll));
+      }
+    }
+    
+    setCommentText('');
+    setCommentModalVisible(false);
+    setSelectedPostForComment(null);
+    Alert.alert('Success', 'Comment added successfully');
+  };
+
+  // Share Post Function
+  const handleSharePost = async () => {
+    if (!selectedPostForShare) return;
+    
+    const sharePost = {
+      id: Date.now(),
+      userId: 'current',
+      name: currentUser.name,
+      username: currentUser.username,
+      avatar: currentUser.avatar,
+      location: currentUser.location,
+      timestamp: new Date().toISOString(),
+      image: selectedPostForShare.image,
+      caption: shareMessage || `Shared: ${selectedPostForShare.caption}`,
+      originalPost: {
+        id: selectedPostForShare.id,
+        name: selectedPostForShare.name,
+        caption: selectedPostForShare.caption
+      },
+      likes: 0,
+      comments: [],
+      shares: 0,
+      type: 'share'
+    };
+    
+    const updatedFeed = [sharePost, ...feedData];
+    setFeedData(updatedFeed);
+    await saveFeedPosts(updatedFeed);
+    
+    const existingPosts = await AsyncStorage.getItem('userPosts');
+    let allUserPosts = existingPosts ? JSON.parse(existingPosts) : [];
+    allUserPosts = [sharePost, ...allUserPosts];
+    await saveUserPosts(allUserPosts);
+    
+    setShareModalVisible(false);
+    setSelectedPostForShare(null);
+    setShareMessage('');
+    Alert.alert('Success', 'Post shared successfully');
   };
 
   // Function to pick image from gallery
@@ -869,12 +998,12 @@ const feedPage = () => {
         username: currentUser.username,
         avatar: currentUser.avatar,
         location: selectedLocation || currentUser.location,
-        time: "Just now",
+        timestamp: new Date().toISOString(),
         image: selectedImage || "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
         caption: postText.trim() || "Shared a photo",
         hashtags: postHashtags,
         likes: 0,
-        comments: 0,
+        comments: [],
         shares: 0,
       };
       
@@ -1001,8 +1130,10 @@ const feedPage = () => {
     const isCurrentUserPost = item.userId === 'current';
     const isFeelingPost = item.type === 'feeling' || (!item.image && item.feeling);
     const isEnrollmentPost = item.type === 'enrollment';
+    const isSharePost = item.type === 'share';
+    const commentCount = item.comments?.length || 0;
     
-    // Special design for enrollment posts (text-only highlight)
+    // Special design for enrollment posts
     if (isEnrollmentPost) {
       return (
         <View style={styles.enrollmentPostCard}>
@@ -1013,7 +1144,7 @@ const feedPage = () => {
               <Text style={styles.postUsername}>@{item.username}</Text>
               <View style={styles.locationTimeContainer}>
                 <Text style={styles.postLocation}>📍 {item.location}</Text>
-                <Text style={styles.postTime}> • {item.time}</Text>
+                <Text style={styles.postTime}> • {formatDateTime(item.timestamp)}</Text>
               </View>
             </View>
             <View style={styles.headerActions}>
@@ -1050,7 +1181,13 @@ const feedPage = () => {
               </View>
               <Text style={styles.statsText}>{item.likes + (isLiked ? 1 : 0)}</Text>
             </View>
-            <Text style={styles.statsText}>{item.comments} comments • {item.shares} shares</Text>
+            <TouchableOpacity onPress={() => {
+              setSelectedPostForComment(item);
+              setCommentModalVisible(true);
+            }}>
+              <Text style={styles.statsText}>{commentCount} comments</Text>
+            </TouchableOpacity>
+            <Text style={styles.statsText}>{item.shares} shares</Text>
           </View>
           
           <View style={styles.actionButtons}>
@@ -1062,10 +1199,22 @@ const feedPage = () => {
                 {isLiked ? '❤️' : '👍'} Like
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                setSelectedPostForComment(item);
+                setCommentModalVisible(true);
+              }}
+            >
               <Text style={styles.actionButtonText}>💬 Comment</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity 
+              style={styles.actionButton}
+              onPress={() => {
+                setSelectedPostForShare(item);
+                setShareModalVisible(true);
+              }}
+            >
               <Text style={styles.actionButtonText}>↗️ Share</Text>
             </TouchableOpacity>
           </View>
@@ -1082,7 +1231,7 @@ const feedPage = () => {
             <Text style={styles.postUsername}>@{item.username}</Text>
             <View style={styles.locationTimeContainer}>
               <Text style={styles.postLocation}>📍 {item.location}</Text>
-              <Text style={styles.postTime}> • {item.time}</Text>
+              <Text style={styles.postTime}> • {formatDateTime(item.timestamp)}</Text>
             </View>
           </View>
           <View style={styles.headerActions}>
@@ -1101,6 +1250,13 @@ const feedPage = () => {
         </View>
 
         <Text style={styles.caption}>{item.caption}</Text>
+        
+        {isSharePost && item.originalPost && (
+          <View style={styles.sharedPostContainer}>
+            <Text style={styles.sharedPostLabel}>🔁 Shared from {item.originalPost.name}</Text>
+            <Text style={styles.sharedPostCaption}>"{item.originalPost.caption}"</Text>
+          </View>
+        )}
         
         {item.hashtags && item.hashtags.length > 0 && (
           <View style={styles.hashtagsContainer}>
@@ -1128,7 +1284,13 @@ const feedPage = () => {
             </View>
             <Text style={styles.statsText}>{item.likes + (isLiked ? 1 : 0)}</Text>
           </View>
-          <Text style={styles.statsText}>{item.comments} comments • {item.shares} shares</Text>
+          <TouchableOpacity onPress={() => {
+            setSelectedPostForComment(item);
+            setCommentModalVisible(true);
+          }}>
+            <Text style={styles.statsText}>{commentCount} comments</Text>
+          </TouchableOpacity>
+          <Text style={styles.statsText}>{item.shares} shares</Text>
         </View>
 
         <View style={styles.actionButtons}>
@@ -1140,10 +1302,22 @@ const feedPage = () => {
               {isLiked ? '❤️' : '👍'} Like
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              setSelectedPostForComment(item);
+              setCommentModalVisible(true);
+            }}
+          >
             <Text style={styles.actionButtonText}>💬 Comment</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => {
+              setSelectedPostForShare(item);
+              setShareModalVisible(true);
+            }}
+          >
             <Text style={styles.actionButtonText}>↗️ Share</Text>
           </TouchableOpacity>
         </View>
@@ -1162,6 +1336,113 @@ const feedPage = () => {
 
   return (
     <View style={styles.container}>
+      {/* Comment Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={commentModalVisible}
+        onRequestClose={() => {
+          setCommentModalVisible(false);
+          setSelectedPostForComment(null);
+          setCommentText('');
+        }}
+      >
+        <View style={styles.commentModalOverlay}>
+          <View style={styles.commentModalContainer}>
+            <View style={styles.commentModalHeader}>
+              <Text style={styles.commentModalTitle}>Comments</Text>
+              <TouchableOpacity onPress={() => {
+                setCommentModalVisible(false);
+                setSelectedPostForComment(null);
+                setCommentText('');
+              }}>
+                <Text style={styles.commentModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.commentsList}>
+              {selectedPostForComment?.comments?.length > 0 ? (
+                selectedPostForComment.comments.map((comment) => (
+                  <View key={comment.id} style={styles.commentItem}>
+                    <View style={styles.commentHeader}>
+                      <Text style={styles.commentUserName}>{comment.userName}</Text>
+                      <Text style={styles.commentTime}>{formatDateTime(comment.timestamp)}</Text>
+                    </View>
+                    <Text style={styles.commentText}>{comment.text}</Text>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.noCommentsContainer}>
+                  <Text style={styles.noCommentsText}>No comments yet. Be the first to comment!</Text>
+                </View>
+              )}
+            </ScrollView>
+            
+            <View style={styles.commentInputContainer}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Write a comment..."
+                value={commentText}
+                onChangeText={setCommentText}
+                multiline
+              />
+              <TouchableOpacity 
+                style={[styles.commentSendButton, !commentText.trim() && styles.commentSendButtonDisabled]}
+                onPress={handleAddComment}
+                disabled={!commentText.trim()}
+              >
+                <Text style={styles.commentSendText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Share Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={shareModalVisible}
+        onRequestClose={() => {
+          setShareModalVisible(false);
+          setSelectedPostForShare(null);
+          setShareMessage('');
+        }}
+      >
+        <View style={styles.shareModalOverlay}>
+          <View style={styles.shareModalContainer}>
+            <View style={styles.shareModalHeader}>
+              <Text style={styles.shareModalTitle}>Share Post</Text>
+              <TouchableOpacity onPress={() => {
+                setShareModalVisible(false);
+                setSelectedPostForShare(null);
+                setShareMessage('');
+              }}>
+                <Text style={styles.shareModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.sharePreview}>
+              <Text style={styles.sharePreviewLabel}>Original post by {selectedPostForShare?.name}</Text>
+              <Text style={styles.sharePreviewCaption}>{selectedPostForShare?.caption}</Text>
+            </View>
+            
+            <TextInput
+              style={styles.shareInput}
+              placeholder="Add your thoughts (optional)..."
+              value={shareMessage}
+              onChangeText={setShareMessage}
+              multiline
+              numberOfLines={3}
+            />
+            
+            <TouchableOpacity style={styles.sharePostButton} onPress={handleSharePost}>
+              <Text style={styles.sharePostButtonText}>Share Now</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Travel Feed</Text>
@@ -1611,6 +1892,7 @@ const feedPage = () => {
                         <Text style={styles.smallStoryName} numberOfLines={1}>
                           {currentUser.name}
                         </Text>
+                        <Text style={styles.smallStoryTime}>{formatDateTime(item.timestamp)}</Text>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -1842,6 +2124,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#1c1e21',
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  smallStoryTime: {
+    fontSize: 9,
+    color: '#999',
+    marginTop: 2,
     textAlign: 'center',
   },
   profileBanner: {
@@ -2535,6 +2823,22 @@ const styles = StyleSheet.create({
     height: 400,
     resizeMode: 'cover',
   },
+  sharedPostContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    marginHorizontal: 12,
+    marginBottom: 12,
+  },
+  sharedPostLabel: {
+    fontSize: 12,
+    color: '#1877f2',
+    marginBottom: 4,
+  },
+  sharedPostCaption: {
+    fontSize: 13,
+    color: '#65676b',
+  },
   feelingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2596,6 +2900,171 @@ const styles = StyleSheet.create({
   },
   actionButtonTextActive: {
     color: '#1877f2',
+  },
+  commentModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  commentModalContainer: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    minHeight: 400,
+    maxHeight: '80%',
+  },
+  commentModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e6eb',
+  },
+  commentModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1c1e21',
+  },
+  commentModalClose: {
+    fontSize: 24,
+    color: '#65676b',
+  },
+  commentsList: {
+    maxHeight: 400,
+  },
+  commentItem: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  commentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  commentUserName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#1c1e21',
+  },
+  commentTime: {
+    fontSize: 11,
+    color: '#999',
+  },
+  commentText: {
+    fontSize: 14,
+    color: '#1c1e21',
+    lineHeight: 20,
+  },
+  noCommentsContainer: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  noCommentsText: {
+    fontSize: 14,
+    color: '#999',
+  },
+  commentInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e4e6eb',
+  },
+  commentInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e4e6eb',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 12,
+    fontSize: 14,
+    maxHeight: 80,
+  },
+  commentSendButton: {
+    backgroundColor: '#1877f2',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  commentSendButtonDisabled: {
+    backgroundColor: '#e4e6eb',
+  },
+  commentSendText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  shareModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+  },
+  shareModalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    margin: 20,
+  },
+  shareModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e6eb',
+  },
+  shareModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1c1e21',
+  },
+  shareModalClose: {
+    fontSize: 24,
+    color: '#65676b',
+  },
+  sharePreview: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  sharePreviewLabel: {
+    fontSize: 12,
+    color: '#1877f2',
+    marginBottom: 6,
+  },
+  sharePreviewCaption: {
+    fontSize: 14,
+    color: '#1c1e21',
+  },
+  shareInput: {
+    borderWidth: 1,
+    borderColor: '#e4e6eb',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 14,
+    color: '#1c1e21',
+    textAlignVertical: 'top',
+    minHeight: 80,
+    marginBottom: 16,
+  },
+  sharePostButton: {
+    backgroundColor: '#1877f2',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  sharePostButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

@@ -38,7 +38,7 @@ const navItems = [
     name: "Profile",
     icon: "person-outline",
     activeIcon: "person",
-    target: "/app-pages/profile",
+    target: "/app-pages/profileHome",
   },
 ];
 
