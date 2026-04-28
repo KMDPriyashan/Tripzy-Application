@@ -931,7 +931,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 5,
-    marginBottom: 30,
+    marginBottom: 85,
   },
   completeButtonText: {
     color: '#fff',

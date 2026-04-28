@@ -447,7 +447,7 @@ const feedProfile = () => {
             <Text style={styles.likeIcon}>👍</Text>
             <Text style={styles.statsText}>{item.likes}</Text>
           </View>
-          <Text style={styles.statsText}>{item.comments} comments • {item.shares} shares</Text>
+          <Text style={styles.statsText}>{item.comments?.length || 0} comments • {item.shares} shares</Text>
         </View>
         
         <View style={styles.postActions}>

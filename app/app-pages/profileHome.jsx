@@ -4,21 +4,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    Image,
-    Modal,
-    RefreshControl,
-    SafeAreaView,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Modal,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 const { width } = Dimensions.get('window');
@@ -49,35 +49,8 @@ const profileHome = () => {
     totalPosts: 0
   });
 
-  // User Plans
-  const [userPlans, setUserPlans] = useState([
-    {
-      id: 1,
-      title: "European Summer Tour",
-      destination: "Paris, Rome, Barcelona",
-      startDate: "June 15, 2024",
-      endDate: "July 10, 2024",
-      budget: "$3,500",
-      companions: 3,
-      status: "upcoming",
-      progress: 45,
-      image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=800",
-      activities: ["Eiffel Tower", "Colosseum", "Sagrada Familia"]
-    },
-    {
-      id: 2,
-      title: "Asian Adventure",
-      destination: "Tokyo, Seoul, Bangkok",
-      startDate: "October 5, 2024",
-      endDate: "October 25, 2024",
-      budget: "$2,800",
-      companions: 2,
-      status: "planning",
-      progress: 25,
-      image: "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=800",
-      activities: ["Tokyo Tower", "Gyeongbokgung", "Floating Markets"]
-    }
-  ]);
+  // User Plans (will be loaded from storage)
+  const [userPlans, setUserPlans] = useState([]);
 
   // Saved Locations
   const [savedLocations, setSavedLocations] = useState([
@@ -128,18 +101,6 @@ const profileHome = () => {
     ]
   });
 
-  // Create Plan Modal
-  const [showCreatePlan, setShowCreatePlan] = useState(false);
-  const [newPlan, setNewPlan] = useState({
-    title: '',
-    destination: '',
-    startDate: '',
-    endDate: '',
-    budget: '',
-    companions: '',
-    activities: ''
-  });
-
   // Search Locations Modal
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,12 +109,14 @@ const profileHome = () => {
   useEffect(() => {
     loadUserData();
     loadUserPosts();
+    loadUserPlans();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       loadUserData();
       loadUserPosts();
+      loadUserPlans();
       return () => {};
     }, [])
   );
@@ -178,16 +141,54 @@ const profileHome = () => {
       if (savedLocs) {
         setSavedLocations(JSON.parse(savedLocs));
       }
-      
-      // Load user plans
-      const savedPlans = await AsyncStorage.getItem('userPlans');
-      if (savedPlans) {
-        setUserPlans(JSON.parse(savedPlans));
-      }
     } catch (error) {
       console.log('Error loading user data:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadUserPlans = async () => {
+    try {
+      const savedPlans = await AsyncStorage.getItem('userPlans');
+      if (savedPlans) {
+        const plans = JSON.parse(savedPlans);
+        setUserPlans(plans);
+      } else {
+        // Default plans if none exist
+        const defaultPlans = [
+          {
+            id: 1,
+            title: "European Summer Tour",
+            destination: "Paris, Rome, Barcelona",
+            startDate: "June 15, 2024",
+            endDate: "July 10, 2024",
+            budget: "$3,500",
+            companions: 3,
+            status: "upcoming",
+            progress: 45,
+            image: "https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=800",
+            activities: ["Eiffel Tower", "Colosseum", "Sagrada Familia"]
+          },
+          {
+            id: 2,
+            title: "Asian Adventure",
+            destination: "Tokyo, Seoul, Bangkok",
+            startDate: "October 5, 2024",
+            endDate: "October 25, 2024",
+            budget: "$2,800",
+            companions: 2,
+            status: "planning",
+            progress: 25,
+            image: "https://images.unsplash.com/photo-1536098561742-ca998e48cbcc?w=800",
+            activities: ["Tokyo Tower", "Gyeongbokgung", "Floating Markets"]
+          }
+        ];
+        setUserPlans(defaultPlans);
+        await AsyncStorage.setItem('userPlans', JSON.stringify(defaultPlans));
+      }
+    } catch (error) {
+      console.log('Error loading user plans:', error);
     }
   };
 
@@ -216,43 +217,6 @@ const profileHome = () => {
     } catch (error) {
       console.log('Error saving locations:', error);
     }
-  };
-
-  const handleCreatePlan = () => {
-    if (!newPlan.title || !newPlan.destination || !newPlan.startDate || !newPlan.endDate) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    const plan = {
-      id: Date.now(),
-      title: newPlan.title,
-      destination: newPlan.destination,
-      startDate: newPlan.startDate,
-      endDate: newPlan.endDate,
-      budget: newPlan.budget || 'Not specified',
-      companions: parseInt(newPlan.companions) || 1,
-      status: 'planning',
-      progress: 0,
-      image: "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
-      activities: newPlan.activities.split(',').map(a => a.trim())
-    };
-
-    const updatedPlans = [plan, ...userPlans];
-    setUserPlans(updatedPlans);
-    saveUserPlans(updatedPlans);
-    
-    setShowCreatePlan(false);
-    setNewPlan({
-      title: '',
-      destination: '',
-      startDate: '',
-      endDate: '',
-      budget: '',
-      companions: '',
-      activities: ''
-    });
-    Alert.alert('Success', 'Travel plan created successfully!');
   };
 
   const handleDeletePlan = (planId) => {
@@ -339,6 +303,10 @@ const profileHome = () => {
       pathname: '/app-pages/tour-guide-profile',
       params: { guide: JSON.stringify(tourGuide) }
     });
+  };
+
+  const navigateToCreatePlan = () => {
+    router.push('/app-pages/createPlan');
   };
 
   const formatDateTime = (timestamp) => {
@@ -434,36 +402,44 @@ const profileHome = () => {
 
   const renderPlansTab = () => (
     <View style={styles.tabContent}>
-      <TouchableOpacity style={styles.createPlanBtn} onPress={() => setShowCreatePlan(true)}>
+      <TouchableOpacity style={styles.createPlanBtn} onPress={navigateToCreatePlan}>
         <Text style={styles.createPlanBtnText}>+ Create New Travel Plan</Text>
       </TouchableOpacity>
       
-      {userPlans.map((plan) => (
-        <TouchableOpacity key={plan.id} style={styles.planCard} onPress={() => navigateToFullPlan(plan)}>
-          <Image source={{ uri: plan.image }} style={styles.planImage} />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.8)']}
-            style={styles.planOverlay}
-          />
-          <View style={styles.planContent}>
-            <View style={styles.planStatus}>
-              <View style={[styles.statusBadge, plan.status === 'upcoming' ? styles.statusUpcoming : styles.statusPlanning]}>
-                <Text style={styles.statusText}>{plan.status.toUpperCase()}</Text>
+      {userPlans.length > 0 ? (
+        userPlans.map((plan) => (
+          <TouchableOpacity key={plan.id} style={styles.planCard} onPress={() => navigateToFullPlan(plan)}>
+            <Image source={{ uri: plan.image }} style={styles.planImage} />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.8)']}
+              style={styles.planOverlay}
+            />
+            <View style={styles.planContent}>
+              <View style={styles.planStatus}>
+                <View style={[styles.statusBadge, plan.status === 'upcoming' ? styles.statusUpcoming : styles.statusPlanning]}>
+                  <Text style={styles.statusText}>{plan.status?.toUpperCase() || 'PLANNING'}</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleDeletePlan(plan.id)} style={styles.deletePlanBtn}>
+                  <Text style={styles.deletePlanText}>🗑️</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => handleDeletePlan(plan.id)} style={styles.deletePlanBtn}>
-                <Text style={styles.deletePlanText}>🗑️</Text>
-              </TouchableOpacity>
+              <Text style={styles.planTitle}>{plan.title}</Text>
+              <Text style={styles.planDestination}>📍 {plan.destination}</Text>
+              <Text style={styles.planDate}>📅 {plan.startDate} - {plan.endDate}</Text>
+              <View style={styles.planProgress}>
+                <View style={[styles.progressBar, { width: `${plan.progress || 0}%` }]} />
+              </View>
+              <Text style={styles.planProgressText}>{plan.progress || 0}% planned</Text>
             </View>
-            <Text style={styles.planTitle}>{plan.title}</Text>
-            <Text style={styles.planDestination}>📍 {plan.destination}</Text>
-            <Text style={styles.planDate}>📅 {plan.startDate} - {plan.endDate}</Text>
-            <View style={styles.planProgress}>
-              <View style={[styles.progressBar, { width: `${plan.progress}%` }]} />
-            </View>
-            <Text style={styles.planProgressText}>{plan.progress}% planned</Text>
-          </View>
-        </TouchableOpacity>
-      ))}
+          </TouchableOpacity>
+        ))
+      ) : (
+        <View style={styles.emptyPlansContainer}>
+          <Text style={styles.emptyPlansIcon}>📋</Text>
+          <Text style={styles.emptyPlansTitle}>No Plans Yet</Text>
+          <Text style={styles.emptyPlansText}>Create your first travel plan to get started!</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -571,7 +547,7 @@ const profileHome = () => {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#667eea" />
+        <ActivityIndicator size="large" color="#1877f2" />
         <Text style={styles.loadingText}>Loading your profile...</Text>
       </SafeAreaView>
     );
@@ -582,7 +558,7 @@ const profileHome = () => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadUserData()} colors={['#667eea']} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => loadUserData()} colors={['#1877f2']} />
         }
       >
         {renderHeader()}
@@ -592,101 +568,6 @@ const profileHome = () => {
         {selectedTab === 'posts' && renderPostsTab()}
         {selectedTab === 'guide' && renderGuideTab()}
       </ScrollView>
-
-      {/* Create Plan Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showCreatePlan}
-        onRequestClose={() => setShowCreatePlan(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <LinearGradient
-              colors={['#667eea', '#764ba2']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.modalHeader}
-            >
-              <Text style={styles.modalTitle}>Create Travel Plan</Text>
-              <TouchableOpacity onPress={() => setShowCreatePlan(false)}>
-                <Text style={styles.modalClose}>✕</Text>
-              </TouchableOpacity>
-            </LinearGradient>
-            
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Plan Title *</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., European Summer Adventure"
-                value={newPlan.title}
-                onChangeText={(text) => setNewPlan({...newPlan, title: text})}
-              />
-              
-              <Text style={styles.inputLabel}>Destination *</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., Paris, Rome, Barcelona"
-                value={newPlan.destination}
-                onChangeText={(text) => setNewPlan({...newPlan, destination: text})}
-              />
-              
-              <Text style={styles.inputLabel}>Start Date *</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., June 15, 2024"
-                value={newPlan.startDate}
-                onChangeText={(text) => setNewPlan({...newPlan, startDate: text})}
-              />
-              
-              <Text style={styles.inputLabel}>End Date *</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., July 10, 2024"
-                value={newPlan.endDate}
-                onChangeText={(text) => setNewPlan({...newPlan, endDate: text})}
-              />
-              
-              <Text style={styles.inputLabel}>Budget (Optional)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g., $2,500"
-                value={newPlan.budget}
-                onChangeText={(text) => setNewPlan({...newPlan, budget: text})}
-              />
-              
-              <Text style={styles.inputLabel}>Companions (Optional)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Number of companions"
-                keyboardType="numeric"
-                value={newPlan.companions}
-                onChangeText={(text) => setNewPlan({...newPlan, companions: text})}
-              />
-              
-              <Text style={styles.inputLabel}>Activities (Comma separated)</Text>
-              <TextInput
-                style={[styles.modalInput, styles.textArea]}
-                placeholder="e.g., Eiffel Tower, Museum, Cruise"
-                multiline
-                value={newPlan.activities}
-                onChangeText={(text) => setNewPlan({...newPlan, activities: text})}
-              />
-              
-              <TouchableOpacity style={styles.createBtn} onPress={handleCreatePlan}>
-                <LinearGradient
-                  colors={['#667eea', '#764ba2']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.createBtnGradient}
-                >
-                  <Text style={styles.createBtnText}>Create Plan</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       {/* Search Locations Modal */}
       <Modal
@@ -698,7 +579,7 @@ const profileHome = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.searchModalContainer}>
             <LinearGradient
-              colors={['#667eea', '#764ba2']}
+              colors={['#1877f2', '#1877f2']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.modalHeader}
@@ -912,7 +793,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   createPlanBtn: {
-    backgroundColor: '#667eea',
+    backgroundColor: '#1877f2',
     padding: 15,
     borderRadius: 12,
     alignItems: 'center',
@@ -1016,8 +897,30 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(255,255,255,0.8)',
   },
+  emptyPlansContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 60,
+    backgroundColor: '#ffffff',
+    borderRadius: 15,
+  },
+  emptyPlansIcon: {
+    fontSize: 60,
+    marginBottom: 16,
+  },
+  emptyPlansTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1c1e21',
+    marginBottom: 8,
+  },
+  emptyPlansText: {
+    fontSize: 14,
+    color: '#65676b',
+    textAlign: 'center',
+  },
   searchLocationBtn: {
-    backgroundColor: '#667eea',
+    backgroundColor: '#1877f2',
     padding: 15,
     borderRadius: 12,
     alignItems: 'center',
@@ -1231,7 +1134,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   bookNowBtn: {
-    backgroundColor: '#667eea',
+    backgroundColor: '#1877f2',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
@@ -1245,12 +1148,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    maxHeight: '90%',
   },
   searchModalContainer: {
     backgroundColor: '#ffffff',
@@ -1274,43 +1171,6 @@ const styles = StyleSheet.create({
   modalClose: {
     fontSize: 24,
     color: '#ffffff',
-  },
-  modalBody: {
-    padding: 20,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: '#333',
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  createBtn: {
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  createBtnGradient: {
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  createBtnText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -1359,7 +1219,7 @@ const styles = StyleSheet.create({
   },
   saveLocationIcon: {
     fontSize: 24,
-    color: '#667eea',
+    color: '#1877f2',
   },
   emptySearch: {
     alignItems: 'center',
