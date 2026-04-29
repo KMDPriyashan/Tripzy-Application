@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0',
   },
   androidInputContainer: {
-    paddingBottom: 12,
+    paddingBottom: 62,
   },
   attachButton: {
     width: 40,

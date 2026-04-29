@@ -162,18 +162,18 @@ const feedPage = () => {
   // Current user data with default values
   const [currentUser, setCurrentUser] = useState({
     id: 'current',
-    name: "John Doe",
-    username: "johndoe",
+    name: "Current User",
+    username: "UserD",
     avatar: defaultAvatar,
     coverImage: defaultCover,
-    bio: "Travel enthusiast | Adventure seeker | Making memories around the world 🌍",
+    bio: " ",
     location: "New York, USA",
     joinDate: "March 2024",
-    followers: 801,
-    following: 345,
-    email: "john.doe@example.com",
-    phone: "+1 234 567 8900",
-    website: "www.johndoe.com"
+    followers: 0,
+    following: 0,
+    email: "currentUser@example.com",
+    phone: "+94.",
+    website: "www.example.com"
   });
 
   // Sample travel feed data (other users' posts) with comments and timestamps
@@ -1933,6 +1933,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    marginBottom: 72,
   },
   loadingContainer: {
     flex: 1,

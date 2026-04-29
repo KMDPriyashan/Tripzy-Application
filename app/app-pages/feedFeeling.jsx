@@ -696,6 +696,7 @@ const styles = StyleSheet.create({
   },
   travelStoriesList: {
     paddingHorizontal: 16,
+    marginBottom: 72,
   },
   travelStoryCard: {
     backgroundColor: '#ffffff',

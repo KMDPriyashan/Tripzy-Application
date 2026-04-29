@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   endtext: {
     fontSize: 13,
     color: '#666',
-    marginBottom: 8,
+    marginBottom: 1,
     fontStyle: 'italic',
     textAlign: 'center',
     paddingHorizontal: 20,
