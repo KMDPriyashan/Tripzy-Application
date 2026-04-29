@@ -839,7 +839,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     padding: 16,
-    paddingBottom: 30,
+    paddingBottom: 80,
   },
   card: {
     backgroundColor: '#fff',

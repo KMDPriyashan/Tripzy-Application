@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -39,9 +40,12 @@ const TourGuideProfilePage = () => {
   const [existingProfileId, setExistingProfileId] = useState(null);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(30));
+  const [userProfile, setUserProfile] = useState(null);
+  let subscription = null;
 
   useEffect(() => {
     loadCurrentUser();
+    loadUserProfile();
     if (params.profileId) {
       loadExistingProfile(params.profileId);
     }
@@ -57,7 +61,25 @@ const TourGuideProfilePage = () => {
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
+    };
   }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      const savedUser = await AsyncStorage.getItem('currentUser');
+      if (savedUser) {
+        setUserProfile(JSON.parse(savedUser));
+      }
+    } catch (error) {
+      console.log('Error loading user profile:', error);
+    }
+  };
 
   const loadCurrentUser = async () => {
     try {
@@ -65,9 +87,33 @@ const TourGuideProfilePage = () => {
       setCurrentUser(user);
       if (user) {
         checkExistingProfile(user.id);
+        // Also check AsyncStorage for tour guide profile
+        checkAsyncStorageProfile();
       }
     } catch (error) {
       console.error('Error loading user:', error);
+    }
+  };
+
+  const checkAsyncStorageProfile = async () => {
+    try {
+      const savedGuide = await AsyncStorage.getItem('tourGuideProfile');
+      if (savedGuide) {
+        const guideData = JSON.parse(savedGuide);
+        setIsEditing(true);
+        setExistingProfileId(guideData.id);
+        setFullName(guideData.name || '');
+        setSelectedImage(guideData.avatar);
+        setProvince(guideData.location || '');
+        setExperience(guideData.experience || '');
+        setDescription(guideData.bio || '');
+        setLanguages(guideData.languages?.join(', ') || '');
+        setIsTourGuide(true);
+        setTravelModeTags(guideData.specialties || []);
+        setSpecialNotes(guideData.upcomingTours?.map(tour => tour.name) || []);
+      }
+    } catch (error) {
+      console.error('Error checking AsyncStorage profile:', error);
     }
   };
 
@@ -77,7 +123,7 @@ const TourGuideProfilePage = () => {
         .from('tour_guides')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors
 
       if (data && !error) {
         setIsEditing(true);
@@ -91,9 +137,37 @@ const TourGuideProfilePage = () => {
         setIsTourGuide(data.is_tour_guide || false);
         setTravelModeTags(data.travel_mode_tags || []);
         setSpecialNotes(data.special_notes || []);
+        
+        // Also save to AsyncStorage
+        await saveToAsyncStorage(data);
       }
     } catch (error) {
       console.error('Error checking existing profile:', error);
+    }
+  };
+
+  const saveToAsyncStorage = async (profileData) => {
+    try {
+      const tourGuideData = {
+        id: profileData.id || Date.now(),
+        name: profileData.full_name || fullName,
+        avatar: profileData.image || selectedImage || userProfile?.avatar || "https://randomuser.me/api/portraits/men/1.jpg",
+        rating: 4.9,
+        totalTours: 0,
+        experience: profileData.experience || experience || "1+ years",
+        languages: profileData.languages ? profileData.languages.split(',').map(l => l.trim()) : (languages ? languages.split(',').map(l => l.trim()) : ["English"]),
+        specialties: profileData.travel_mode_tags || travelModeTags || ["Cultural Tours", "Adventure Travel"],
+        bio: profileData.description || description || "Professional tour guide ready to show you amazing places!",
+        price: "$50/day",
+        availability: "Available for booking",
+        location: profileData.province || province,
+        upcomingTours: []
+      };
+      
+      await AsyncStorage.setItem('tourGuideProfile', JSON.stringify(tourGuideData));
+      console.log('✅ Tour guide profile saved to AsyncStorage');
+    } catch (error) {
+      console.error('Error saving to AsyncStorage:', error);
     }
   };
 
@@ -103,7 +177,7 @@ const TourGuideProfilePage = () => {
         .from('tour_guides')
         .select('*')
         .eq('id', profileId)
-        .single();
+        .maybeSingle();
 
       if (data && !error) {
         setFullName(data.full_name || '');
@@ -117,6 +191,9 @@ const TourGuideProfilePage = () => {
         setSpecialNotes(data.special_notes || []);
         setIsEditing(true);
         setExistingProfileId(data.id);
+        
+        // Save to AsyncStorage
+        await saveToAsyncStorage(data);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -183,6 +260,28 @@ const TourGuideProfilePage = () => {
     setLoading(true);
 
     try {
+      // Prepare data for AsyncStorage (local storage)
+      const tourGuideData = {
+        id: existingProfileId || Date.now(),
+        name: fullName,
+        avatar: selectedImage || userProfile?.avatar || "https://randomuser.me/api/portraits/men/1.jpg",
+        rating: 4.9,
+        totalTours: 0,
+        experience: experience || "1+ years",
+        languages: languages ? languages.split(',').map(l => l.trim()) : ["English"],
+        specialties: travelModeTags.length > 0 ? travelModeTags : ["Cultural Tours", "Adventure Travel"],
+        bio: description || "Professional tour guide ready to show you amazing places!",
+        price: "$50/day",
+        availability: "Available for booking",
+        location: province,
+        upcomingTours: specialNotes.map(note => ({ id: Date.now() + Math.random(), name: note, date: "Upcoming", spots: 5 }))
+      };
+      
+      // Save to AsyncStorage
+      await AsyncStorage.setItem('tourGuideProfile', JSON.stringify(tourGuideData));
+      console.log('✅ Tour guide profile saved to AsyncStorage');
+
+      // Prepare data for Supabase
       const profileData = {
         user_id: currentUser.id,
         user_email: currentUser.email,
@@ -218,8 +317,12 @@ const TourGuideProfilePage = () => {
         isEditing ? 'Your profile has been updated!' : 'Your profile has been created!',
         [
           {
-            text: 'View All Guides',
-            onPress: () => router.push('/app-pages/TourGuideList')
+            text: 'Go to Home',
+            onPress: () => router.push('/')
+          },
+          {
+            text: 'View Profile',
+            onPress: () => router.push('/app-pages/tour-guide-profile')
           }
         ]
       );
@@ -272,7 +375,7 @@ const TourGuideProfilePage = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollViewContent}
       >
-        {/* Hero Section without Icon */}
+        {/* Hero Section */}
         <View style={styles.heroSection}>
           <Text style={styles.heroTitle}>Create Your Guide Profile</Text>
           <Text style={styles.heroSubtitle}>
@@ -280,7 +383,7 @@ const TourGuideProfilePage = () => {
           </Text>
         </View>
 
-        {/* Profile Image Section - Square Border Design */}
+        {/* Profile Image Section */}
         {renderSection('Profile Photo', 'camera-outline', 
           <TouchableOpacity style={styles.imageUploadContainer} onPress={pickImage}>
             {selectedImage ? (
@@ -303,9 +406,9 @@ const TourGuideProfilePage = () => {
           </TouchableOpacity>
         )}
 
-          <Text style={styles.buttomSubtitle}>
-            🔖 Share a little about yourself – your name, location, and experience will help travelers connect with you.
-          </Text>
+        <Text style={styles.buttomSubtitle}>
+          🔖 Share a little about yourself – your name, location, and experience will help travelers connect with you.
+        </Text>
 
         {/* Personal Information */}
         {renderSection('Personal Information', 'person-outline',
@@ -369,8 +472,8 @@ const TourGuideProfilePage = () => {
         )}
 
         <Text style={styles.buttomSubtitle}>
-            🔖 Tell travelers your story – share your passion for guiding and what makes your tours unique.
-          </Text>
+          🔖 Tell travelers your story – share your passion for guiding and what makes your tours unique.
+        </Text>
 
         {/* Description */}
         {renderSection('About Me', 'document-text-outline',
@@ -393,8 +496,8 @@ const TourGuideProfilePage = () => {
         )}
 
         <Text style={styles.buttomSubtitle}>
-            🔖 TAdd your travel specialties and special notes one at a time. Travelers love knowing what makes your tours special!
-          </Text>
+          🔖 Add your travel specialties and special notes one at a time. Travelers love knowing what makes your tours special!
+        </Text>
 
         {/* Travel Mode Tags */}
         {renderSection('Travel Specialties', 'bicycle-outline',
@@ -482,8 +585,8 @@ const TourGuideProfilePage = () => {
         )}
 
         <Text style={styles.buttomSubtitle}>
-            🔖 Your profile is your gateway to connecting with travelers from around the world. Submit your information and begin sharing unforgettable experiences.
-          </Text>
+          🔖 Your profile is your gateway to connecting with travelers from around the world. Submit your information and begin sharing unforgettable experiences.
+        </Text>
 
         {/* Submit Button */}
         <Animated.View 
@@ -631,7 +734,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 3,
-    borderColor: '#606a76',
+    borderColor: '#007AFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -651,7 +754,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    opacity: 0,
+  },
+  imageOverlayText: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 8,
   },
   imagePlaceholder: {
     width: 280,
@@ -711,7 +818,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 15,
     paddingVertical: 14,
-    fontSize: 13,
+    fontSize: 16,
     color: '#333',
   },
   textAreaWrapper: {
@@ -732,7 +839,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    fontSize: 12,
+    fontSize: 14,
     color: '#333',
     borderWidth: 1,
     borderColor: '#e0e0e0',
@@ -845,7 +952,7 @@ const styles = StyleSheet.create({
   submitButtonContainer: {
     paddingHorizontal: 20,
     marginTop: 10,
-    marginBottom: 20,
+    marginBottom: 65,
   },
   submitButton: {
     backgroundColor: '#007AFF',

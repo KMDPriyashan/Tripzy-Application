@@ -447,7 +447,7 @@ const feedProfile = () => {
             <Text style={styles.likeIcon}>👍</Text>
             <Text style={styles.statsText}>{item.likes}</Text>
           </View>
-          <Text style={styles.statsText}>{item.comments} comments • {item.shares} shares</Text>
+          <Text style={styles.statsText}>{item.comments?.length || 0} comments • {item.shares} shares</Text>
         </View>
         
         <View style={styles.postActions}>
@@ -965,6 +965,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    marginBottom: 73,
   },
   loadingContainer: {
     flex: 1,

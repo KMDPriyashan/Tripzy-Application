@@ -449,6 +449,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    marginTop: Platform.OS === 'android' ? 40 : 0,
   },
   backButton: {
     padding: 8,
@@ -553,7 +554,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#f0f0f0',
   },
   androidInputContainer: {
-    paddingBottom: 12,
+    paddingBottom: 62,
   },
   attachButton: {
     width: 40,

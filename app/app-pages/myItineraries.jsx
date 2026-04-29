@@ -1867,7 +1867,7 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 20,
+    marginBottom: 60,
   },
   notificationContainer: {
     position: 'absolute',
