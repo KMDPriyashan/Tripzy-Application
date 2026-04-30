@@ -1,12 +1,80 @@
 // weather-notification.jsx - Weather Notification Page
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const WeatherNotificationPage = () => {
     const router = useRouter();
     const [searchQuery, setSearchQuery] = useState('');
+    const [notifications, setNotifications] = useState([]);
+    const [weatherAlert, setWeatherAlert] = useState(null);
+
+    // Load saved notifications and check for weather alerts
+    useEffect(() => {
+        loadNotifications();
+        checkWeatherAlerts();
+        // Set up interval to check weather alerts every hour
+        const interval = setInterval(checkWeatherAlerts, 3600000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const loadNotifications = async () => {
+        try {
+            const saved = await AsyncStorage.getItem('weather_notifications');
+            if (saved) {
+                setNotifications(JSON.parse(saved));
+            }
+        } catch (error) {
+            console.error('Error loading notifications:', error);
+        }
+    };
+
+    const saveNotification = async (notification) => {
+        try {
+            const updated = [notification, ...notifications].slice(0, 20);
+            setNotifications(updated);
+            await AsyncStorage.setItem('weather_notifications', JSON.stringify(updated));
+        } catch (error) {
+            console.error('Error saving notification:', error);
+        }
+    };
+
+    const checkWeatherAlerts = async () => {
+        // Simulate weather alert check for Sri Lanka cities
+        const sriLankanCities = ['Colombo', 'Kandy', 'Galle', 'Jaffna', 'Nuwara Eliya', 'Trincomalee', 'Negombo', 'Batticaloa'];
+        const randomCity = sriLankanCities[Math.floor(Math.random() * sriLankanCities.length)];
+        
+        // Random weather alerts for demonstration
+        const alerts = [
+            { type: 'rain', message: `Heavy rainfall expected in ${randomCity} today. Carry an umbrella!`, severity: 'warning' },
+            { type: 'thunder', message: `Thunderstorms predicted in ${randomCity}. Avoid outdoor activities.`, severity: 'danger' },
+            { type: 'heat', message: `Heat wave warning in ${randomCity}. Stay hydrated!`, severity: 'warning' },
+            { type: 'wind', message: `Strong winds in ${randomCity}. Be careful when traveling.`, severity: 'info' },
+        ];
+        
+        // 30% chance of showing an alert
+        if (Math.random() < 0.3) {
+            const alert = alerts[Math.floor(Math.random() * alerts.length)];
+            setWeatherAlert(alert);
+            const newNotification = {
+                id: Date.now(),
+                title: `Weather Alert: ${alert.type.toUpperCase()}`,
+                message: alert.message,
+                time: new Date().toLocaleTimeString(),
+                date: new Date().toLocaleDateString(),
+                severity: alert.severity,
+                city: randomCity
+            };
+            await saveNotification(newNotification);
+            // Show alert popup
+            Alert.alert('Weather Alert', alert.message);
+        } else {
+            setWeatherAlert(null);
+        }
+    };
 
     const bottomNavItems = [
         { name: 'Home', icon: 'home-outline', route: '/app-pages/home' },
@@ -45,8 +113,26 @@ const WeatherNotificationPage = () => {
 
     const handleSearch = () => {
         if (searchQuery.trim()) {
-            // Handle search
-            console.log('Searching for:', searchQuery);
+            // Only allow Sri Lankan city search
+            const sriLankanCities = ['colombo', 'kandy', 'galle', 'jaffna', 'nuwara eliya', 'trincomalee', 'negombo', 'batticaloa', 'anuradhapura', 'polonnaruwa', 'ratnapura', 'badulla', 'kurunegala', 'matara', 'kalutara'];
+            const cityLower = searchQuery.toLowerCase().trim();
+            const isValid = sriLankanCities.some(city => cityLower.includes(city) || city.includes(cityLower));
+            
+            if (isValid) {
+                console.log('Searching for Sri Lankan city:', searchQuery);
+                Alert.alert('Search', `Searching for weather in ${searchQuery}...`);
+            } else {
+                Alert.alert('Search Restricted', 'Weather searches are currently limited to Sri Lankan cities only. Please enter a city in Sri Lanka (e.g., Colombo, Kandy, Galle).');
+            }
+        }
+    };
+
+    const getSeverityColor = (severity) => {
+        switch(severity) {
+            case 'danger': return '#FF0000';
+            case 'warning': return '#FF6B6B';
+            case 'info': return '#FF8E53';
+            default: return '#FF6B6B';
         }
     };
 
@@ -60,33 +146,59 @@ const WeatherNotificationPage = () => {
                 {/* App Header */}
                 <View style={styles.header}>
                     <Text style={styles.appTitle}>Tripzy</Text>
-                    <Text style={styles.appSubtitle}>Application</Text>
+                    <Text style={styles.appSubtitle}>Weather Notifications</Text>
                 </View>
 
-                {/* Weather Alert Card */}
+                {/* Weather Alert Card - Dynamic based on current alerts */}
                 <LinearGradient
-                    colors={['#FF6B6B', '#FF8E53']}
+                    colors={weatherAlert ? [getSeverityColor(weatherAlert.severity), '#FF8E53'] : ['#FF6B6B', '#FF8E53']}
                     style={styles.alertCard}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                 >
                     <View style={styles.alertHeader}>
-                        <Ionicons name="warning" size={24} color="#fff" />
-                        <Text style={styles.alertTitle}>Mostly Rainy</Text>
+                        <Ionicons name={weatherAlert ? "alert-circle" : "warning"} size={24} color="#fff" />
+                        <Text style={styles.alertTitle}>
+                            {weatherAlert ? weatherAlert.type.toUpperCase() : 'Weather Monitoring Active'}
+                        </Text>
                     </View>
                     <Text style={styles.alertMessage}>
-                        Mostly Rainy with thunders. so please careful and avoid using electrical devices
+                        {weatherAlert ? weatherAlert.message : 'Weather alerts will appear here when severe conditions are detected in Sri Lanka.'}
                     </Text>
                 </LinearGradient>
 
-                {/* Search Section */}
+                {/* Notifications Section */}
+                <View style={styles.notificationsSection}>
+                    <Text style={styles.sectionTitle}>Recent Notifications</Text>
+                    {notifications.length === 0 ? (
+                        <View style={styles.emptyNotifications}>
+                            <Ionicons name="notifications-off-outline" size={48} color="#ccc" />
+                            <Text style={styles.emptyText}>No notifications yet</Text>
+                            <Text style={styles.emptySubtext}>Weather alerts will appear here</Text>
+                        </View>
+                    ) : (
+                        notifications.map((notif) => (
+                            <View key={notif.id} style={[styles.notificationCard, { borderLeftColor: getSeverityColor(notif.severity) }]}>
+                                <View style={styles.notificationHeader}>
+                                    <Ionicons name="cloud-outline" size={20} color="#007AFF" />
+                                    <Text style={styles.notificationTitle}>{notif.title}</Text>
+                                    <Text style={styles.notificationTime}>{notif.time}</Text>
+                                </View>
+                                <Text style={styles.notificationMessage}>{notif.message}</Text>
+                                <Text style={styles.notificationDate}>{notif.date} • {notif.city}</Text>
+                            </View>
+                        ))
+                    )}
+                </View>
+
+                {/* Search Section - Sri Lanka only */}
                 <View style={styles.searchSection}>
-                    <Text style={styles.searchLabel}>Search Your Trip</Text>
+                    <Text style={styles.searchLabel}>Search Your Trip (Sri Lanka)</Text>
                     <View style={styles.searchContainer}>
                         <Ionicons name="search-outline" size={20} color="#8E8E93" />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search destinations, hotels..."
+                            placeholder="Search Sri Lankan cities..."
                             placeholderTextColor="#8E8E93"
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -98,6 +210,7 @@ const WeatherNotificationPage = () => {
                             </TouchableOpacity>
                         )}
                     </View>
+                    <Text style={styles.searchHint}>Supported cities: Colombo, Kandy, Galle, Jaffna, Nuwara Eliya, and more</Text>
                 </View>
 
                 {/* Anchor Tools Section */}
@@ -122,7 +235,7 @@ const WeatherNotificationPage = () => {
                         <Ionicons name="cloud-outline" size={24} color="#007AFF" />
                         <Text style={styles.weatherLinkText}>Weather</Text>
                     </View>
-                    <Text style={styles.weatherLinkSubtext}>Check You Journey as Previous</Text>
+                    <Text style={styles.weatherLinkSubtext}>Check detailed forecast for Sri Lankan cities</Text>
                     <Ionicons name="chevron-forward" size={20} color="#007AFF" />
                 </TouchableOpacity>
 
@@ -216,6 +329,72 @@ const styles = StyleSheet.create({
         color: '#fff',
         lineHeight: 20,
     },
+    notificationsSection: {
+        backgroundColor: '#fff',
+        marginHorizontal: 16,
+        marginTop: 20,
+        borderRadius: 16,
+        padding: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 3,
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: '#333',
+        marginBottom: 16,
+    },
+    emptyNotifications: {
+        alignItems: 'center',
+        paddingVertical: 30,
+    },
+    emptyText: {
+        fontSize: 16,
+        color: '#999',
+        marginTop: 10,
+    },
+    emptySubtext: {
+        fontSize: 12,
+        color: '#ccc',
+        marginTop: 5,
+    },
+    notificationCard: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 12,
+        padding: 15,
+        marginBottom: 12,
+        borderLeftWidth: 4,
+        borderLeftColor: '#FF6B6B',
+    },
+    notificationHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    notificationTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#333',
+        flex: 1,
+        marginLeft: 8,
+    },
+    notificationTime: {
+        fontSize: 11,
+        color: '#999',
+    },
+    notificationMessage: {
+        fontSize: 13,
+        color: '#666',
+        lineHeight: 18,
+        marginBottom: 8,
+    },
+    notificationDate: {
+        fontSize: 10,
+        color: '#bbb',
+    },
     searchSection: {
         backgroundColor: '#fff',
         marginHorizontal: 16,
@@ -251,6 +430,12 @@ const styles = StyleSheet.create({
         marginLeft: 8,
         paddingVertical: 0,
     },
+    searchHint: {
+        fontSize: 11,
+        color: '#999',
+        marginTop: 8,
+        fontStyle: 'italic',
+    },
     toolsSection: {
         backgroundColor: '#fff',
         marginHorizontal: 16,
@@ -262,12 +447,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.05,
         shadowRadius: 8,
         elevation: 3,
-    },
-    sectionTitle: {
-        fontSize: 20,
-        fontWeight: '700',
-        color: '#333',
-        marginBottom: 16,
     },
     toolsGrid: {
         gap: 16,
