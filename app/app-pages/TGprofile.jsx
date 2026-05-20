@@ -31,6 +31,7 @@ const TourGuideProfilePage = () => {
   const [experience, setExperience] = useState('');
   const [description, setDescription] = useState('');
   const [languages, setLanguages] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [isTourGuide, setIsTourGuide] = useState(true);
   const [travelModeTags, setTravelModeTags] = useState([]);
   const [currentTag, setCurrentTag] = useState('');
@@ -183,6 +184,7 @@ const TourGuideProfilePage = () => {
     setExperience(profile.experience || '');
     setDescription(profile.bio || '');
     setLanguages(profile.languages?.join(', ') || '');
+    setWhatsappNumber(profile.whatsapp || '');
     setIsTourGuide(true);
     setTravelModeTags(profile.specialties || []);
     setSpecialNotes(profile.notes || []);
@@ -197,6 +199,7 @@ const TourGuideProfilePage = () => {
     setExperience(data.experience || '');
     setDescription(data.description || '');
     setLanguages(data.languages || '');
+    setWhatsappNumber(data.whatsapp_number || '');
     setIsTourGuide(data.is_tour_guide || true);
     setTravelModeTags(data.travel_mode_tags || []);
     setSpecialNotes(data.special_notes || []);
@@ -221,6 +224,7 @@ const TourGuideProfilePage = () => {
         price: profileData.price || "$50/day",
         availability: profileData.availability || "Available for booking",
         location: profileData.province || province,
+        whatsapp: profileData.whatsapp_number || whatsappNumber,
         notes: profileData.special_notes || specialNotes,
         createdAt: new Date().toISOString(),
       };
@@ -271,6 +275,7 @@ const TourGuideProfilePage = () => {
         price: "$50/day",
         availability: "Available for booking",
         location: province.trim(),
+        whatsapp: whatsappNumber.trim(),
         notes: specialNotes,
         createdAt: new Date().toISOString(),
       };
@@ -300,6 +305,7 @@ const TourGuideProfilePage = () => {
         experience: experience.trim() || null,
         description: description.trim() || null,
         languages: languages.trim() || null,
+        whatsapp_number: whatsappNumber.trim() || null,
         is_tour_guide: isTourGuide,
         travel_mode_tags: travelModeTags,
         special_notes: specialNotes,
@@ -516,6 +522,21 @@ const TourGuideProfilePage = () => {
                   placeholderTextColor="#999"
                   value={languages}
                   onChangeText={setLanguages}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>WhatsApp Number</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="logo-whatsapp" size={20} color="#25D366" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., +94 77 123 4567"
+                  placeholderTextColor="#999"
+                  value={whatsappNumber}
+                  onChangeText={setWhatsappNumber}
+                  keyboardType="phone-pad"
                 />
               </View>
             </View>
