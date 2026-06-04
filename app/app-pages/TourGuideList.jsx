@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Directory, File, Paths } from 'expo-file-system';
+import { File } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -7,6 +7,7 @@ import {
   Dimensions,
   FlatList,
   Image,
+  Linking,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -32,17 +33,14 @@ const TourGuideList = () => {
   const validateImageUri = (uri) => {
     if (!uri) return null;
     
-    // Check if the image is a valid local file
     if (uri.startsWith('file://') || uri.startsWith('content://')) {
       return uri;
     }
     
-    // For data URLs (base64)
     if (uri.startsWith('data:image')) {
       return uri;
     }
     
-    // For remote URLs (Supabase storage URLs)
     if (uri.startsWith('http://') || uri.startsWith('https://')) {
       return uri;
     }
@@ -50,78 +48,9 @@ const TourGuideList = () => {
     return null;
   };
 
-  // Function to copy image to permanent storage
-  const copyImageToPermanentStorage = async (tempUri) => {
-    if (!tempUri) return null;
-    
-    try {
-      // Create a permanent directory if it doesn't exist
-      const permanentDir = new Directory(Paths.document, 'tour_guide_images');
-      
-      // Check if directory exists, create if not
-      if (!permanentDir.exists) {
-        permanentDir.create({ intermediates: true });
-      }
-      
-      // Generate unique filename
-      const filename = `guide_image_${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
-      const permanentFile = new File(permanentDir, filename);
-      
-      // Create source file object
-      const sourceFile = new File(tempUri);
-      
-      // Copy the file
-      sourceFile.copy(permanentFile);
-      
-      return permanentFile.uri;
-    } catch (error) {
-      console.error('Error copying image:', error);
-      return tempUri; // Return original if copy fails
-    }
-  };
-
-  // Function to clean up old/unused images
-  const cleanupOldImages = async () => {
-    try {
-      const { data: profilesData, error } = await supabase
-        .from('tour_guides')
-        .select('image');
-      
-      if (error) throw error;
-      
-      const usedImages = new Set();
-      
-      // Collect all used image URIs
-      profilesData.forEach(profile => {
-        if (profile.image && profile.image.includes('/tour_guide_images/')) {
-          usedImages.add(profile.image);
-        }
-      });
-      
-      // Get all images in the tour_guide_images directory
-      const permanentDir = new Directory(Paths.document, 'tour_guide_images');
-      
-      if (permanentDir.exists) {
-        const contents = permanentDir.list();
-        
-        // Delete unused images
-        for (const item of contents) {
-          if (item instanceof File) {
-            if (!usedImages.has(item.uri)) {
-              item.delete();
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error cleaning up images:', error);
-    }
-  };
-
   useEffect(() => {
     loadCurrentUser();
 
-    // Cleanup subscription on unmount
     return () => {
       if (subscriptionRef.current) {
         supabase.removeChannel(subscriptionRef.current);
@@ -145,7 +74,6 @@ const TourGuideList = () => {
   const loadProfiles = async () => {
     setLoading(true);
     try {
-      // Fetch profiles from Supabase database
       const { data, error } = await supabase
         .from('tour_guides')
         .select('*')
@@ -154,10 +82,8 @@ const TourGuideList = () => {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        // Validate and fix images for each profile
         let needsUpdate = false;
         const validatedProfiles = data.map(profile => {
-          // Check if image file still exists
           if (profile.image && profile.image.includes('/tour_guide_images/')) {
             try {
               const imageFile = new File(profile.image);
@@ -179,7 +105,6 @@ const TourGuideList = () => {
           return profile;
         });
         
-        // If any images were invalid, update the database
         if (needsUpdate) {
           for (const profile of validatedProfiles) {
             if (profile.id) {
@@ -191,7 +116,6 @@ const TourGuideList = () => {
           }
         }
         
-        // Add default ratings if not present
         const profilesWithRatings = validatedProfiles.map(profile => ({
           ...profile,
           rating: profile.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
@@ -200,7 +124,6 @@ const TourGuideList = () => {
         setProfiles(profilesWithRatings);
         setFilteredProfiles(profilesWithRatings);
 
-        // Check if current user has a profile
         if (currentUser) {
           const userProfile = profilesWithRatings.find(p => p.user_id === currentUser.id);
           setHasOwnProfile(!!userProfile);
@@ -218,20 +141,17 @@ const TourGuideList = () => {
     }
   };
 
-  // Setup real-time subscription for tour_guides table
   const setupRealtimeSubscription = async () => {
-    // Remove existing subscription if any
     if (subscriptionRef.current) {
       await supabase.removeChannel(subscriptionRef.current);
     }
 
-    // Create new channel for real-time updates
     const channel = supabase
       .channel('tour-guides-changes')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'tour_guides',
         },
@@ -247,15 +167,12 @@ const TourGuideList = () => {
     subscriptionRef.current = channel;
   };
 
-  // Handle real-time updates
   const handleRealtimeUpdate = (payload) => {
     const { eventType, new: newRecord, old: oldRecord } = payload;
 
     switch (eventType) {
       case 'INSERT':
-        // Validate image for new profile
         const validatedImage = validateImageUri(newRecord.image);
-        // New profile added
         const newProfile = {
           ...newRecord,
           image: validatedImage,
@@ -265,11 +182,9 @@ const TourGuideList = () => {
 
         setProfiles(prevProfiles => [newProfile, ...prevProfiles]);
 
-        // Update filtered profiles if search query is empty
         if (searchQuery === '') {
           setFilteredProfiles(prev => [newProfile, ...prev]);
         } else {
-          // Check if new profile matches search query
           const matchesSearch = checkProfileMatchesSearch(newProfile, searchQuery);
           if (matchesSearch) {
             setFilteredProfiles(prev => [newProfile, ...prev]);
@@ -278,9 +193,7 @@ const TourGuideList = () => {
         break;
 
       case 'UPDATE':
-        // Validate image for updated profile
         const updatedValidatedImage = validateImageUri(newRecord.image);
-        // Profile updated
         const updatedProfile = {
           ...newRecord,
           image: updatedValidatedImage,
@@ -302,7 +215,6 @@ const TourGuideList = () => {
         break;
 
       case 'DELETE':
-        // Profile deleted - also delete associated image if in permanent storage
         if (oldRecord.image && oldRecord.image.includes('/tour_guide_images/')) {
           try {
             const imageFile = new File(oldRecord.image);
@@ -323,14 +235,12 @@ const TourGuideList = () => {
         break;
     }
 
-    // Update hasOwnProfile status if current user's profile changed
     if (currentUser) {
       const userProfile = profiles.find(p => p.user_id === currentUser.id);
       setHasOwnProfile(!!userProfile);
     }
   };
 
-  // Helper function to check if profile matches search query
   const checkProfileMatchesSearch = (profile, query) => {
     if (!query.trim()) return true;
     const searchLower = query.toLowerCase();
@@ -364,10 +274,70 @@ const TourGuideList = () => {
   };
 
   const handleChatPress = (profile) => {
-    router.push({
-      pathname: '/app-pages/Chat',
-      params: { guideId: profile.id, guideName: profile.full_name }
-    });
+    // Get WhatsApp number from profile
+    const whatsappNumber = profile.whatsapp_number;
+    
+    if (!whatsappNumber) {
+      Alert.alert(
+        'WhatsApp Number Not Available',
+        'This tour guide has not provided a WhatsApp number yet.',
+        [{ text: 'OK', style: 'cancel' }]
+      );
+      return;
+    }
+    
+    // Clean the WhatsApp number (remove spaces, dashes, etc.)
+    let cleanNumber = whatsappNumber.replace(/[\s\-\(\)]/g, '');
+    
+    // Remove '+' if present for checking
+    let numberWithoutPlus = cleanNumber.replace('+', '');
+    
+    // Check if number starts with country code (assuming 1-4 digits for country code)
+    // For Sri Lanka (+94), we need to ensure proper formatting
+    if (!cleanNumber.startsWith('+')) {
+      // If number starts with 0, convert to country code format
+      if (numberWithoutPlus.startsWith('0')) {
+        // For Sri Lanka: 0712345678 -> +94712345678
+        if (numberWithoutPlus.startsWith('07')) {
+          cleanNumber = '+' + numberWithoutPlus.substring(1);
+        } else {
+          cleanNumber = '+' + numberWithoutPlus;
+        }
+      } else {
+        cleanNumber = '+' + numberWithoutPlus;
+      }
+    }
+    
+    // Create WhatsApp URL
+    const whatsappUrl = `whatsapp://send?phone=${cleanNumber}`;
+    
+    // Try to open WhatsApp
+    Linking.canOpenURL(whatsappUrl)
+      .then((supported) => {
+        if (supported) {
+          return Linking.openURL(whatsappUrl);
+        } else {
+          // If WhatsApp is not installed, provide alternative options
+          Alert.alert(
+            'WhatsApp Not Installed',
+            'WhatsApp is not installed on your device. Would you like to save the number to your contacts?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Copy Number', 
+                onPress: () => {
+                  const numberToCopy = whatsappNumber.replace(/[\s\-\(\)]/g, '');
+                  Alert.alert('Copied!', 'Phone number copied to clipboard');
+                }
+              }
+            ]
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('Error opening WhatsApp:', err);
+        Alert.alert('Error', 'Unable to open WhatsApp. Please try again.');
+      });
   };
 
   const handleBecomeGuide = () => {
@@ -398,7 +368,6 @@ const TourGuideList = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete associated image if in permanent storage
               if (profile.image && profile.image.includes('/tour_guide_images/')) {
                 try {
                   const imageFile = new File(profile.image);
@@ -440,7 +409,6 @@ const TourGuideList = () => {
     });
   };
 
-  // Image component with error handling for guide avatars
   const GuideAvatar = ({ imageUri, name, style }) => {
     const [imageError, setImageError] = useState(false);
     const [validUri, setValidUri] = useState(null);
@@ -470,7 +438,6 @@ const TourGuideList = () => {
     );
   };
 
-  // Image component for cover images with error handling
   const GuideCoverImage = ({ imageUri, style }) => {
     const [imageError, setImageError] = useState(false);
     const [validUri, setValidUri] = useState(null);
@@ -536,6 +503,13 @@ const TourGuideList = () => {
                 <Ionicons name="location-outline" size={12} color="#666" />
                 <Text style={styles.locationText}>{profile.province || 'Location not set'}</Text>
               </View>
+              {/* Display WhatsApp number if available */}
+              {profile.whatsapp_number && !isOwner && (
+                <View style={styles.whatsappIndicator}>
+                  <Ionicons name="logo-whatsapp" size={10} color="#25D366" />
+                  <Text style={styles.whatsappIndicatorText}>WhatsApp available</Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.ratingContainer}>
@@ -617,13 +591,18 @@ const TourGuideList = () => {
             <Text style={styles.viewButtonText}>View Profile</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.chatButton}
-            onPress={() => handleChatPress(profile)}
-          >
-            <Ionicons name="chatbubble-outline" size={18} color="#25D366" />
-            <Text style={styles.chatButtonText}>Chat</Text>
-          </TouchableOpacity>
+          {!isOwner && (
+            <TouchableOpacity
+              style={[styles.chatButton, !profile.whatsapp_number && styles.chatButtonDisabled]}
+              onPress={() => handleChatPress(profile)}
+              disabled={!profile.whatsapp_number}
+            >
+              <Ionicons name="logo-whatsapp" size={18} color={profile.whatsapp_number ? "#25D366" : "#ccc"} />
+              <Text style={[styles.chatButtonText, !profile.whatsapp_number && styles.chatButtonTextDisabled]}>
+                Chat
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {isOwner && (
@@ -662,11 +641,6 @@ const TourGuideList = () => {
       </View>
     );
   };
-
-  // Clean up old images on component mount
-  useEffect(() => {
-    cleanupOldImages();
-  }, []);
 
   if (loading) {
     return (
@@ -902,6 +876,16 @@ const styles = StyleSheet.create({
     color: '#666',
     marginLeft: 4,
   },
+  whatsappIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  whatsappIndicatorText: {
+    fontSize: 10,
+    color: '#25D366',
+    marginLeft: 4,
+  },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1055,10 +1039,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 6,
   },
+  chatButtonDisabled: {
+    backgroundColor: '#f5f5f5',
+    opacity: 0.6,
+  },
   chatButtonText: {
     color: '#25D366',
     fontSize: 14,
     fontWeight: '500',
+  },
+  chatButtonTextDisabled: {
+    color: '#ccc',
   },
   ownerBadge: {
     position: 'absolute',

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -23,32 +23,54 @@ const { width } = Dimensions.get('window');
 const TourGuideProfilePage = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
+  
+  // Form State
   const [fullName, setFullName] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [province, setProvince] = useState('');
   const [experience, setExperience] = useState('');
   const [description, setDescription] = useState('');
   const [languages, setLanguages] = useState('');
-  const [isTourGuide, setIsTourGuide] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [isTourGuide, setIsTourGuide] = useState(true);
   const [travelModeTags, setTravelModeTags] = useState([]);
   const [currentTag, setCurrentTag] = useState('');
   const [specialNotes, setSpecialNotes] = useState([]);
   const [currentNote, setCurrentNote] = useState('');
+  
+  // User & Profile State
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [existingProfileId, setExistingProfileId] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  
+  // Animation State
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(30));
-  const [userProfile, setUserProfile] = useState(null);
-  let subscription = null;
+  
+  // Component Mount Ref
+  const isMounted = useRef(true);
 
+  // ==================== Lifecycle ====================
   useEffect(() => {
+    isMounted.current = true;
+    
     loadCurrentUser();
     loadUserProfile();
+    
     if (params.profileId) {
       loadExistingProfile(params.profileId);
     }
+    
+    startAnimations();
+    
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const startAnimations = () => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -61,19 +83,13 @@ const TourGuideProfilePage = () => {
         useNativeDriver: true,
       }),
     ]).start();
+  };
 
-    // Cleanup subscription on unmount
-    return () => {
-      if (subscription) {
-        supabase.removeChannel(subscription);
-      }
-    };
-  }, []);
-
+  // ==================== Data Loading ====================
   const loadUserProfile = async () => {
     try {
       const savedUser = await AsyncStorage.getItem('currentUser');
-      if (savedUser) {
+      if (savedUser && isMounted.current) {
         setUserProfile(JSON.parse(savedUser));
       }
     } catch (error) {
@@ -83,34 +99,29 @@ const TourGuideProfilePage = () => {
 
   const loadCurrentUser = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-      if (user) {
-        checkExistingProfile(user.id);
-        // Also check AsyncStorage for tour guide profile
-        checkAsyncStorageProfile();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      
+      if (user && isMounted.current) {
+        setCurrentUser(user);
+        await checkExistingProfile(user.id);
+        await checkAsyncStorageProfile(user.id);
       }
     } catch (error) {
       console.error('Error loading user:', error);
     }
   };
 
-  const checkAsyncStorageProfile = async () => {
+  const checkAsyncStorageProfile = async (userId) => {
     try {
-      const savedGuide = await AsyncStorage.getItem('tourGuideProfile');
-      if (savedGuide) {
-        const guideData = JSON.parse(savedGuide);
-        setIsEditing(true);
-        setExistingProfileId(guideData.id);
-        setFullName(guideData.name || '');
-        setSelectedImage(guideData.avatar);
-        setProvince(guideData.location || '');
-        setExperience(guideData.experience || '');
-        setDescription(guideData.bio || '');
-        setLanguages(guideData.languages?.join(', ') || '');
-        setIsTourGuide(true);
-        setTravelModeTags(guideData.specialties || []);
-        setSpecialNotes(guideData.upcomingTours?.map(tour => tour.name) || []);
+      const savedProfiles = await AsyncStorage.getItem('tourGuideProfiles');
+      if (savedProfiles && isMounted.current) {
+        const profilesList = JSON.parse(savedProfiles);
+        const existingProfile = profilesList.find(p => p.userId === userId);
+        
+        if (existingProfile) {
+          populateFormFromProfile(existingProfile);
+        }
       }
     } catch (error) {
       console.error('Error checking AsyncStorage profile:', error);
@@ -123,51 +134,19 @@ const TourGuideProfilePage = () => {
         .from('tour_guides')
         .select('*')
         .eq('user_id', userId)
-        .maybeSingle(); // Use maybeSingle() instead of single() to avoid errors
+        .maybeSingle();
 
-      if (data && !error) {
-        setIsEditing(true);
-        setExistingProfileId(data.id);
-        setFullName(data.full_name || '');
-        setSelectedImage(data.image);
-        setProvince(data.province || '');
-        setExperience(data.experience || '');
-        setDescription(data.description || '');
-        setLanguages(data.languages || '');
-        setIsTourGuide(data.is_tour_guide || false);
-        setTravelModeTags(data.travel_mode_tags || []);
-        setSpecialNotes(data.special_notes || []);
-        
-        // Also save to AsyncStorage
-        await saveToAsyncStorage(data);
+      if (error) {
+        console.error('Supabase error:', error);
+        return;
+      }
+
+      if (data && isMounted.current) {
+        populateFormFromSupabase(data);
+        await saveToAsyncStorage(data, userId);
       }
     } catch (error) {
       console.error('Error checking existing profile:', error);
-    }
-  };
-
-  const saveToAsyncStorage = async (profileData) => {
-    try {
-      const tourGuideData = {
-        id: profileData.id || Date.now(),
-        name: profileData.full_name || fullName,
-        avatar: profileData.image || selectedImage || userProfile?.avatar || "https://randomuser.me/api/portraits/men/1.jpg",
-        rating: 4.9,
-        totalTours: 0,
-        experience: profileData.experience || experience || "1+ years",
-        languages: profileData.languages ? profileData.languages.split(',').map(l => l.trim()) : (languages ? languages.split(',').map(l => l.trim()) : ["English"]),
-        specialties: profileData.travel_mode_tags || travelModeTags || ["Cultural Tours", "Adventure Travel"],
-        bio: profileData.description || description || "Professional tour guide ready to show you amazing places!",
-        price: "$50/day",
-        availability: "Available for booking",
-        location: profileData.province || province,
-        upcomingTours: []
-      };
-      
-      await AsyncStorage.setItem('tourGuideProfile', JSON.stringify(tourGuideData));
-      console.log('✅ Tour guide profile saved to AsyncStorage');
-    } catch (error) {
-      console.error('Error saving to AsyncStorage:', error);
     }
   };
 
@@ -179,71 +158,92 @@ const TourGuideProfilePage = () => {
         .eq('id', profileId)
         .maybeSingle();
 
-      if (data && !error) {
-        setFullName(data.full_name || '');
-        setSelectedImage(data.image);
-        setProvince(data.province || '');
-        setExperience(data.experience || '');
-        setDescription(data.description || '');
-        setLanguages(data.languages || '');
-        setIsTourGuide(data.is_tour_guide || false);
-        setTravelModeTags(data.travel_mode_tags || []);
-        setSpecialNotes(data.special_notes || []);
+      if (error) {
+        console.error('Supabase error:', error);
+        return;
+      }
+
+      if (data && isMounted.current) {
+        populateFormFromSupabase(data);
         setIsEditing(true);
         setExistingProfileId(data.id);
-        
-        // Save to AsyncStorage
-        await saveToAsyncStorage(data);
+        await saveToAsyncStorage(data, data.user_id);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
     }
   };
 
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (status !== 'granted') {
-      Alert.alert('Permission Required', 'We need access to your photos to upload images.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-
-    if (!result.canceled) {
-      setSelectedImage(result.assets[0].uri);
-    }
+  // ==================== Form Population ====================
+  const populateFormFromProfile = (profile) => {
+    setIsEditing(true);
+    setExistingProfileId(profile.id);
+    setFullName(profile.name || '');
+    setSelectedImage(profile.avatar);
+    setProvince(profile.location || '');
+    setExperience(profile.experience || '');
+    setDescription(profile.bio || '');
+    setLanguages(profile.languages?.join(', ') || '');
+    setWhatsappNumber(profile.whatsapp || '');
+    setIsTourGuide(true);
+    setTravelModeTags(profile.specialties || []);
+    setSpecialNotes(profile.notes || []);
   };
 
-  const addTravelModeTag = () => {
-    if (currentTag.trim()) {
-      setTravelModeTags([...travelModeTags, currentTag.trim()]);
-      setCurrentTag('');
+  const populateFormFromSupabase = (data) => {
+    setIsEditing(true);
+    setExistingProfileId(data.id);
+    setFullName(data.full_name || '');
+    setSelectedImage(data.image);
+    setProvince(data.province || '');
+    setExperience(data.experience || '');
+    setDescription(data.description || '');
+    setLanguages(data.languages || '');
+    setWhatsappNumber(data.whatsapp_number || '');
+    setIsTourGuide(data.is_tour_guide || true);
+    setTravelModeTags(data.travel_mode_tags || []);
+    setSpecialNotes(data.special_notes || []);
+  };
+
+  // ==================== Data Saving ====================
+  const saveToAsyncStorage = async (profileData, userId) => {
+    try {
+      const tourGuideData = {
+        id: profileData.id || Date.now(),
+        userId: userId || currentUser?.id,
+        name: profileData.full_name || fullName,
+        avatar: profileData.image || selectedImage || userProfile?.avatar,
+        rating: parseFloat(profileData.rating) || 4.9,
+        totalTours: profileData.total_tours || 0,
+        experience: profileData.experience || experience,
+        languages: profileData.languages 
+          ? profileData.languages.split(',').map(l => l.trim()) 
+          : (languages ? languages.split(',').map(l => l.trim()) : []),
+        specialties: profileData.travel_mode_tags || travelModeTags,
+        bio: profileData.description || description,
+        price: profileData.price || "$50/day",
+        availability: profileData.availability || "Available for booking",
+        location: profileData.province || province,
+        whatsapp: profileData.whatsapp_number || whatsappNumber,
+        notes: profileData.special_notes || specialNotes,
+        createdAt: new Date().toISOString(),
+      };
+      
+      const existingProfiles = await AsyncStorage.getItem('tourGuideProfiles');
+      let profilesList = existingProfiles ? JSON.parse(existingProfiles) : [];
+      
+      const existingIndex = profilesList.findIndex(p => p.userId === userId);
+      if (existingIndex !== -1) {
+        profilesList[existingIndex] = tourGuideData;
+      } else {
+        profilesList.push(tourGuideData);
+      }
+      
+      await AsyncStorage.setItem('tourGuideProfiles', JSON.stringify(profilesList));
+      console.log('✅ Tour guide profile saved to AsyncStorage');
+    } catch (error) {
+      console.error('Error saving to AsyncStorage:', error);
     }
-  };
-
-  const removeTravelModeTag = (index) => {
-    const newTags = [...travelModeTags];
-    newTags.splice(index, 1);
-    setTravelModeTags(newTags);
-  };
-
-  const addSpecialNote = () => {
-    if (currentNote.trim()) {
-      setSpecialNotes([...specialNotes, currentNote.trim()]);
-      setCurrentNote('');
-    }
-  };
-
-  const removeSpecialNote = (index) => {
-    const newNotes = [...specialNotes];
-    newNotes.splice(index, 1);
-    setSpecialNotes(newNotes);
   };
 
   const handleSubmit = async () => {
@@ -260,44 +260,59 @@ const TourGuideProfilePage = () => {
     setLoading(true);
 
     try {
-      // Prepare data for AsyncStorage (local storage)
+      // Prepare AsyncStorage data
       const tourGuideData = {
         id: existingProfileId || Date.now(),
-        name: fullName,
-        avatar: selectedImage || userProfile?.avatar || "https://randomuser.me/api/portraits/men/1.jpg",
+        userId: currentUser.id,
+        name: fullName.trim(),
+        avatar: selectedImage || userProfile?.avatar,
         rating: 4.9,
         totalTours: 0,
-        experience: experience || "1+ years",
-        languages: languages ? languages.split(',').map(l => l.trim()) : ["English"],
-        specialties: travelModeTags.length > 0 ? travelModeTags : ["Cultural Tours", "Adventure Travel"],
-        bio: description || "Professional tour guide ready to show you amazing places!",
+        experience: experience.trim(),
+        languages: languages ? languages.split(',').map(l => l.trim()).filter(l => l) : [],
+        specialties: travelModeTags,
+        bio: description.trim(),
         price: "$50/day",
         availability: "Available for booking",
-        location: province,
-        upcomingTours: specialNotes.map(note => ({ id: Date.now() + Math.random(), name: note, date: "Upcoming", spots: 5 }))
+        location: province.trim(),
+        whatsapp: whatsappNumber.trim(),
+        notes: specialNotes,
+        createdAt: new Date().toISOString(),
       };
       
       // Save to AsyncStorage
-      await AsyncStorage.setItem('tourGuideProfile', JSON.stringify(tourGuideData));
+      const existingProfiles = await AsyncStorage.getItem('tourGuideProfiles');
+      let profilesList = existingProfiles ? JSON.parse(existingProfiles) : [];
+      
+      const existingIndex = profilesList.findIndex(p => p.userId === currentUser.id);
+      if (existingIndex !== -1) {
+        profilesList[existingIndex] = tourGuideData;
+      } else {
+        profilesList.push(tourGuideData);
+      }
+      
+      await AsyncStorage.setItem('tourGuideProfiles', JSON.stringify(profilesList));
       console.log('✅ Tour guide profile saved to AsyncStorage');
 
-      // Prepare data for Supabase
+      // Prepare Supabase data
       const profileData = {
         user_id: currentUser.id,
         user_email: currentUser.email,
         user_name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0],
-        full_name: fullName,
+        full_name: fullName.trim(),
         image: selectedImage,
-        province: province || null,
-        experience: experience || null,
-        description: description || null,
-        languages: languages || null,
+        province: province.trim() || null,
+        experience: experience.trim() || null,
+        description: description.trim() || null,
+        languages: languages.trim() || null,
+        whatsapp_number: whatsappNumber.trim() || null,
         is_tour_guide: isTourGuide,
         travel_mode_tags: travelModeTags,
         special_notes: specialNotes,
         updated_at: new Date().toISOString(),
       };
 
+      // Save to Supabase
       let result;
       if (isEditing && existingProfileId) {
         result = await supabase
@@ -316,14 +331,8 @@ const TourGuideProfilePage = () => {
         'Success! 🎉',
         isEditing ? 'Your profile has been updated!' : 'Your profile has been created!',
         [
-          {
-            text: 'Go to Home',
-            onPress: () => router.push('/')
-          },
-          {
-            text: 'View Profile',
-            onPress: () => router.push('/app-pages/tour-guide-profile')
-          }
+          { text: 'Go to Home', onPress: () => router.push('/') },
+          { text: 'View Profile', onPress: () => router.push('/app-pages/tour-guide-profile') }
         ]
       );
     } catch (error) {
@@ -334,14 +343,64 @@ const TourGuideProfilePage = () => {
     }
   };
 
+  // ==================== Image Picker ====================
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'We need access to your photos to upload images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && isMounted.current) {
+      setSelectedImage(result.assets[0].uri);
+    }
+  };
+
+  // ==================== Tags & Notes Management ====================
+  const addTravelModeTag = () => {
+    if (currentTag.trim() && isMounted.current) {
+      setTravelModeTags([...travelModeTags, currentTag.trim()]);
+      setCurrentTag('');
+    }
+  };
+
+  const removeTravelModeTag = (index) => {
+    if (isMounted.current) {
+      const newTags = [...travelModeTags];
+      newTags.splice(index, 1);
+      setTravelModeTags(newTags);
+    }
+  };
+
+  const addSpecialNote = () => {
+    if (currentNote.trim() && isMounted.current) {
+      setSpecialNotes([...specialNotes, currentNote.trim()]);
+      setCurrentNote('');
+    }
+  };
+
+  const removeSpecialNote = (index) => {
+    if (isMounted.current) {
+      const newNotes = [...specialNotes];
+      newNotes.splice(index, 1);
+      setSpecialNotes(newNotes);
+    }
+  };
+
+  // ==================== Render Helpers ====================
   const renderSection = (title, icon, children) => (
     <Animated.View 
       style={[
         styles.sectionCard,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }]
-        }
+        { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
       ]}
     >
       <View style={styles.sectionHeader}>
@@ -354,8 +413,10 @@ const TourGuideProfilePage = () => {
     </Animated.View>
   );
 
+  // ==================== Main Render ====================
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -383,7 +444,7 @@ const TourGuideProfilePage = () => {
           </Text>
         </View>
 
-        {/* Profile Image Section */}
+        {/* Profile Photo Section */}
         {renderSection('Profile Photo', 'camera-outline', 
           <TouchableOpacity style={styles.imageUploadContainer} onPress={pickImage}>
             {selectedImage ? (
@@ -406,11 +467,7 @@ const TourGuideProfilePage = () => {
           </TouchableOpacity>
         )}
 
-        <Text style={styles.buttomSubtitle}>
-          🔖 Share a little about yourself – your name, location, and experience will help travelers connect with you.
-        </Text>
-
-        {/* Personal Information */}
+        {/* Personal Information Section */}
         {renderSection('Personal Information', 'person-outline',
           <>
             <View style={styles.inputGroup}>
@@ -468,14 +525,25 @@ const TourGuideProfilePage = () => {
                 />
               </View>
             </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>WhatsApp Number</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="logo-whatsapp" size={20} color="#25D366" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., +94 77 123 4567"
+                  placeholderTextColor="#999"
+                  value={whatsappNumber}
+                  onChangeText={setWhatsappNumber}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
           </>
         )}
 
-        <Text style={styles.buttomSubtitle}>
-          🔖 Tell travelers your story – share your passion for guiding and what makes your tours unique.
-        </Text>
-
-        {/* Description */}
+        {/* About Me Section */}
         {renderSection('About Me', 'document-text-outline',
           <>
             <View style={styles.inputGroup}>
@@ -495,11 +563,7 @@ const TourGuideProfilePage = () => {
           </>
         )}
 
-        <Text style={styles.buttomSubtitle}>
-          🔖 Add your travel specialties and special notes one at a time. Travelers love knowing what makes your tours special!
-        </Text>
-
-        {/* Travel Mode Tags */}
+        {/* Travel Specialties Section */}
         {renderSection('Travel Specialties', 'bicycle-outline',
           <>
             <View style={styles.tagInputWrapper}>
@@ -530,7 +594,7 @@ const TourGuideProfilePage = () => {
           </>
         )}
 
-        {/* Special Notes */}
+        {/* Special Notes Section */}
         {renderSection('Special Notes', 'bulb-outline',
           <>
             <View style={styles.tagInputWrapper}>
@@ -562,40 +626,11 @@ const TourGuideProfilePage = () => {
           </>
         )}
 
-        {/* Tour Guide Status */}
-        {renderSection('Status', 'checkbox-outline',
-          <TouchableOpacity 
-            style={styles.toggleContainer} 
-            onPress={() => setIsTourGuide(!isTourGuide)}
-          >
-            <View style={styles.toggleInfo}>
-              <Ionicons 
-                name={isTourGuide ? "checkmark-circle" : "ellipse-outline"} 
-                size={24} 
-                color={isTourGuide ? "#4CAF50" : "#999"} 
-              />
-              <Text style={styles.toggleText}>
-                {isTourGuide ? "Active Tour Guide" : "Register as Tour Guide"}
-              </Text>
-            </View>
-            <View style={[styles.toggleSwitch, isTourGuide && styles.toggleSwitchActive]}>
-              <View style={[styles.toggleKnob, isTourGuide && styles.toggleKnobActive]} />
-            </View>
-          </TouchableOpacity>
-        )}
-
-        <Text style={styles.buttomSubtitle}>
-          🔖 Your profile is your gateway to connecting with travelers from around the world. Submit your information and begin sharing unforgettable experiences.
-        </Text>
-
         {/* Submit Button */}
         <Animated.View 
           style={[
             styles.submitButtonContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
           ]}
         >
           <TouchableOpacity 
@@ -619,6 +654,7 @@ const TourGuideProfilePage = () => {
   );
 };
 
+// ==================== Styles ====================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -633,11 +669,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
     marginTop: 40,
   },
   backButton: {
@@ -683,16 +714,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 20,
   },
-  buttomSubtitle: {
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 20,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    fontStyle: 'italic',
-  },
   sectionCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -735,11 +756,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 3,
     borderColor: '#007AFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
   profileImage: {
     width: '100%',
@@ -852,11 +868,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
   },
   addButtonText: {
     color: '#fff',
@@ -909,46 +920,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: 20,
   },
-  toggleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-  toggleInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  toggleText: {
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 10,
-  },
-  toggleSwitch: {
-    width: 50,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ccc',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  toggleSwitchActive: {
-    backgroundColor: '#4CAF50',
-  },
-  toggleKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  toggleKnobActive: {
-    transform: [{ translateX: 22 }],
-  },
   submitButtonContainer: {
     paddingHorizontal: 20,
     marginTop: 10,
@@ -961,11 +932,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 16,
     borderRadius: 16,
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
   },
   submitButtonDisabled: {
     backgroundColor: '#999',
