@@ -289,7 +289,7 @@ const PlanPage = () => {
                     style={styles.viewButton}
                     onPress={() => handleViewItinerary(itinerary)}
                   >
-                    <Text style={styles.viewButtonText}>View</Text>
+                    <Text style={styles.viewButtonText}>Your View</Text>
                   </TouchableOpacity>
                 </View>
               ))
