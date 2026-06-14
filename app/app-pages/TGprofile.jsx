@@ -26,6 +26,7 @@ const TourGuideProfilePage = () => {
   
   // Form State
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [province, setProvince] = useState('');
   const [experience, setExperience] = useState('');
@@ -90,7 +91,12 @@ const TourGuideProfilePage = () => {
     try {
       const savedUser = await AsyncStorage.getItem('currentUser');
       if (savedUser && isMounted.current) {
-        setUserProfile(JSON.parse(savedUser));
+        const parsedUser = JSON.parse(savedUser);
+        setUserProfile(parsedUser);
+        // Set email from user profile if available
+        if (parsedUser.email) {
+          setEmail(parsedUser.email);
+        }
       }
     } catch (error) {
       console.log('Error loading user profile:', error);
@@ -104,6 +110,10 @@ const TourGuideProfilePage = () => {
       
       if (user && isMounted.current) {
         setCurrentUser(user);
+        // Set email from supabase user
+        if (user.email) {
+          setEmail(user.email);
+        }
         await checkExistingProfile(user.id);
         await checkAsyncStorageProfile(user.id);
       }
@@ -179,6 +189,7 @@ const TourGuideProfilePage = () => {
     setIsEditing(true);
     setExistingProfileId(profile.id);
     setFullName(profile.name || '');
+    setEmail(profile.email || '');
     setSelectedImage(profile.avatar);
     setProvince(profile.location || '');
     setExperience(profile.experience || '');
@@ -194,6 +205,7 @@ const TourGuideProfilePage = () => {
     setIsEditing(true);
     setExistingProfileId(data.id);
     setFullName(data.full_name || '');
+    setEmail(data.user_email || '');
     setSelectedImage(data.image);
     setProvince(data.province || '');
     setExperience(data.experience || '');
@@ -212,6 +224,7 @@ const TourGuideProfilePage = () => {
         id: profileData.id || Date.now(),
         userId: userId || currentUser?.id,
         name: profileData.full_name || fullName,
+        email: profileData.user_email || email,
         avatar: profileData.image || selectedImage || userProfile?.avatar,
         rating: parseFloat(profileData.rating) || 4.9,
         totalTours: profileData.total_tours || 0,
@@ -252,6 +265,11 @@ const TourGuideProfilePage = () => {
       return;
     }
 
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email address');
+      return;
+    }
+
     if (!currentUser) {
       Alert.alert('Error', 'Please login first');
       return;
@@ -265,6 +283,7 @@ const TourGuideProfilePage = () => {
         id: existingProfileId || Date.now(),
         userId: currentUser.id,
         name: fullName.trim(),
+        email: email.trim(),
         avatar: selectedImage || userProfile?.avatar,
         rating: 4.9,
         totalTours: 0,
@@ -297,7 +316,7 @@ const TourGuideProfilePage = () => {
       // Prepare Supabase data
       const profileData = {
         user_id: currentUser.id,
-        user_email: currentUser.email,
+        user_email: email.trim(),
         user_name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0],
         full_name: fullName.trim(),
         image: selectedImage,
@@ -480,6 +499,23 @@ const TourGuideProfilePage = () => {
                   placeholderTextColor="#999"
                   value={fullName}
                   onChangeText={setFullName}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Email Address *</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="mail-outline" size={20} color="#007AFF" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email address"
+                  placeholderTextColor="#999"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
               </View>
             </View>
