@@ -21,6 +21,10 @@ const feedPage = () => {
   const [selectedPostForShare, setSelectedPostForShare] = useState(null);
   const [shareMessage, setShareMessage] = useState('');
   
+  // Options Modal State
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [selectedPostForOptions, setSelectedPostForOptions] = useState(null);
+  
   // Format Date/Time Function
   const formatDateTime = (timestamp) => {
     if (!timestamp) return 'Just now';
@@ -1062,6 +1066,81 @@ const feedPage = () => {
     }
   };
 
+  // Options Menu Handlers
+  const openOptionsMenu = (post) => {
+    setSelectedPostForOptions(post);
+    setOptionsModalVisible(true);
+  };
+
+  const handleReportPost = () => {
+    Alert.alert(
+      'Report Post',
+      'Why are you reporting this post?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Spam', onPress: () => Alert.alert('Reported', 'Thank you for reporting spam') },
+        { text: 'Harassment', onPress: () => Alert.alert('Reported', 'Thank you for reporting harassment') },
+        { text: 'Inappropriate Content', onPress: () => Alert.alert('Reported', 'Thank you for reporting inappropriate content') },
+        { text: 'Misinformation', onPress: () => Alert.alert('Reported', 'Thank you for reporting misinformation') }
+      ]
+    );
+    setOptionsModalVisible(false);
+  };
+
+  const handleSavePost = async () => {
+    if (!selectedPostForOptions) return;
+    
+    try {
+      const savedPosts = await AsyncStorage.getItem('savedPosts');
+      let savedPostsList = savedPosts ? JSON.parse(savedPosts) : [];
+      
+      // Check if already saved
+      const alreadySaved = savedPostsList.some(p => p.id === selectedPostForOptions.id);
+      if (alreadySaved) {
+        Alert.alert('Info', 'Post already saved');
+        setOptionsModalVisible(false);
+        return;
+      }
+      
+      // Add to saved posts
+      const postToSave = {
+        id: selectedPostForOptions.id,
+        name: selectedPostForOptions.name,
+        username: selectedPostForOptions.username,
+        avatar: selectedPostForOptions.avatar,
+        location: selectedPostForOptions.location,
+        image: selectedPostForOptions.image,
+        caption: selectedPostForOptions.caption,
+        likes: selectedPostForOptions.likes,
+        timestamp: selectedPostForOptions.timestamp,
+        savedAt: new Date().toISOString()
+      };
+      
+      savedPostsList.unshift(postToSave);
+      await AsyncStorage.setItem('savedPosts', JSON.stringify(savedPostsList));
+      Alert.alert('Saved', 'Post saved to your collection');
+    } catch (error) {
+      console.log('Error saving post:', error);
+      Alert.alert('Error', 'Failed to save post');
+    }
+    setOptionsModalVisible(false);
+  };
+
+  const handleCopyLink = () => {
+    Alert.alert('Link Copied', 'Post link copied to clipboard');
+    setOptionsModalVisible(false);
+  };
+
+  const handleViewProfile = () => {
+    navigateToProfile();
+    setOptionsModalVisible(false);
+  };
+
+  const handleNotInterested = () => {
+    Alert.alert('Noted', "We'll show fewer posts like this");
+    setOptionsModalVisible(false);
+  };
+
   const renderEventItem = ({ item }) => {
     const isEnrolled = enrolledEvents.some(e => e.id === item.id);
     const spotsLeft = item.spots - item.enrolled;
@@ -1156,7 +1235,7 @@ const feedPage = () => {
                   <Text style={styles.deleteIcon}>🗑️</Text>
                 </TouchableOpacity>
               )}
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => openOptionsMenu(item)}>
                 <Text style={styles.moreIcon}>•••</Text>
               </TouchableOpacity>
             </View>
@@ -1243,7 +1322,7 @@ const feedPage = () => {
                 <Text style={styles.deleteIcon}>🗑️</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => openOptionsMenu(item)}>
               <Text style={styles.moreIcon}>•••</Text>
             </TouchableOpacity>
           </View>
@@ -1441,6 +1520,69 @@ const feedPage = () => {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Options Modal - Three Dots Menu */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={optionsModalVisible}
+        onRequestClose={() => setOptionsModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.optionsModalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setOptionsModalVisible(false)}
+        >
+          <View style={styles.optionsModalContainer}>
+            <View style={styles.optionsModalHeader}>
+              <Text style={styles.optionsModalTitle}>Post Options</Text>
+              <TouchableOpacity onPress={() => setOptionsModalVisible(false)}>
+                <Text style={styles.optionsModalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleSavePost}>
+              <Text style={styles.optionIcon}>🔖</Text>
+              <View>
+                <Text style={styles.optionTitle}>Save Post</Text>
+                <Text style={styles.optionDescription}>Add to your saved collection</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleCopyLink}>
+              <Text style={styles.optionIcon}>🔗</Text>
+              <View>
+                <Text style={styles.optionTitle}>Copy Link</Text>
+                <Text style={styles.optionDescription}>Copy post link to clipboard</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleViewProfile}>
+              <Text style={styles.optionIcon}>👤</Text>
+              <View>
+                <Text style={styles.optionTitle}>View Profile</Text>
+                <Text style={styles.optionDescription}>Go to {selectedPostForOptions?.name}'s profile</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleNotInterested}>
+              <Text style={styles.optionIcon}>🙅</Text>
+              <View>
+                <Text style={styles.optionTitle}>Not Interested</Text>
+                <Text style={styles.optionDescription}>See fewer posts like this</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleReportPost}>
+              <Text style={styles.optionIcon}>🚩</Text>
+              <View>
+                <Text style={styles.optionTitle}>Report Post</Text>
+                <Text style={styles.optionDescription}>Report inappropriate content</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       <View style={styles.header}>
@@ -1847,7 +1989,7 @@ const feedPage = () => {
                 
                 <TouchableOpacity style={styles.createPostAction} onPress={() => setModalVisible(true)}>
                   <Text style={styles.photoIcon}>🖼️</Text>
-                  <Text style={styles.createPostActionText}>Photo/Video</Text>
+                  <Text style={styles.createPostActionText}>Uploads</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity style={styles.createPostAction} onPress={navigateToFeeling}>
@@ -1857,7 +1999,7 @@ const feedPage = () => {
               </View>
             </View>
 
-            {/* Your Recent Stories Section */}
+            {/* Your Recent Stories Section - UPDATED WITH CAPTION */}
             {currentUserPosts.length > 0 && (
               <View style={styles.recentStoriesSection}>
                 <View style={styles.sectionHeader}>
@@ -1892,6 +2034,12 @@ const feedPage = () => {
                         <Text style={styles.smallStoryName} numberOfLines={1}>
                           {currentUser.name}
                         </Text>
+                        {/* Caption added here */}
+                        {item.caption && (
+                          <Text style={styles.smallStoryCaption} numberOfLines={2}>
+                            {item.caption}
+                          </Text>
+                        )}
                         <Text style={styles.smallStoryTime}>{formatDateTime(item.timestamp)}</Text>
                       </View>
                     </TouchableOpacity>
@@ -1930,6 +2078,61 @@ const feedPage = () => {
 };
 
 const styles = StyleSheet.create({
+  // ... (keep all existing styles, add these new ones for options modal)
+  
+  // Options Modal Styles
+  optionsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionsModalContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '85%',
+    maxWidth: 350,
+    overflow: 'hidden',
+  },
+  optionsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e4e6eb',
+  },
+  optionsModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1c1e21',
+  },
+  optionsModalClose: {
+    fontSize: 20,
+    color: '#65676b',
+    fontWeight: 'bold',
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f2f5',
+  },
+  optionIcon: {
+    fontSize: 24,
+    marginRight: 14,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1c1e21',
+    marginBottom: 2,
+  },
+  optionDescription: {
+    fontSize: 12,
+    color: '#65676b',
+  },
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
@@ -2078,7 +2281,7 @@ const styles = StyleSheet.create({
   },
   smallStoryCard: {
     width: 130,
-    height: 160,
+    height: 180, // Increased height to accommodate caption
     borderRadius: 12,
     marginRight: 12,
     overflow: 'hidden',
@@ -2119,13 +2322,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    height: 40,
+    minHeight: 60, // Changed from fixed 40 to minHeight 60 to accommodate caption
   },
   smallStoryName: {
     fontSize: 12,
     color: '#1c1e21',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  // New style for caption in recent stories
+  smallStoryCaption: {
+    fontSize: 10,
+    color: '#65676b',
+    marginTop: 2,
+    marginBottom: 2,
+    textAlign: 'center',
+    paddingHorizontal: 4,
   },
   smallStoryTime: {
     fontSize: 9,
@@ -3067,6 +3279,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  
 });
 
 export default feedPage;
