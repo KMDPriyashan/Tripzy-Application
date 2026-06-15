@@ -1,354 +1,461 @@
 import { useRouter } from 'expo-router';
-import { useState } from "react";
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { supabase } from '../lib/supabase';
 
+const { width } = Dimensions.get("window");
+
+// ─── THEME (matches HomePage) ─────────────────────
+const C = {
+  bg: "#F4F7FF",
+  white: "#FFFFFF",
+  navy: "#0A1F44",
+  blue: "#1877f2",
+  blueSoft: "#EAF0FF",
+  blueLight: "#5B9BFF",
+  blueMid: "#D0E2FF",
+  text: "#0A1F44",
+  textMuted: "#6B80A3",
+};
+
+// ─── Animated floating orb (matches HomePage) ─────
+const FloatOrb = ({ style, delay = 0 }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 3000 + delay,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: 3000 + delay,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, []);
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -16],
+  });
+  return <Animated.View style={[style, { transform: [{ translateY }] }]} />;
+};
+
+// ─── Main ─────────────────────────────────────────
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  // Validation functions
-  const validateEmail = (email) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-  };
+  const heroFade = useRef(new Animated.Value(0)).current;
+  const heroSlide = useRef(new Animated.Value(-20)).current;
+  const logoScale = useRef(new Animated.Value(0.82)).current;
+  const pillFade = useRef(new Animated.Value(0)).current;
+  const cardFade = useRef(new Animated.Value(0)).current;
+  const cardSlide = useRef(new Animated.Value(30)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(heroFade, {
+        toValue: 1,
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(heroSlide, {
+        toValue: 0,
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 5,
+        tension: 55,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pillFade, {
+        toValue: 1,
+        duration: 600,
+        delay: 380,
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardFade, {
+        toValue: 1,
+        duration: 600,
+        delay: 450,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardSlide, {
+        toValue: 0,
+        duration: 600,
+        delay: 450,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  // ── Validation ──────────────────────────────────
+  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const validateForm = () => {
-    if (!email.trim()) {
-      return { isValid: false, message: 'Please enter your email address' };
-    }
-
-    if (!validateEmail(email)) {
-      return { isValid: false, message: 'Please enter a valid email address' };
-    }
-
-    if (!password) {
-      return { isValid: false, message: 'Please enter your password' };
-    }
-
+    if (!email.trim()) return { isValid: false, message: 'Please enter your email address' };
+    if (!validateEmail(email)) return { isValid: false, message: 'Please enter a valid email address' };
+    if (!password) return { isValid: false, message: 'Please enter your password' };
     return { isValid: true, message: '' };
   };
 
-  // Enhanced Error Handling for Login
   const handleAuthError = (error) => {
-    const errorMessage = error.message;
-
-    if (errorMessage.includes('Invalid login credentials')) {
-      return 'Invalid email or password. Please try again.';
-    } else if (errorMessage.includes('Email not confirmed')) {
-      return 'Please confirm your email address before logging in. Check your inbox for the confirmation link.';
-    } else if (errorMessage.includes('Email rate limit exceeded')) {
-      return 'Too many attempts. Please try again in a few minutes.';
-    } else if (errorMessage.includes('User not found')) {
-      return 'No account found with this email address. Please sign up first.';
-    } else {
-      return errorMessage || 'An unexpected error occurred. Please try again.';
-    }
+    const msg = error.message;
+    if (msg.includes('Invalid login credentials')) return 'Invalid email or password. Please try again.';
+    if (msg.includes('Email not confirmed')) return 'Please confirm your email address before logging in.';
+    if (msg.includes('Email rate limit exceeded')) return 'Too many attempts. Please try again in a few minutes.';
+    if (msg.includes('User not found')) return 'No account found with this email. Please sign up first.';
+    return msg || 'An unexpected error occurred. Please try again.';
   };
 
-  // Login Function
+  // ── Login ────────────────────────────────────────
   const handleLogin = async () => {
-    // Validate form
     const validation = validateForm();
     if (!validation.isValid) {
       Alert.alert('Validation Error', validation.message);
       return;
     }
-
     setLoading(true);
-
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
-        password: password,
+        password,
       });
-
-      if (error) {
-        const userFriendlyError = handleAuthError(error);
-        Alert.alert('Login Error', userFriendlyError);
-        return;
-      }
-
+      if (error) { Alert.alert('Login Error', handleAuthError(error)); return; }
       if (data.user && data.session) {
-        console.log('Login successful !');
-        
-        // Check if email is confirmed
         if (!data.user.email_confirmed_at) {
-          Alert.alert(
-            'Email Not Verified',
-            'Please verify your email address before logging in. Check your inbox for the verification link.',
+          Alert.alert('Email Not Verified',
+            'Please verify your email address before logging in.',
             [
-              {
-                text: 'Resend Verification',
-                onPress: () => resendVerificationEmail(data.user.email)
-              },
-              {
-                text: 'OK',
-                style: 'cancel'
-              }
+              { text: 'Resend Verification', onPress: () => resendVerificationEmail(data.user.email) },
+              { text: 'OK', style: 'cancel' }
             ]
           );
           return;
         }
-
-        // Successfully logged in with verified email
-        Alert.alert(
-          'Success!',
-          'You have successfully logged in.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => {
-                resetForm();
-                // Navigate to Home Page
-                router.replace('/profile');
-              }
-            }
-          ]
-        );
+        Alert.alert('Success!', 'You have successfully logged in.', [
+          { text: 'Continue', onPress: () => { setEmail(''); setPassword(''); router.replace('/profile'); } }
+        ]);
       }
-
-    } catch (error) {
-      console.error('Unexpected login error:', error);
+    } catch (e) {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Resend verification email
   const resendVerificationEmail = async (userEmail) => {
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: userEmail,
-      });
-
-      if (error) {
-        Alert.alert('Error', 'Failed to resend verification email. Please try again.');
-      } else {
-        Alert.alert('Success', 'Verification email sent! Please check your inbox.');
-      }
-    } catch (error) {
-      console.error('Resend email error:', error);
-    }
+      const { error } = await supabase.auth.resend({ type: 'signup', email: userEmail });
+      Alert.alert(error ? 'Error' : 'Success',
+        error ? 'Failed to resend. Please try again.' : 'Verification email sent! Check your inbox.');
+    } catch (e) { console.error(e); }
   };
 
-  // Reset form
-  const resetForm = () => {
-    setEmail('');
-    setPassword('');
-  };
-
-  // Navigate to Signup
-  const navigateToSignup = () => {
-    router.push('/signup');
-  };
-
-  // Forgot Password
   const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address first');
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
+    if (!email.trim()) { Alert.alert('Error', 'Please enter your email address first'); return; }
+    if (!validateEmail(email)) { Alert.alert('Error', 'Please enter a valid email address'); return; }
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
         redirectTo: 'myapp://auth/reset-password',
       });
-
-      if (error) {
-        Alert.alert('Error', 'Failed to send password reset email. Please try again.');
-      } else {
-        Alert.alert('Success', 'Password reset email sent! Please check your inbox.');
-      }
-    } catch (error) {
-      console.error('Forgot password error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    }
+      Alert.alert(error ? 'Error' : 'Success',
+        error ? 'Failed to send reset email. Please try again.' : 'Password reset email sent! Check your inbox.');
+    } catch (e) { Alert.alert('Error', 'An unexpected error occurred. Please try again.'); }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Image at the top */}
-      <View style={styles.imageContainer}>
-        <Image 
-          source={require('../assets/images/index_back.jpg')}
-          style={styles.topImage}
-          resizeMode="cover"
-        />
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={C.white} />
+
+      {/* ══ HERO (mirrors HomePage hero) ══════════════ */}
+      <View style={styles.hero}>
+        <FloatOrb delay={0} style={styles.orbA} />
+        <FloatOrb delay={600} style={styles.orbB} />
+        <FloatOrb delay={300} style={styles.orbC} />
+
+        {/* Logo */}
+        <Animated.Text style={[styles.logoText, {
+          opacity: heroFade,
+          transform: [{ scale: logoScale }]
+        }]}>
+          Tripzy
+        </Animated.Text>
+
+        {/* Welcome pill */}
+        <Animated.View style={[styles.welcomePill, { opacity: pillFade }]}>
+          <View style={styles.pillDot} />
+          <Text style={styles.pillText}>Your journey starts here ✈️</Text>
+        </Animated.View>
+
+        {/* Hero text */}
+        <Animated.View style={{ opacity: heroFade, transform: [{ translateY: heroSlide }] }}>
+          <Text style={styles.heroH1}>Welcome{"\n"}Back.</Text>
+          <Text style={styles.heroSub}>Sign in to continue your adventure.</Text>
+        </Animated.View>
       </View>
 
-      {/* Heading and Paragraph Section */}
-      <View style={styles.textSection}>
-        <Text style={styles.heading}>Welcome Back!</Text>
-        <Text style={styles.paragraph}>
-          Sign in to your account to continue your journey and access your personalized travel experience.
-        </Text>
-      </View>
+      {/* ══ LOGIN CARD ════════════════════════════════ */}
+      <Animated.View style={[styles.card, {
+        opacity: cardFade,
+        transform: [{ translateY: cardSlide }]
+      }]}>
 
-      {/* Input Fields Section */}
-      <View style={styles.inputSection}>
+        {/* Email */}
+        <Text style={styles.inputLabel}>Email Address</Text>
         <TextInput
           style={styles.input}
-          placeholder="Email Address"
-          placeholderTextColor="#999"
+          placeholder="you@example.com"
+          placeholderTextColor={C.textMuted}
           keyboardType="email-address"
           autoCapitalize="none"
           value={email}
           onChangeText={setEmail}
           editable={!loading}
         />
+
+        {/* Password */}
+        <Text style={styles.inputLabel}>Password</Text>
         <TextInput
           style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#999"
-          secureTextEntry={true}
+          placeholder="Enter your password"
+          placeholderTextColor={C.textMuted}
+          secureTextEntry
           value={password}
           onChangeText={setPassword}
           editable={!loading}
         />
-        
-        {/* Forgot Password Link */}
-        <TouchableOpacity 
-          style={styles.forgotPasswordContainer}
+
+        {/* Forgot password */}
+        <TouchableOpacity
+          style={styles.forgotRow}
           onPress={handleForgotPassword}
           disabled={loading}
         >
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          <Text style={styles.forgotText}>Forgot Password?</Text>
         </TouchableOpacity>
-      </View>
 
-      {/* Login Button */}
-      <TouchableOpacity 
-        style={[
-          styles.loginButton, 
-          loading && styles.loginButtonDisabled,
-          (!email || !password) && styles.loginButtonDisabled
-        ]}
-        onPress={handleLogin}
-        disabled={loading || !email || !password}
-      >
-        <Text style={styles.loginButtonText}>
-          {loading ? 'Signing In...' : 'Login'}
-        </Text>
-      </TouchableOpacity>
+        {/* Login button */}
+        <TouchableOpacity
+          style={[styles.loginBtn, (loading || !email || !password) && styles.loginBtnDisabled]}
+          onPress={handleLogin}
+          disabled={loading || !email || !password}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.loginBtnText}>{loading ? 'Signing In...' : 'Sign In'}</Text>
+        </TouchableOpacity>
 
-      {/* Sign up section */}
-      <View style={styles.signupSection}>
-        <Text style={styles.signupText}>
-          Don't have an account?{" "}
-          <Text style={styles.signupLink} onPress={navigateToSignup}>
-            Create account
-          </Text>
-        </Text>
-      </View>
+        {/* Divider */}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* Sign up */}
+        <View style={styles.signupRow}>
+          <Text style={styles.signupText}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => router.push('/signup')} disabled={loading}>
+            <Text style={styles.signupLink}>Create account</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
     </View>
   );
-};  
+};
 
-export default LoginPage;
-
+// ─── STYLES ───────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
-    paddingHorizontal: 20,
-    backgroundColor: '#ffffff',
+    backgroundColor: C.bg,
   },
-  imageContainer: {
-    width: '100%',
-    height: 200,
-    marginBottom: 30,
-    borderRadius: 10,
+
+  // ── Hero ──────────────────────────────────────
+  hero: {
+    backgroundColor: C.white,
+    paddingHorizontal: 24,
+    paddingTop: 64,
+    paddingBottom: 32,
+    borderBottomLeftRadius: 38,
+    borderBottomRightRadius: 38,
     overflow: 'hidden',
+    shadowColor: C.blue,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 6,
   },
-  topImage: {
-    width: '100%',
-    height: '100%',
+
+  // Orbs
+  orbA: {
+    position: 'absolute', top: -48, right: -48,
+    width: 210, height: 210, borderRadius: 105,
+    backgroundColor: C.blue, opacity: 0.07,
   },
-  textSection: {
-    alignItems: 'center',
-    marginBottom: 40,
+  orbB: {
+    position: 'absolute', bottom: -30, left: -40,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: C.blueLight, opacity: 0.09,
   },
-  heading: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    textAlign: 'center',
-    marginBottom: 15,
+  orbC: {
+    position: 'absolute', top: 110, right: 20,
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: C.blue, opacity: 0.05,
   },
-  paragraph: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 10,
-  },
-  inputSection: {
-    marginBottom: 30,
-  },
-  input: {
-    backgroundColor: '#f8f8f8',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 15,
-    color: '#000',
-  },
-  forgotPasswordContainer: {
-    alignItems: 'flex-end',
-    marginTop: 5,
-  },
-  forgotPasswordText: {
-    color: '#000000',
-    fontSize: 14,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  loginButton: {
-    backgroundColor: '#000000',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
+
+  logoText: {
+    fontSize: 46,
+    fontWeight: '900',
+    color: C.blue,
+    fontFamily: 'serif',
+    letterSpacing: 1.5,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+  },
+
+  welcomePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.blueSoft,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 50,
+    marginBottom: 18,
+    borderWidth: 1.5,
+    borderColor: C.blueMid,
+    gap: 8,
+  },
+  pillDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.blue },
+  pillText: { color: C.blue, fontSize: 13, fontWeight: '700', letterSpacing: 0.3 },
+
+  heroH1: {
+    fontSize: 40,
+    fontWeight: '900',
+    color: C.navy,
+    lineHeight: 48,
+    letterSpacing: -0.8,
+    marginBottom: 10,
+  },
+  heroSub: {
+    fontSize: 14,
+    color: C.textMuted,
+    lineHeight: 22,
+  },
+
+  // ── Login card ────────────────────────────────
+  card: {
+    backgroundColor: C.white,
+    borderRadius: 24,
+    marginHorizontal: 20,
+    marginTop: 28,
+    padding: 24,
+    shadowColor: C.blue,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     elevation: 5,
   },
-  loginButtonDisabled: {
-    backgroundColor: '#666',
+
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.navy,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  input: {
+    backgroundColor: C.bg,
+    borderWidth: 1.5,
+    borderColor: C.blueMid,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    fontSize: 14,
+    color: C.navy,
+    marginBottom: 16,
+  },
+
+  forgotRow: {
+    alignItems: 'flex-end',
+    marginTop: -8,
+    marginBottom: 20,
+  },
+  forgotText: {
+    color: C.blue,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  loginBtn: {
+    backgroundColor: C.blue,
+    paddingVertical: 15,
+    borderRadius: 14,
+    alignItems: 'center',
+    shadowColor: C.blue,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  loginBtnDisabled: {
+    backgroundColor: C.blueLight,
+    shadowOpacity: 0,
+    elevation: 0,
     opacity: 0.6,
   },
-  loginButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  loginBtnText: {
+    color: C.white,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  signupSection: {
+
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    gap: 10,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: C.blueMid },
+  dividerText: { fontSize: 13, color: C.textMuted, fontWeight: '600' },
+
+  signupRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  signupText: {
-    fontSize: 16,
-    color: '#666',
-  },
+  signupText: { fontSize: 14, color: C.textMuted },
   signupLink: {
-    color: '#3091AE',
-    fontWeight: 'bold',
-    textDecorationLine: 'none',
+    fontSize: 14,
+    color: C.blue,
+    fontWeight: '700',
   },
 });
+
+export default LoginPage;
