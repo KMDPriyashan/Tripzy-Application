@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 
 // Import Supabase functions with correct path
-import BottomNav from '../../components/BottomNav'; // Import BottomNav component
+import BottomNav from '../../components/BottomNav';
 import { getPopularLocations, searchDatabaseLocations, supabase } from '../../lib/supabase';
 
 const mapPage = () => {
@@ -70,7 +70,7 @@ const mapPage = () => {
     }
   };
 
-  // Updated searchLocations function with better error handling
+  // Search locations from database
   const searchLocations = async (query) => {
     if (!query.trim() || query.length < 2) {
       setSearchResults([]);
@@ -79,12 +79,11 @@ const mapPage = () => {
     }
 
     setSearching(true);
-    const allResults = [];
 
     try {
       console.log('Searching for:', query);
       
-      // 1. Search in Supabase Database
+      // Search in Supabase Database
       const dbResults = await searchDatabaseLocations(query);
       console.log('Database results count:', dbResults?.length || 0);
       
@@ -102,11 +101,10 @@ const mapPage = () => {
           district: loc.district,
           search_relevance: loc.search_relevance || 0
         }));
-        allResults.push(...formattedDbResults);
-      }
-
-      // 2. Search in Google Places API (only if no database results)
-      if (allResults.length === 0) {
+        setSearchResults(formattedDbResults);
+        setShowSearchResults(formattedDbResults.length > 0);
+      } else {
+        // If no database results, try Google Places API as fallback
         try {
           const response = await fetch(
             `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk`
@@ -125,79 +123,43 @@ const mapPage = () => {
               types: place.types,
               rating: place.rating
             }));
-            allResults.push(...googleResults);
+            setSearchResults(googleResults);
+            setShowSearchResults(googleResults.length > 0);
+          } else {
+            setSearchResults([]);
+            setShowSearchResults(false);
           }
         } catch (error) {
           console.error('Google search error:', error);
+          setSearchResults([]);
+          setShowSearchResults(false);
         }
-      }
-
-      // Sort and set results
-      allResults.sort((a, b) => {
-        if (a.source === 'database' && b.source !== 'database') return -1;
-        if (a.source !== 'database' && b.source === 'database') return 1;
-        if (a.source === 'database' && b.source === 'database') {
-          return (b.search_relevance || 0) - (a.search_relevance || 0);
-        }
-        return 0;
-      });
-
-      const finalResults = allResults.slice(0, 10);
-      setSearchResults(finalResults);
-      setShowSearchResults(finalResults.length > 0);
-      
-      if (finalResults.length === 0 && allResults.length === 0) {
-        // Show local suggestions as fallback
-        getLocalSuggestions(query);
       }
     } catch (error) {
       console.error('Search error:', error);
-      getLocalSuggestions(query);
+      setSearchResults([]);
+      setShowSearchResults(false);
     } finally {
       setSearching(false);
     }
-  };
-
-  // Local suggestions as fallback
-  const getLocalSuggestions = (query) => {
-    const localPlaces = [
-      { id: '1', name: 'Gampaha Town', address: 'Gampaha, Sri Lanka', latitude: 7.0908, longitude: 80.0056 },
-      { id: '2', name: 'Henerathgoda Botanical Garden', address: 'Gampaha, Sri Lanka', latitude: 7.1011, longitude: 80.0156 },
-      { id: '3', name: 'Gampaha Wickramarachchi University', address: 'Gampaha, Sri Lanka', latitude: 7.0875, longitude: 80.0117 },
-      { id: '4', name: 'Gampaha Railway Station', address: 'Gampaha, Sri Lanka', latitude: 7.0897, longitude: 80.0100 },
-      { id: '5', name: 'Kandy City Center', address: 'Kandy, Sri Lanka', latitude: 7.2914, longitude: 80.6386 },
-      { id: '6', name: 'Galle Fort', address: 'Galle, Sri Lanka', latitude: 6.0275, longitude: 80.2183 },
-      { id: '7', name: 'Colombo City Center', address: 'Colombo, Sri Lanka', latitude: 6.9271, longitude: 79.8612 },
-      { id: '8', name: 'Temple of the Tooth', address: 'Kandy, Sri Lanka', latitude: 7.2936, longitude: 80.6414 },
-    ];
-    
-    const filtered = localPlaces.filter(place => 
-      place.name.toLowerCase().includes(query.toLowerCase()) ||
-      place.address.toLowerCase().includes(query.toLowerCase())
-    );
-    
-    const formattedResults = filtered.map(place => ({
-      ...place,
-      source: 'local',
-      rating: 4.0
-    }));
-    
-    setSearchResults(formattedResults);
-    setShowSearchResults(formattedResults.length > 0);
   };
 
   // Handle text input change with debounce
   const handleSearchChange = (text, inputType) => {
     setSearchQuery(text);
     setSelectedInput(inputType);
-    setShowSearchResults(true); // Keep results visible while typing
     
     if (searchTimeout.current) {
       clearTimeout(searchTimeout.current);
     }
     
     searchTimeout.current = setTimeout(() => {
-      searchLocations(text);
+      if (text.trim().length >= 2) {
+        searchLocations(text);
+      } else {
+        setSearchResults([]);
+        setShowSearchResults(false);
+      }
     }, 500);
   };
 
@@ -226,8 +188,8 @@ const mapPage = () => {
     setSelectedInput(null);
   };
 
-  // Clear search results (for cancel button)
-  const clearSearchResultsManually = () => {
+  // Clear search results
+  const clearSearchResults = () => {
     setSearchResults([]);
     setShowSearchResults(false);
     setSelectedInput(null);
@@ -297,9 +259,16 @@ const mapPage = () => {
 
   const addWaypoint = () => {
     if (newDestination.trim()) {
-      setWaypoints([...waypoints, { id: Date.now(), name: newDestination, address: newDestination }]);
+      // Check if the entered text matches any search result or add as is
+      setWaypoints([...waypoints, { 
+        id: Date.now(), 
+        name: newDestination, 
+        address: newDestination 
+      }]);
       setNewDestination('');
       setShowAddDestination(false);
+      setSearchResults([]);
+      setShowSearchResults(false);
     } else {
       Alert.alert('Error', 'Please enter a destination');
     }
@@ -444,6 +413,44 @@ const mapPage = () => {
     }
   };
 
+  // Render search results panel
+  const renderSearchResults = () => {
+    if (!showSearchResults || searchResults.length === 0 || !selectedInput) return null;
+    
+    return (
+      <View style={styles.searchResultsPanel}>
+        <View style={styles.searchResultsHeader}>
+          <Text style={styles.searchResultsTitle}>
+            📍 Search results ({searchResults.length} found)
+          </Text>
+          <TouchableOpacity onPress={clearSearchResults}>
+            <Text style={styles.clearResultsText}>✕ Close</Text>
+          </TouchableOpacity>
+        </View>
+        {searchResults.map((item) => (
+          <TouchableOpacity 
+            key={item.id} 
+            style={styles.searchResultItem}
+            onPress={() => selectLocation(item)}
+          >
+            <View style={styles.searchResultHeader}>
+              <Text style={styles.searchResultName}>{item.name}</Text>
+              {item.source === 'database' && (
+                <Text style={styles.databaseBadge}>📌 Saved</Text>
+              )}
+            </View>
+            <Text style={styles.searchResultAddress} numberOfLines={1}>
+              {item.address}
+            </Text>
+            {item.rating && (
+              <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -515,13 +522,17 @@ const mapPage = () => {
                 value={fromLocation}
                 onChangeText={(text) => {
                   setFromLocation(text);
-                  handleSearchChange(text, 'from');
+                  if (!useCurrentLocation) {
+                    handleSearchChange(text, 'from');
+                  }
                 }}
                 editable={!useCurrentLocation}
                 onFocus={() => {
                   if (!useCurrentLocation) {
                     setSelectedInput('from');
-                    if (fromLocation) handleSearchChange(fromLocation, 'from');
+                    if (fromLocation && fromLocation.length >= 2) {
+                      searchLocations(fromLocation);
+                    }
                   }
                 }}
               />
@@ -537,39 +548,7 @@ const mapPage = () => {
             ) : null}
             
             {/* Search Results for "From" Section */}
-            {showSearchResults && selectedInput === 'from' && searchResults.length > 0 && (
-              <View style={styles.searchResultsPanel}>
-                <View style={styles.searchResultsHeader}>
-                  <Text style={styles.searchResultsTitle}>
-                    {searchResults.filter(r => r.source === 'database').length > 0 ? 
-                      '📍 From your saved places' : '📍 Search results'}
-                  </Text>
-                  <TouchableOpacity onPress={clearSearchResultsManually}>
-                    <Text style={styles.clearResultsText}>✕ Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-                {searchResults.map((item) => (
-                  <TouchableOpacity 
-                    key={item.id} 
-                    style={styles.searchResultItem}
-                    onPress={() => selectLocation(item)}
-                  >
-                    <View style={styles.searchResultHeader}>
-                      <Text style={styles.searchResultName}>{item.name}</Text>
-                      {item.source === 'database' && (
-                        <Text style={styles.databaseBadge}>📌 Saved</Text>
-                      )}
-                    </View>
-                    <Text style={styles.searchResultAddress} numberOfLines={1}>
-                      {item.address}
-                    </Text>
-                    {item.rating && (
-                      <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            {renderSearchResults()}
             
             {searching && selectedInput === 'from' && (
               <View style={styles.searchingContainer}>
@@ -617,44 +596,14 @@ const mapPage = () => {
               }}
               onFocus={() => {
                 setSelectedInput('to');
-                if (toLocation) handleSearchChange(toLocation, 'to');
+                if (toLocation && toLocation.length >= 2) {
+                  searchLocations(toLocation);
+                }
               }}
             />
             
             {/* Search Results for "To" Section */}
-            {showSearchResults && selectedInput === 'to' && searchResults.length > 0 && (
-              <View style={styles.searchResultsPanel}>
-                <View style={styles.searchResultsHeader}>
-                  <Text style={styles.searchResultsTitle}>
-                    {searchResults.filter(r => r.source === 'database').length > 0 ? 
-                      '📍 From your saved places' : '📍 Search results'}
-                  </Text>
-                  <TouchableOpacity onPress={clearSearchResultsManually}>
-                    <Text style={styles.clearResultsText}>✕ Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-                {searchResults.map((item) => (
-                  <TouchableOpacity 
-                    key={item.id} 
-                    style={styles.searchResultItem}
-                    onPress={() => selectLocation(item)}
-                  >
-                    <View style={styles.searchResultHeader}>
-                      <Text style={styles.searchResultName}>{item.name}</Text>
-                      {item.source === 'database' && (
-                        <Text style={styles.databaseBadge}>📌 Saved</Text>
-                      )}
-                    </View>
-                    <Text style={styles.searchResultAddress} numberOfLines={1}>
-                      {item.address}
-                    </Text>
-                    {item.rating && (
-                      <Text style={styles.searchResultRating}>⭐ {item.rating}</Text>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            {renderSearchResults()}
             
             {searching && selectedInput === 'to' && (
               <View style={styles.searchingContainer}>
@@ -759,27 +708,55 @@ const mapPage = () => {
                   value={newDestination}
                   onChangeText={(text) => {
                     setNewDestination(text);
-                    handleSearchChange(text, 'waypoint');
+                    if (text.trim().length >= 2) {
+                      searchLocations(text);
+                      setSelectedInput('waypoint');
+                    } else {
+                      setSearchResults([]);
+                      setShowSearchResults(false);
+                    }
                   }}
-                  onFocus={() => setSelectedInput('waypoint')}
+                  onFocus={() => {
+                    setSelectedInput('waypoint');
+                    if (newDestination && newDestination.length >= 2) {
+                      searchLocations(newDestination);
+                    }
+                  }}
                 />
                 
+                {/* Search Results in Modal */}
                 {searchResults.length > 0 && selectedInput === 'waypoint' && (
                   <View style={styles.modalResults}>
-                    {searchResults.slice(0, 3).map((item) => (
+                    <Text style={styles.modalResultsTitle}>📍 Select from search results:</Text>
+                    {searchResults.slice(0, 5).map((item) => (
                       <TouchableOpacity 
                         key={item.id} 
                         style={styles.modalResultItem}
                         onPress={() => selectLocation(item)}
                       >
                         <Text style={styles.modalResultName}>{item.name}</Text>
+                        <Text style={styles.modalResultAddress} numberOfLines={1}>
+                          {item.address}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
                 
+                {searching && selectedInput === 'waypoint' && (
+                  <View style={styles.searchingContainer}>
+                    <ActivityIndicator size="small" color="#007AFF" />
+                    <Text style={styles.searchingText}>Searching...</Text>
+                  </View>
+                )}
+                
                 <View style={styles.modalButtons}>
-                  <TouchableOpacity style={styles.modalCancel} onPress={() => setShowAddDestination(false)}>
+                  <TouchableOpacity style={styles.modalCancel} onPress={() => {
+                    setShowAddDestination(false);
+                    setSearchResults([]);
+                    setShowSearchResults(false);
+                    setNewDestination('');
+                  }}>
                     <Text style={styles.modalCancelText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.modalAdd} onPress={addWaypoint}>
@@ -807,14 +784,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bottomPadding: {
-    height: 80, // Extra padding to prevent content being hidden behind bottom nav
+    height: 80,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 60,
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
@@ -1252,16 +1229,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
     borderRadius: 12,
     marginBottom: 15,
+    padding: 10,
+  },
+  modalResultsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
   },
   modalResultItem: {
-    padding: 12,
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   modalResultName: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
+  },
+  modalResultAddress: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 2,
   },
   modalButtons: {
     flexDirection: 'row',
