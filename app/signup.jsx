@@ -1,15 +1,104 @@
 import { useRouter } from 'expo-router';
-import { useState } from "react";
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { supabase } from '../lib/supabase'; // Adjust path as needed
 
+const { width } = Dimensions.get("window");
+
+// ─── THEME ────────────────────────────────────────
+const C = {
+  bg: "#F4F7FF",
+  white: "#FFFFFF",
+  navy: "#0A1F44",
+  blue: "#1877f2",
+  blueSoft: "#EAF0FF",
+  blueLight: "#5B9BFF",
+  blueMid: "#D0E2FF",
+  text: "#0A1F44",
+  textMuted: "#6B80A3",
+};
+
+// ─── Animated floating orb ──────────────────────
+const FloatOrb = ({ style, delay = 0 }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 3000 + delay,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: 3000 + delay,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, []);
+  const translateY = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -16],
+  });
+  return <Animated.View style={[style, { transform: [{ translateY }] }]} />;
+};
+
 const SignupPage = () => {
-    const router = useRouter();
+  const router = useRouter();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const heroFade = useRef(new Animated.Value(0)).current;
+  const heroSlide = useRef(new Animated.Value(-20)).current;
+  const logoScale = useRef(new Animated.Value(0.82)).current;
+  const pillFade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(heroFade, {
+        toValue: 1,
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(heroSlide, {
+        toValue: 0,
+        duration: 700,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(logoScale, {
+        toValue: 1,
+        friction: 5,
+        tension: 55,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pillFade, {
+        toValue: 1,
+        duration: 600,
+        delay: 380,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const handleSignup = async () => {
     // Basic validation
@@ -69,162 +158,302 @@ const SignupPage = () => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Image at the top */}
-      <View style={styles.imageContainer}>
-        <Image 
-          source={require('../assets/images/index_back.jpg')}
-          style={styles.topImage}
-          resizeMode="cover"
-        />
-      </View>
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={C.white} />
 
-      {/* Heading and Paragraph Section */}
-      <View style={styles.textSection}>
-        <Text style={styles.heading}>Create Your Account</Text>
-        <Text style={styles.paragraph}>
-          Join us today and start your journey! Create an account to access exclusive features and personalized content.
-        </Text>
-      </View>
-
-      {/* Input Fields Section */}
-      <View style={styles.inputSection}>
-        <TextInput
-          style={styles.input}
-          placeholder="Full Name"
-          placeholderTextColor="#999"
-          value={fullName}
-          onChangeText={setFullName}
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email Address"
-          placeholderTextColor="#999"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-          editable={!loading}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#999"
-          secureTextEntry={true}
-          value={password}
-          onChangeText={setPassword}
-          editable={!loading}
-        />
-      </View>
-
-      {/* Submit Button */}
-      <TouchableOpacity 
-        style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-        onPress={handleSignup}
-        disabled={loading}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 60 }}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.submitButtonText}>
-          {loading ? 'Creating Account...' : 'Sign Up'}
-        </Text>
-      </TouchableOpacity>
+        {/* ══ HERO ══════════════════════════════ */}
+        <View style={styles.hero}>
+          <FloatOrb delay={0} style={styles.orbA} />
+          <FloatOrb delay={600} style={styles.orbB} />
+          <FloatOrb delay={300} style={styles.orbC} />
 
-      {/* Already have account section */}
-      <View style={styles.loginSection}>
-        <Text style={styles.loginText}>
-          Already have an account?{" "}
-          <Text style={styles.loginLink} onPress={() => router.replace('/loginpage')}>Login account</Text>
-        </Text>
-      </View>
+          <Animated.View
+            style={[
+              styles.topBar,
+              { opacity: heroFade, transform: [{ translateY: heroSlide }] },
+            ]}
+          >
+            <Animated.Text
+              style={[styles.logoText, { transform: [{ scale: logoScale }] }]}
+            >
+              Tripzy
+            </Animated.Text>
+          </Animated.View>
+
+          <Animated.View style={[styles.welcomePill, { opacity: pillFade }]}>
+            <View style={styles.pillDot} />
+            <Text style={styles.pillText}>Let's get you started 🌍</Text>
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              opacity: heroFade,
+              transform: [{ translateY: heroSlide }],
+            }}
+          >
+            <Text style={styles.heroH1}>Create Your{"\n"}Account.</Text>
+            <Text style={styles.heroSub}>Join us today and start your journey! Create an account to access exclusive features and personalized content.</Text>
+          </Animated.View>
+        </View>
+
+        {/* ══ FORM SECTION ══════════════════════ */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.formCard}>
+            <Text style={styles.cardTitle}>📝 Your Details</Text>
+
+            <Text style={styles.inputLabel}>Full Name</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Full Name"
+              placeholderTextColor={C.textMuted}
+              value={fullName}
+              onChangeText={setFullName}
+              editable={!loading}
+            />
+
+            <Text style={styles.inputLabel}>Email Address</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Email Address"
+              placeholderTextColor={C.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+              editable={!loading}
+            />
+
+            <Text style={styles.inputLabel}>Password</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Password"
+              placeholderTextColor={C.textMuted}
+              secureTextEntry={true}
+              value={password}
+              onChangeText={setPassword}
+              editable={!loading}
+            />
+
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={handleSignup}
+              disabled={loading}
+            >
+              <View style={[styles.saveBtnGradient, { backgroundColor: C.blue }, loading && styles.saveBtnDisabled]}>
+                <Text style={styles.saveBtnText}>
+                  {loading ? 'Creating Account...' : 'Sign Up'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Already have account */}
+          <View style={styles.infoCard}>
+            <View style={styles.loginRow}>
+              <Text style={styles.infoText}>Already have an account? </Text>
+              <Text style={styles.loginLink} onPress={() => router.replace('/loginpage')}>
+                Login account
+              </Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
-};  
+};
 
 export default SignupPage;
 
+// ─── STYLES ───────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    backgroundColor: '#ffffff',
+  root: { flex: 1, backgroundColor: C.bg },
+
+  // Hero
+  hero: {
+    backgroundColor: C.white,
+    paddingHorizontal: 24,
+    paddingTop: 58,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 38,
+    borderBottomRightRadius: 38,
+    marginBottom: 20,
+    overflow: "hidden",
+    shadowColor: C.blue,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 6,
   },
-  imageContainer: {
-    width: '100%',
-    height: 200,
-    marginBottom: 30,
-    borderRadius: 10,
-    overflow: 'hidden',
+
+  // Orbs
+  orbA: {
+    position: "absolute",
+    top: -48,
+    right: -48,
+    width: 210,
+    height: 210,
+    borderRadius: 105,
+    backgroundColor: C.blue,
+    opacity: 0.07,
   },
-  topImage: {
-    width: '100%',
-    height: '100%',
+  orbB: {
+    position: "absolute",
+    bottom: -30,
+    left: -40,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: C.blueLight,
+    opacity: 0.09,
   },
-  textSection: {
-    alignItems: 'center',
-    marginBottom: 40,
+  orbC: {
+    position: "absolute",
+    top: 110,
+    right: 20,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: C.blue,
+    opacity: 0.05,
   },
-  heading: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#000000',
-    textAlign: 'center',
-    marginBottom: 15,
+
+  // Top bar
+  topBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 20,
   },
-  paragraph: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+  logoText: {
+    fontSize: 46,
+    fontWeight: "900",
+    color: C.blue,
+    fontFamily: "serif",
+    letterSpacing: 1.5,
+  },
+
+  // Welcome pill
+  welcomePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: C.blueSoft,
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 50,
+    marginBottom: 18,
+    borderWidth: 1.5,
+    borderColor: C.blueMid,
+    gap: 8,
+  },
+  pillDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.blue },
+  pillText: {
+    color: C.blue,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+
+  // Hero text
+  heroH1: {
+    fontSize: 40,
+    fontWeight: "900",
+    color: C.navy,
+    lineHeight: 48,
+    letterSpacing: -0.8,
+    marginBottom: 12,
+  },
+  heroSub: {
+    fontSize: 14,
+    color: C.textMuted,
     lineHeight: 22,
-    paddingHorizontal: 10,
+    marginBottom: 0,
   },
-  inputSection: {
-    marginBottom: 30,
+
+  // Section Container
+  sectionContainer: {
+    padding: 20,
   },
-  input: {
-    backgroundColor: '#f8f8f8',
+
+  // Form Card
+  formCard: {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: C.navy,
+    marginBottom: 4,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.navy,
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modalInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: C.blueMid,
     borderRadius: 10,
     paddingHorizontal: 15,
     paddingVertical: 12,
-    fontSize: 16,
-    marginBottom: 15,
-    color: '#000',
+    fontSize: 14,
+    color: C.navy,
+    backgroundColor: C.bg,
   },
-  submitButton: {
-    backgroundColor: '#000000',
+
+  // Save / Submit Button
+  saveBtn: {
+    marginTop: 24,
+  },
+  saveBtnGradient: {
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
-  submitButtonDisabled: {
-    backgroundColor: '#666',
+  saveBtnDisabled: {
     opacity: 0.6,
   },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  saveBtnText: {
+    color: C.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
-  loginSection: {
+
+  // Info Card (login link)
+  infoCard: {
+    backgroundColor: C.white,
+    borderRadius: 16,
+    padding: 16,
     alignItems: 'center',
   },
-  loginText: {
-    fontSize: 16,
-    color: '#666',
+  loginRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  infoText: {
+    fontSize: 14,
+    color: C.textMuted,
   },
   loginLink: {
-    color: '#3091AE',
-    fontWeight: 'bold',
-    textDecorationLine: 'none',
+    fontSize: 14,
+    color: C.blue,
+    fontWeight: '700',
   },
 });
