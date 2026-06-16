@@ -1,28 +1,23 @@
 import { Stack, usePathname } from "expo-router";
 import BottomNav from "../components/BottomNav";
-import { NotificationProvider } from "./app-pages/context/NotificationContext.js";
+import { NotificationProvider } from "./app-pages/context/NotificationContext"; // ✅ removed .js
 
 export default function RootLayout() {
   const pathname = usePathname();
 
-  // 🚫 Pages where navbar should be hidden
   const hideNavbarRoutes = ["/", "/loginpage", "/signup", "/welcome"];
-
   const shouldHideNavbar = hideNavbarRoutes.includes(pathname);
 
   return (
     <NotificationProvider>
       <>
         <Stack screenOptions={{ headerShown: false }}>
-          {/* Auth / Main */}
           <Stack.Screen name="index" />
           <Stack.Screen name="loginpage" />
           <Stack.Screen name="signup" />
           <Stack.Screen name="welcome" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="(tabs)" />
-
-          {/* App Pages */}
           <Stack.Screen name="app-pages/TourGuideProfile" />
           <Stack.Screen name="app-pages/TourGuideList" />
           <Stack.Screen name="app-pages/TourGuideCard" />
@@ -43,7 +38,6 @@ export default function RootLayout() {
           <Stack.Screen name="app-pages/group-chat" />
         </Stack>
 
-        {/* 🔥 Show navbar only when allowed */}
         {!shouldHideNavbar && <BottomNav />}
       </>
     </NotificationProvider>
