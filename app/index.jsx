@@ -13,11 +13,14 @@ import {
 const { width, height } = Dimensions.get("window");
 
 const C = {
-  bg: "#F8FAFC", // Ultra clean premium canvas
+  bg: "#EBF1FA", // Matte Premium Slate-Tint Canvas (No more stark white)
+  cardBg: "#FFFFFF", // Clean white reserved only for structural components
   primary: "#1A6BFF", // Active Tripzy brand blue
-  primarySubtle: "rgba(26, 107, 255, 0.05)",
+  primarySubtle: "rgba(26, 107, 255, 0.06)",
+  waveColor1: "#D3E4FF", // Richer contrasting blue wave depth
+  waveColor2: "#C5DCFF", // Deepest accent wave structure to break empty space
   textMain: "#0A162F", // Luxurious deep navy
-  textMuted: "#64748B", // Soft minimalist gray
+  textMuted: "#4A5568", // Strong visible gray for descriptions
   accentGold: "#FFB800", // Luxury warm accent trace
 };
 
@@ -29,6 +32,10 @@ const Index = () => {
   const slideAnim = useRef(new Animated.Value(30)).current;
   const pulse1 = useRef(new Animated.Value(1)).current;
   const pulse2 = useRef(new Animated.Value(1)).current;
+
+  // Wave floating loops to continually warp background emptiness
+  const waveMove1 = useRef(new Animated.Value(0)).current;
+  const waveMove2 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Entrance Anim
@@ -45,6 +52,36 @@ const Index = () => {
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Responsive Background Flow
+    Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(waveMove1, {
+            toValue: 18,
+            duration: 4500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveMove1, {
+            toValue: 0,
+            duration: 4500,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(waveMove2, {
+            toValue: -14,
+            duration: 3800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(waveMove2, {
+            toValue: 0,
+            duration: 3800,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+    ).start();
 
     // Infinite Micro Pulsing for the Center Core Node
     const runPulse = () => {
@@ -92,11 +129,25 @@ const Index = () => {
 
   return (
     <View style={s.root}>
+      {/* Set status bar to dark content over premium gray backdrop */}
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
-      {/* Modern Wave-Shaped Dynamic Graphic Background System */}
+      {/* ── HIGH-CONTRAST BALANCED BACKGROUND ARCHITECTURE ── */}
       <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {/* Soft Contrast Top Mask */}
         <View style={s.topWaveDesign} />
+
+        {/* Animated Solid Wave 1 (Deep base contrast) */}
+        <Animated.View
+          style={[s.waveBase, { transform: [{ translateY: waveMove1 }] }]}
+        />
+
+        {/* Animated Solid Wave 2 (Middle balance contrast) */}
+        <Animated.View
+          style={[s.waveOverlay, { transform: [{ translateY: waveMove2 }] }]}
+        />
+
+        {/* Left Side Ambient Bubble */}
         <View style={s.accentCircleLeft} />
       </View>
 
@@ -208,7 +259,7 @@ export default Index;
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: C.bg,
+    backgroundColor: C.bg, // Uses the solid matte gray-blue foundation
   },
   mainWrapper: {
     flex: 1,
@@ -218,47 +269,68 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
   },
 
-  // Premium Background Curves
+  // Deep contrasting shapes to safely kill white emptiness
   topWaveDesign: {
     position: "absolute",
-    top: -height * 0.12,
+    top: -height * 0.15,
     right: -width * 0.2,
-    width: width * 1.3,
-    height: height * 0.45,
-    borderRadius: width * 0.65,
-    backgroundColor: "rgba(26, 107, 255, 0.04)",
+    width: width * 1.4,
+    height: height * 0.48,
+    borderRadius: width * 0.7,
+    backgroundColor: "#DCE7F7", // Darker sub-tone slate for the top section
+  },
+  waveBase: {
+    position: "absolute",
+    width: width * 1.2,
+    height: width * 1.2,
+    borderRadius: (width * 1.2) / 2,
+    bottom: height * 0.1,
+    right: -width * 0.25,
+    backgroundColor: C.waveColor1,
+    opacity: 0.85,
+  },
+  waveOverlay: {
+    position: "absolute",
+    width: width * 1.0,
+    height: width * 1.0,
+    borderRadius: (width * 1.0) / 2,
+    bottom: height * 0.05,
+    left: -width * 0.2,
+    backgroundColor: C.waveColor2,
+    opacity: 0.9,
   },
   accentCircleLeft: {
     position: "absolute",
-    bottom: height * 0.2,
+    bottom: height * 0.35,
     left: -width * 0.15,
     width: width * 0.45,
     height: width * 0.45,
     borderRadius: (width * 0.45) / 2,
-    backgroundColor: "rgba(255, 184, 0, 0.04)", // Soft warmth reflection
+    backgroundColor: "rgba(255, 184, 0, 0.06)", // Vibrant gold particle flash
   },
 
-  // Central Interactive Visual Area
+  // Central Core Section
   artContainer: {
     height: height * 0.38,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
     marginTop: 20,
+    zIndex: 10,
   },
   coreCircle: {
     width: width * 0.38,
     height: width * 0.38,
     borderRadius: (width * 0.38) / 2,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.cardBg,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(26, 107, 255, 0.08)",
-    elevation: 8,
+    borderColor: "rgba(26, 107, 255, 0.1)",
+    elevation: 10,
     shadowColor: C.textMain,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.08,
     shadowRadius: 16,
     zIndex: 10,
   },
@@ -273,24 +345,24 @@ const s = StyleSheet.create({
     zIndex: 1,
   },
 
-  // Floating Luxe Badges System
+  // Floating Luxe Badges System (Popping out cleanly over dark waves)
   floatBadge: {
     position: "absolute",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: C.cardBg,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 20,
     gap: 6,
-    elevation: 6,
+    elevation: 8,
     shadowColor: C.textMain,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     zIndex: 20,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
   },
   badgeEmoji: { fontSize: 13 },
   badgeTxt: { fontSize: 12, fontWeight: "700", color: C.textMain },
@@ -298,23 +370,24 @@ const s = StyleSheet.create({
   badgeRight: { top: "34%", right: "2%" },
   badgeBottom: { bottom: "16%", left: "26%" },
 
-  // Typography Section
+  // Typography Text Section
   infoContainer: {
     flex: 1,
     justifyContent: "center",
     paddingTop: 10,
+    zIndex: 10,
   },
   tagRow: {
     flexDirection: "row",
     marginBottom: 12,
   },
   brandTag: {
-    backgroundColor: C.primarySubtle,
+    backgroundColor: "#FFFFFF",
     borderRadius: 30,
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderWidth: 0.8,
-    borderColor: "rgba(26, 107, 255, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(26, 107, 255, 0.15)",
   },
   brandTagTxt: {
     color: C.primary,
@@ -335,11 +408,13 @@ const s = StyleSheet.create({
     color: C.textMuted,
     lineHeight: 22,
     marginTop: 14,
+    fontWeight: "500",
   },
 
-  // Actions Bar Systems
+  // Bottom Interactive Bar System
   footerContainer: {
     width: "100%",
+    zIndex: 10,
   },
   btnMain: {
     backgroundColor: C.primary,
@@ -380,7 +455,7 @@ const s = StyleSheet.create({
     color: C.textMuted,
     textAlign: "center",
     marginTop: 16,
-    opacity: 0.5,
-    fontWeight: "500",
+    opacity: 0.6,
+    fontWeight: "600",
   },
 });
