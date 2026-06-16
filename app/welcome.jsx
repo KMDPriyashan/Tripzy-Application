@@ -4,6 +4,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
   StatusBar,
   StyleSheet,
   Text,
@@ -63,6 +64,8 @@ const Welcome = () => {
   const pillFade = useRef(new Animated.Value(0)).current;
   const sloganFade = useRef(new Animated.Value(0)).current;
   const sloganSlide = useRef(new Animated.Value(16)).current;
+  const imageFade = useRef(new Animated.Value(0)).current;
+  const imageScale = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -102,6 +105,20 @@ const Welcome = () => {
         duration: 650,
         delay: 520,
         easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(imageFade, {
+        toValue: 1,
+        duration: 700,
+        delay: 300,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.spring(imageScale, {
+        toValue: 1,
+        friction: 4,
+        tension: 50,
+        delay: 300,
         useNativeDriver: true,
       }),
     ]).start();
@@ -148,14 +165,23 @@ const Welcome = () => {
 
       {/* ══ CONTENT ══════════════════════════════ */}
       <View style={styles.sectionContainer}>
-        {/* Heading & Paragraph */}
-        <View style={styles.infoCard}>
-          <Text style={styles.mainHeading}>Manage Your{"\n"}Traveling Journey</Text>
-          <Text style={styles.paragraphText}>
-            Discover your next adventure with ease—use our app to unlock exciting
-            new travel deals and journey smarter!
-          </Text>
-        </View>
+        {/* Image */}
+        <Animated.View
+          style={[
+            styles.imageContainer,
+            {
+              opacity: imageFade,
+              transform: [{ scale: imageScale }],
+            },
+          ]}
+        >
+          <Image
+            source={require("C:/Users/dulas/OneDrive/Documents/GitHub/Tripzy-Application/assets/images/welcome-back.jpg")}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+        </Animated.View>
+        
 
         {/* Buttons */}
         <TouchableOpacity style={styles.saveBtn} onPress={() => router.push('/loginpage')}>
@@ -186,7 +212,7 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     borderBottomLeftRadius: 38,
     borderBottomRightRadius: 38,
-    marginBottom: 20,
+    marginBottom: 8,
     overflow: "hidden",
     shadowColor: C.blue,
     shadowOffset: { width: 0, height: 8 },
@@ -260,7 +286,7 @@ const styles = StyleSheet.create({
     color: C.blue,
     fontSize: 13,
     fontWeight: "700",
-    letterSpacing: 0.3,
+    letterSpecing: 0.3,
   },
 
   // Hero slogan & subtext
@@ -271,7 +297,7 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     letterSpacing: -0.5,
     marginBottom: 8,
-    marginTop : 20,
+    marginTop: 20,
   },
   heroSub: {
     fontSize: 14,
@@ -281,7 +307,28 @@ const styles = StyleSheet.create({
 
   // Section Container
   sectionContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    flex: 1,
+  },
+
+  // Image Container
+  imageContainer: {
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: "hidden",
+    height: 440,
+    backgroundColor: C.blueSoft,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 16,
   },
 
   // Info Card
