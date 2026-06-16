@@ -1,9 +1,12 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   Easing,
+  Modal,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -27,6 +30,8 @@ const C = {
   blueMid: "#D0E2FF",
   text: "#0A1F44",
   textMuted: "#6B80A3",
+  danger: "#FF3B30",
+  dangerSoft: "#FFF0EF",
 };
 
 const featureCardsData = [
@@ -77,6 +82,28 @@ const featureCardsData = [
     target: "/app-pages/weather",
     accentBg: "#E8F2FF",
     accentIcon: "#3B9EFF",
+  },
+];
+
+// ─── Three-dot menu items ─────────────────────────
+const MENU_ITEMS = [
+  {
+    label: "Notifications",
+    icon: "notifications-outline",
+    target: "/app-pages/Notifications",
+    color: C.navy,
+  },
+  {
+    label: "Settings & Privacy",
+    icon: "settings-outline",
+    target: "/app-pages/SettingsPrivacy",
+    color: C.navy,
+  },
+  {
+    label: "Help & Support",
+    icon: "help-circle-outline",
+    target: "/app-pages/HelpSupport",
+    color: C.navy,
   },
 ];
 
@@ -193,6 +220,10 @@ const HomePage = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Menu state
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [logoutVisible, setLogoutVisible] = useState(false);
+
   const heroFade = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(-20)).current;
   const logoScale = useRef(new Animated.Value(0.82)).current;
@@ -252,6 +283,24 @@ const HomePage = () => {
     }
   };
 
+  const handleMenuItemPress = (target) => {
+    setMenuVisible(false);
+    router.push(target);
+  };
+
+  const handleLogoutPress = () => {
+    setMenuVisible(false);
+    // Small delay so the dropdown closes before the dialog appears
+    setTimeout(() => setLogoutVisible(true), 150);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutVisible(false);
+    await supabase.auth.signOut();
+    // onAuthStateChange above will fire SIGNED_OUT and redirect
+  };
+
+  // ── Splash / loading ──
   if (loading)
     return (
       <View style={styles.splash}>
@@ -293,12 +342,11 @@ const HomePage = () => {
       >
         {/* ══ HERO ══════════════════════════════ */}
         <View style={styles.hero}>
-          {/* Decorative orbs — blue tints only */}
           <FloatOrb delay={0} style={styles.orbA} />
           <FloatOrb delay={600} style={styles.orbB} />
           <FloatOrb delay={300} style={styles.orbC} />
 
-          {/* Top bar: TRIPZY logo + profile */}
+          {/* ── Top bar ─────────────────────── */}
           <Animated.View
             style={[
               styles.topBar,
@@ -310,11 +358,14 @@ const HomePage = () => {
             >
               Tripzy
             </Animated.Text>
+
+            {/* ── Three-dot menu button (replaces profile emoji) ── */}
             <TouchableOpacity
-              style={styles.profileBtn}
-              onPress={() => router.push("/app-pages/profile")}
+              style={styles.menuBtn}
+              onPress={() => setMenuVisible(true)}
+              activeOpacity={0.75}
             >
-              <Text style={styles.profileEmoji}>👤</Text>
+              <Ionicons name="ellipsis-vertical" size={20} color={C.blue} />
             </TouchableOpacity>
           </Animated.View>
 
@@ -390,6 +441,102 @@ const HomePage = () => {
       </ScrollView>
 
       <BottomNav />
+
+      {/* ══ DROPDOWN MENU ════════════════════════════════════════════════ */}
+      <Modal
+        visible={menuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuVisible(false)}
+      >
+        <Pressable
+          style={styles.menuOverlay}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.dropdown}>
+            {/* Decorative accent bar at top */}
+            <View style={styles.dropdownAccent} />
+
+            {MENU_ITEMS.map((item, idx) => (
+              <TouchableOpacity
+                key={item.label}
+                style={[
+                  styles.dropdownRow,
+                  idx < MENU_ITEMS.length - 1 && styles.dropdownRowBorder,
+                ]}
+                onPress={() => handleMenuItemPress(item.target)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.dropdownIconWrap}>
+                  <Ionicons name={item.icon} size={19} color={C.blue} />
+                </View>
+                <Text style={styles.dropdownLabel}>{item.label}</Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={15}
+                  color={C.textMuted}
+                />
+              </TouchableOpacity>
+            ))}
+
+            <View style={styles.dropdownDivider} />
+
+            {/* Logout row */}
+            <TouchableOpacity
+              style={styles.dropdownRow}
+              onPress={handleLogoutPress}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[styles.dropdownIconWrap, styles.dropdownIconDanger]}
+              >
+                <Ionicons name="log-out-outline" size={19} color={C.danger} />
+              </View>
+              <Text style={[styles.dropdownLabel, styles.dropdownLabelDanger]}>
+                Logout
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ══ LOGOUT CONFIRMATION ══════════════════════════════════════════ */}
+      <Modal
+        visible={logoutVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogoutVisible(false)}
+      >
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconCircle}>
+              <Ionicons name="log-out-outline" size={28} color={C.danger} />
+            </View>
+            <Text style={styles.confirmTitle}>Log Out</Text>
+            <Text style={styles.confirmMsg}>
+              Are you sure you want to log out?
+            </Text>
+
+            <View style={styles.confirmBtnRow}>
+              <TouchableOpacity
+                style={[styles.confirmBtn, styles.cancelBtn]}
+                onPress={() => setLogoutVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.confirmBtn, styles.logoutBtn]}
+                onPress={confirmLogout}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.logoutBtnText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -398,7 +545,7 @@ const HomePage = () => {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
 
-  // Splash / loading
+  // Splash
   splash: {
     flex: 1,
     backgroundColor: C.white,
@@ -499,7 +646,9 @@ const styles = StyleSheet.create({
     textShadowRadius: 12,
     textShadowOffset: { width: 0, height: 0 },
   },
-  profileBtn: {
+
+  // ── Three-dot button — same sizing/shape as the original profileBtn ──
+  menuBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -509,7 +658,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: C.blueMid,
   },
-  profileEmoji: { fontSize: 19 },
 
   // Welcome pill
   welcomePill: {
@@ -607,7 +755,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // Section header
+  // Section
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -688,43 +836,115 @@ const styles = StyleSheet.create({
   },
   cardChipText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
 
-  // Quote banner
-  quoteBanner: {
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 4,
+  // ── Dropdown ──────────────────────────────────────────────────────────
+  menuOverlay: { flex: 1, backgroundColor: "rgba(10,31,68,0.18)" },
+  dropdown: {
+    position: "absolute",
+    top: 72, // just below the top bar
+    right: 20,
+    width: 230,
     backgroundColor: C.white,
-    borderRadius: 20,
-    padding: 22,
-    borderWidth: 1.5,
+    borderRadius: 18,
+    overflow: "hidden",
+    shadowColor: C.navy,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.13,
+    shadowRadius: 18,
+    elevation: 10,
+    borderWidth: 1,
     borderColor: C.blueMid,
-    shadowColor: C.blue,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 2,
   },
-  quoteBar: {
-    width: 36,
-    height: 4,
-    backgroundColor: C.blue,
-    borderRadius: 4,
+  dropdownAccent: { height: 4, backgroundColor: C.blue },
+  dropdownRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  dropdownRowBorder: { borderBottomWidth: 0.5, borderBottomColor: C.blueMid },
+  dropdownIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: C.blueSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropdownIconDanger: { backgroundColor: C.dangerSoft },
+  dropdownLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "600",
+    color: C.navy,
+    letterSpacing: 0.1,
+  },
+  dropdownLabelDanger: { color: C.danger },
+  dropdownDivider: {
+    height: 0.5,
+    backgroundColor: C.blueMid,
+    marginHorizontal: 16,
+  },
+
+  // ── Logout confirmation ───────────────────────────────────────────────
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(10,31,68,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  confirmCard: {
+    width: "100%",
+    backgroundColor: C.white,
+    borderRadius: 22,
+    padding: 26,
+    alignItems: "center",
+    shadowColor: C.navy,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: C.blueMid,
+  },
+  confirmIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: C.dangerSoft,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 14,
   },
-  quoteText: {
-    fontSize: 15,
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: "800",
     color: C.navy,
-    fontStyle: "italic",
-    lineHeight: 23,
-    fontWeight: "500",
-    marginBottom: 10,
+    marginBottom: 6,
   },
-  quoteAuthor: {
-    fontSize: 12,
+  confirmMsg: {
+    fontSize: 14,
     color: C.textMuted,
-    fontWeight: "700",
-    letterSpacing: 1,
+    textAlign: "center",
+    marginBottom: 22,
+    lineHeight: 20,
   },
+  confirmBtnRow: { flexDirection: "row", gap: 12, width: "100%" },
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  cancelBtn: {
+    backgroundColor: C.blueSoft,
+    borderWidth: 1.5,
+    borderColor: C.blueMid,
+  },
+  cancelBtnText: { color: C.navy, fontWeight: "700", fontSize: 15 },
+  logoutBtn: { backgroundColor: C.danger },
+  logoutBtnText: { color: C.white, fontWeight: "700", fontSize: 15 },
 });
 
 export default HomePage;
