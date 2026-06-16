@@ -3,170 +3,172 @@ import { useEffect, useRef } from "react";
 import {
   Animated,
   Dimensions,
-  Easing,
+  Image,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
-} from 'react-native';
+  View,
+} from "react-native";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
-// ─── THEME ────────────────────────────────────────
 const C = {
-  bg: "#F4F7FF",
-  white: "#FFFFFF",
-  navy: "#0A1F44",
-  blue: "#1877f2",
-  blueSoft: "#EAF0FF",
-  blueLight: "#5B9BFF",
-  blueMid: "#D0E2FF",
-  text: "#0A1F44",
-  textMuted: "#6B80A3",
+  bg: "#F9FAFC", // Soft premium white canvas
+  primary: "#1A6BFF", // Rich functional blue
+  primarySubtle: "rgba(26, 107, 255, 0.05)",
+  textMain: "#09152E", // Midnight slate
+  textMuted: "#6B7C96", // Smooth neutral body text
+  cardBg: "#FFFFFF",
+  cardBorder: "#EAEFF8",
 };
 
-// ─── Animated floating orb ──────────────────────
-const FloatOrb = ({ style, delay = 0 }) => {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 3000 + delay,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(anim, {
-          toValue: 0,
-          duration: 3000 + delay,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, []);
-  const translateY = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -16],
-  });
-  return <Animated.View style={[style, { transform: [{ translateY }] }]} />;
-};
+const FEATURES = [
+  { icon: "📅", title: "Smart Paths", desc: "AI itineraries" },
+  { icon: "🗺️", title: "Live Maps", desc: "Real-time sync" },
+  { icon: "⛅", title: "Alerts", desc: "Live weather" },
+  { icon: "💬", title: "Hub", desc: "Global chats" },
+];
 
 const Welcome = () => {
   const router = useRouter();
 
-  const heroFade = useRef(new Animated.Value(0)).current;
-  const heroSlide = useRef(new Animated.Value(-20)).current;
-  const logoScale = useRef(new Animated.Value(0.82)).current;
-  const pillFade = useRef(new Animated.Value(0)).current;
-  const sloganFade = useRef(new Animated.Value(0)).current;
-  const sloganSlide = useRef(new Animated.Value(16)).current;
+  // Animation Trackers
+  const fadeContent = useRef(new Animated.Value(0)).current;
+  const slideHeader = useRef(new Animated.Value(40)).current;
+  const imageScale = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(heroFade, {
+      Animated.timing(fadeContent, {
         toValue: 1,
-        duration: 700,
-        easing: Easing.out(Easing.cubic),
+        duration: 800,
         useNativeDriver: true,
       }),
-      Animated.timing(heroSlide, {
-        toValue: 0,
-        duration: 700,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.spring(logoScale, {
-        toValue: 1,
-        friction: 5,
-        tension: 55,
-        useNativeDriver: true,
-      }),
-      Animated.timing(pillFade, {
-        toValue: 1,
-        duration: 600,
-        delay: 380,
-        useNativeDriver: true,
-      }),
-      Animated.timing(sloganFade, {
-        toValue: 1,
-        duration: 650,
-        delay: 520,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(sloganSlide, {
-        toValue: 0,
-        duration: 650,
-        delay: 520,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
+      Animated.stagger(100, [
+        Animated.spring(slideHeader, {
+          toValue: 0,
+          friction: 8,
+          tension: 35,
+          useNativeDriver: true,
+        }),
+        Animated.spring(imageScale, {
+          toValue: 1,
+          friction: 8,
+          tension: 30,
+          useNativeDriver: true,
+        }),
+      ]),
     ]).start();
   }, []);
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={C.white} />
+    <View style={s.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
 
-      {/* ══ HERO ══════════════════════════════ */}
-      <View style={styles.hero}>
-        <FloatOrb delay={0} style={styles.orbA} />
-        <FloatOrb delay={600} style={styles.orbB} />
-        <FloatOrb delay={300} style={styles.orbC} />
-
+      <View style={s.mainContainer}>
+        {/* ── DESIGN HERO CONTAINER ────────────────── */}
         <Animated.View
           style={[
-            styles.topBar,
-            { opacity: heroFade, transform: [{ translateY: heroSlide }] },
+            s.heroVisualWrapper,
+            { opacity: fadeContent, transform: [{ scale: imageScale }] },
           ]}
         >
-          <Animated.Text
-            style={[styles.logoText, { transform: [{ scale: logoScale }] }]}
-          >
-            Tripzy
-          </Animated.Text>
-        </Animated.View>
+          <Image
+            source={{
+              uri: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80",
+            }}
+            style={s.heroImage}
+            resizeMode="cover"
+          />
+          <View style={s.imageOverlay} />
 
-        <Animated.View style={[styles.welcomePill, { opacity: pillFade }]}>
-          <View style={styles.pillDot} />
-          <Text style={styles.pillText}>Welcome aboard 🌍</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={{
-            opacity: sloganFade,
-            transform: [{ translateY: sloganSlide }],
-          }}
-        >
-          <Text style={styles.heroSlogan}>Travel Far. Travel Smart.</Text>
-          <Text style={styles.heroSub}>Tripzy helps you plan, book, and enjoy every trip with ease.</Text>
-        </Animated.View>
-      </View>
-
-      {/* ══ CONTENT ══════════════════════════════ */}
-      <View style={styles.sectionContainer}>
-        {/* Heading & Paragraph */}
-        <View style={styles.infoCard}>
-          <Text style={styles.mainHeading}>Manage Your{"\n"}Traveling Journey</Text>
-          <Text style={styles.paragraphText}>
-            Discover your next adventure with ease—use our app to unlock exciting
-            new travel deals and journey smarter!
-          </Text>
-        </View>
-
-        {/* Buttons */}
-        <TouchableOpacity style={styles.saveBtn} onPress={() => router.push('/loginpage')}>
-          <View style={[styles.saveBtnGradient, { backgroundColor: C.blue }]}>
-            <Text style={styles.saveBtnText}>Application Login</Text>
+          {/* Floating Context Pill 1 */}
+          <View style={s.floatingBadge1}>
+            <Text style={s.badgeEmoji}>✈️</Text>
+            <View>
+              <Text style={s.badgeTitle}>120+ Countries</Text>
+              <Text style={s.badgeSubtitle}>Ready to explore</Text>
+            </View>
           </View>
-        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push('/signup')}>
-          <Text style={styles.secondaryButtonText}>Signup</Text>
-        </TouchableOpacity>
+          {/* Floating Context Pill 2 */}
+          <View style={s.floatingBadge2}>
+            <Text style={s.badgeEmoji}>⭐</Text>
+            <Text style={s.badgeTitle}>4.9 Rating</Text>
+          </View>
+        </Animated.View>
+
+        {/* ── TYPOGRAPHY TEXT LAYERS ────────────────── */}
+        <Animated.View
+          style={[
+            s.textBlock,
+            { opacity: fadeContent, transform: [{ translateY: slideHeader }] },
+          ]}
+        >
+          <View style={s.pillWrapper}>
+            <View style={s.appPill}>
+              <Text style={s.appPillText}>WELCOME TO TRIPZY</Text>
+            </View>
+          </View>
+
+          <Text style={s.heroTitle}>
+            The world is waiting,{"\n"}discover your{" "}
+            <Text style={s.accentText}>story.</Text>
+          </Text>
+          <Text style={s.heroSubtitle}>
+            Plan smart routes, track shifts instantly, and map your global
+            adventures alongside an open community.
+          </Text>
+        </Animated.View>
+
+        {/* ── MODERN FEATURE GRID ────────────────── */}
+        <Animated.View
+          style={[
+            s.featuresGrid,
+            { opacity: fadeContent, transform: [{ translateY: slideHeader }] },
+          ]}
+        >
+          {FEATURES.map((feat, index) => (
+            <View key={index} style={s.featureBox}>
+              <View style={s.featIconBg}>
+                <Text style={s.featIcon}>{feat.icon}</Text>
+              </View>
+              <View style={s.featTextCol}>
+                <Text style={s.featTitle}>{feat.title}</Text>
+                <Text style={s.featDesc}>{feat.desc}</Text>
+              </View>
+            </View>
+          ))}
+        </Animated.View>
+
+        {/* ── FUNCTION BUTTON ACTIONS FOOTER ────────────── */}
+        <Animated.View
+          style={[
+            s.actionBlock,
+            { opacity: fadeContent, transform: [{ translateY: slideHeader }] },
+          ]}
+        >
+          <TouchableOpacity
+            style={s.buttonPrimary}
+            activeOpacity={0.88}
+            onPress={() => router.push("/signup")}
+          >
+            <Text style={s.buttonPrimaryText}>Get Started — It's Free</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.buttonSecondary}
+            activeOpacity={0.75}
+            onPress={() => router.push("/loginpage")}
+          >
+            <Text style={s.buttonSecondaryText}>I Already Have an Account</Text>
+          </TouchableOpacity>
+
+          <Text style={s.legalFootnote}>
+            By continuing, you agree to our standard Terms & Privacy Policy.
+          </Text>
+        </Animated.View>
       </View>
     </View>
   );
@@ -174,170 +176,186 @@ const Welcome = () => {
 
 export default Welcome;
 
-// ─── STYLES ───────────────────────────────────────
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
-
-  // Hero
-  hero: {
-    backgroundColor: C.white,
+const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
+  mainContainer: {
+    flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 58,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 38,
-    borderBottomRightRadius: 38,
-    marginBottom: 20,
-    overflow: "hidden",
-    shadowColor: C.blue,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 6,
+    paddingTop: height * 0.05, // Screen එකේ උස අනුව dynamic padding
+    paddingBottom: height * 0.03,
+    justifyContent: "space-between", // Elements ටික screen එක පුරා සමානව බෙදී යයි
   },
 
-  // Orbs
-  orbA: {
-    position: "absolute",
-    top: -48,
-    right: -48,
-    width: 210,
-    height: 210,
-    borderRadius: 105,
-    backgroundColor: C.blue,
-    opacity: 0.07,
+  // Image Layout
+  heroVisualWrapper: {
+    width: "100%",
+    height: height * 0.28, // Scroll නොවීමට image එක මදක් කුඩා කර ඇත
+    position: "relative",
   },
-  orbB: {
-    position: "absolute",
-    bottom: -30,
-    left: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: C.blueLight,
-    opacity: 0.09,
+  heroImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 28,
+    borderTopLeftRadius: 8,
+    borderBottomRightRadius: 8,
   },
-  orbC: {
-    position: "absolute",
-    top: 110,
-    right: 20,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: C.blue,
-    opacity: 0.05,
+  imageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(9, 21, 46, 0.03)",
+    borderRadius: 28,
+    borderTopLeftRadius: 8,
+    borderBottomRightRadius: 8,
   },
 
-  // Top bar
-  topBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  logoText: {
-    fontSize: 46,
-    fontWeight: "900",
-    color: C.blue,
-    fontFamily: "serif",
-    letterSpacing: 1.5,
-  },
-
-  // Welcome pill
-  welcomePill: {
+  // Badges
+  floatingBadge1: {
+    position: "absolute",
+    bottom: -8,
+    left: 12,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: C.blueSoft,
-    alignSelf: "flex-start",
     paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 50,
-    borderWidth: 1.5,
-    borderColor: C.blueMid,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 8,
+    elevation: 4,
+    shadowColor: C.textMain,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+  },
+  floatingBadge2: {
+    position: "absolute",
+    top: 14,
+    right: -6,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    gap: 4,
+    elevation: 4,
+    shadowColor: C.textMain,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+  },
+  badgeEmoji: { fontSize: 16 },
+  badgeTitle: { fontSize: 12, fontWeight: "700", color: C.textMain },
+  badgeSubtitle: { fontSize: 10, color: C.textMuted },
+
+  // Typography
+  textBlock: {
+    marginTop: 12,
+  },
+  pillWrapper: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  appPill: {
+    backgroundColor: C.primarySubtle,
+    borderRadius: 30,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  appPillText: {
+    color: C.primary,
+    fontSize: 9,
+    fontWeight: "800",
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: "800",
+    color: C.textMain,
+    lineHeight: 38,
+    letterSpacing: -0.5,
+  },
+  accentText: { color: C.primary },
+  heroSubtitle: {
+    fontSize: 13,
+    color: C.textMuted,
+    lineHeight: 20,
+    marginTop: 8,
+  },
+
+  // Grid Layout
+  featuresGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    gap: 8,
+    marginVertical: 12,
+  },
+  featureBox: {
+    width: "48%",
+    backgroundColor: C.cardBg,
+    borderWidth: 1,
+    borderColor: C.cardBorder,
+    borderRadius: 16,
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
-  pillDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.blue },
-  pillText: {
-    color: C.blue,
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 0.3,
+  featIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: C.bg,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  featIcon: { fontSize: 14 },
+  featTextCol: { flex: 1 },
+  featTitle: { fontSize: 12, fontWeight: "700", color: C.textMain },
+  featDesc: { fontSize: 10, color: C.textMuted },
 
-  // Hero slogan & subtext
-  heroSlogan: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: C.navy,
-    lineHeight: 36,
-    letterSpacing: -0.5,
-    marginBottom: 8,
-    marginTop : 20,
+  // Actions Button Section
+  actionBlock: {
+    width: "100%",
   },
-  heroSub: {
-    fontSize: 14,
-    color: C.textMuted,
-    lineHeight: 22,
-  },
-
-  // Section Container
-  sectionContainer: {
-    padding: 20,
-  },
-
-  // Info Card
-  infoCard: {
-    backgroundColor: C.white,
+  buttonPrimary: {
+    backgroundColor: C.primary,
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  mainHeading: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: C.navy,
-    textAlign: 'center',
-    lineHeight: 32,
-    marginBottom: 12,
-    letterSpacing: -0.5,
+  buttonPrimaryText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
-  paragraphText: {
+  buttonSecondary: {
+    backgroundColor: "transparent",
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  buttonSecondaryText: {
+    color: C.primary,
     fontSize: 14,
+    fontWeight: "700",
+  },
+  legalFootnote: {
+    fontSize: 10,
     color: C.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-
-  // Buttons
-  saveBtn: {
-    marginBottom: 14,
-  },
-  saveBtnGradient: {
-    paddingVertical: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: C.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: C.white,
-    paddingVertical: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: C.blueMid,
-  },
-  secondaryButtonText: {
-    color: C.blue,
-    fontSize: 16,
-    fontWeight: '700',
+    textAlign: "center",
+    lineHeight: 14,
+    marginTop: 8,
+    opacity: 0.7,
   },
 });
