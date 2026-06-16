@@ -3,10 +3,7 @@ import { useEffect, useRef } from "react";
 import {
   Animated,
   Dimensions,
-<<<<<<< HEAD
-=======
   Easing,
->>>>>>> 3059b579aacc5567c940dd6b15aa99aa7a3ead31
   Image,
   StatusBar,
   StyleSheet,
@@ -18,13 +15,17 @@ import {
 const { width, height } = Dimensions.get("window");
 
 const C = {
-  bg: "#F9FAFC", // Soft premium white canvas
-  primary: "#1A6BFF", // Rich functional blue
+  bg: "#F9FAFC",
+  primary: "#1A6BFF",
   primarySubtle: "rgba(26, 107, 255, 0.05)",
-  textMain: "#09152E", // Midnight slate
-  textMuted: "#6B7C96", // Smooth neutral body text
+  textMain: "#09152E",
+  textMuted: "#6B7C96",
   cardBg: "#FFFFFF",
   cardBorder: "#EAEFF8",
+  navy: "#0A1F44",
+  blue: "#1877f2",
+  blueSoft: "#EAF0FF",
+  white: "#FFFFFF",
 };
 
 const FEATURES = [
@@ -37,20 +38,11 @@ const FEATURES = [
 const Welcome = () => {
   const router = useRouter();
 
-<<<<<<< HEAD
   // Animation Trackers
   const fadeContent = useRef(new Animated.Value(0)).current;
   const slideHeader = useRef(new Animated.Value(40)).current;
-=======
-  const heroFade = useRef(new Animated.Value(0)).current;
-  const heroSlide = useRef(new Animated.Value(-20)).current;
-  const logoScale = useRef(new Animated.Value(0.82)).current;
-  const pillFade = useRef(new Animated.Value(0)).current;
-  const sloganFade = useRef(new Animated.Value(0)).current;
-  const sloganSlide = useRef(new Animated.Value(16)).current;
-  const imageFade = useRef(new Animated.Value(0)).current;
->>>>>>> 3059b579aacc5567c940dd6b15aa99aa7a3ead31
   const imageScale = useRef(new Animated.Value(0.95)).current;
+  const imageFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -59,7 +51,6 @@ const Welcome = () => {
         duration: 800,
         useNativeDriver: true,
       }),
-<<<<<<< HEAD
       Animated.stagger(100, [
         Animated.spring(slideHeader, {
           toValue: 0,
@@ -74,7 +65,6 @@ const Welcome = () => {
           useNativeDriver: true,
         }),
       ]),
-=======
       Animated.timing(imageFade, {
         toValue: 1,
         duration: 700,
@@ -82,14 +72,6 @@ const Welcome = () => {
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.spring(imageScale, {
-        toValue: 1,
-        friction: 4,
-        tension: 50,
-        delay: 300,
-        useNativeDriver: true,
-      }),
->>>>>>> 3059b579aacc5567c940dd6b15aa99aa7a3ead31
     ]).start();
   }, []);
 
@@ -114,7 +96,6 @@ const Welcome = () => {
           />
           <View style={s.imageOverlay} />
 
-<<<<<<< HEAD
           {/* Floating Context Pill 1 */}
           <View style={s.floatingBadge1}>
             <Text style={s.badgeEmoji}>✈️</Text>
@@ -122,48 +103,6 @@ const Welcome = () => {
               <Text style={s.badgeTitle}>120+ Countries</Text>
               <Text style={s.badgeSubtitle}>Ready to explore</Text>
             </View>
-=======
-        <Animated.View style={[styles.welcomePill, { opacity: pillFade }]}>
-          <View style={styles.pillDot} />
-          <Text style={styles.pillText}>Welcome aboard 🌍</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={{
-            opacity: sloganFade,
-            transform: [{ translateY: sloganSlide }],
-          }}
-        >
-          <Text style={styles.heroSlogan}>Travel Far. Travel Smart.</Text>
-          <Text style={styles.heroSub}>Tripzy helps you plan, book, and enjoy every trip with ease.</Text>
-        </Animated.View>
-      </View>
-
-      {/* ══ CONTENT ══════════════════════════════ */}
-      <View style={styles.sectionContainer}>
-        {/* Image */}
-        <Animated.View
-          style={[
-            styles.imageContainer,
-            {
-              opacity: imageFade,
-              transform: [{ scale: imageScale }],
-            },
-          ]}
-        >
-          <Image
-            source={require("C:/Users/dulas/OneDrive/Documents/GitHub/Tripzy-Application/assets/images/welcome-back.jpg")}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
-        </Animated.View>
-        
-
-        {/* Buttons */}
-        <TouchableOpacity style={styles.saveBtn} onPress={() => router.push('/loginpage')}>
-          <View style={[styles.saveBtnGradient, { backgroundColor: C.blue }]}>
-            <Text style={styles.saveBtnText}>Application Login</Text>
->>>>>>> 3059b579aacc5567c940dd6b15aa99aa7a3ead31
           </View>
 
           {/* Floating Context Pill 2 */}
@@ -258,29 +197,15 @@ const s = StyleSheet.create({
   mainContainer: {
     flex: 1,
     paddingHorizontal: 24,
-<<<<<<< HEAD
-    paddingTop: height * 0.05, // Screen එකේ උස අනුව dynamic padding
+    paddingTop: height * 0.05,
     paddingBottom: height * 0.03,
-    justifyContent: "space-between", // Elements ටික screen එක පුරා සමානව බෙදී යයි
-=======
-    paddingTop: 58,
-    paddingBottom: 28,
-    borderBottomLeftRadius: 38,
-    borderBottomRightRadius: 38,
-    marginBottom: 8,
-    overflow: "hidden",
-    shadowColor: C.blue,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 6,
->>>>>>> 3059b579aacc5567c940dd6b15aa99aa7a3ead31
+    justifyContent: "space-between",
   },
 
   // Image Layout
   heroVisualWrapper: {
     width: "100%",
-    height: height * 0.28, // Scroll නොවීමට image එක මදක් කුඩා කර ඇත
+    height: height * 0.28,
     position: "relative",
   },
   heroImage: {
@@ -391,7 +316,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-<<<<<<< HEAD
   featIconBg: {
     width: 34,
     height: 34,
@@ -399,74 +323,18 @@ const s = StyleSheet.create({
     backgroundColor: C.bg,
     alignItems: "center",
     justifyContent: "center",
-=======
-  pillDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: C.blue },
-  pillText: {
-    color: C.blue,
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpecing: 0.3,
->>>>>>> 3059b579aacc5567c940dd6b15aa99aa7a3ead31
   },
   featIcon: { fontSize: 14 },
   featTextCol: { flex: 1 },
   featTitle: { fontSize: 12, fontWeight: "700", color: C.textMain },
   featDesc: { fontSize: 10, color: C.textMuted },
 
-<<<<<<< HEAD
   // Actions Button Section
   actionBlock: {
     width: "100%",
   },
   buttonPrimary: {
     backgroundColor: C.primary,
-=======
-  // Hero slogan & subtext
-  heroSlogan: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: C.navy,
-    lineHeight: 36,
-    letterSpacing: -0.5,
-    marginBottom: 8,
-    marginTop: 20,
-  },
-  heroSub: {
-    fontSize: 14,
-    color: C.textMuted,
-    lineHeight: 22,
-  },
-
-  // Section Container
-  sectionContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 0,
-    flex: 1,
-  },
-
-  // Image Container
-  imageContainer: {
-    marginBottom: 16,
-    borderRadius: 16,
-    overflow: "hidden",
-    height: 440,
-    backgroundColor: C.blueSoft,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  heroImage: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 16,
-  },
-
-  // Info Card
-  infoCard: {
-    backgroundColor: C.white,
->>>>>>> 3059b579aacc5567c940dd6b15aa99aa7a3ead31
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: "center",
