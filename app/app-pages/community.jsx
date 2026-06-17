@@ -71,20 +71,7 @@ const CommunityPage = () => {
     try {
       const supabaseUser = await getCurrentUser();
       if (supabaseUser) {
-        // Get the user's display_name from user_metadata or user_data
-        const displayName = supabaseUser.user_metadata?.display_name || 
-                           supabaseUser.user_metadata?.name || 
-                           supabaseUser.user_metadata?.full_name || 
-                           supabaseUser.user_metadata?.username ||
-                           supabaseUser.email?.split('@')[0] || 
-                           'User';
-        setCurrentUser({ 
-          id: supabaseUser.id, 
-          name: displayName, 
-          display_name: displayName,
-          avatar: '👤' 
-        });
-        console.log('Current user display name:', displayName);
+        setCurrentUser({ id: supabaseUser.id, name: supabaseUser.user_metadata?.name || 'User', avatar: '👤' });
       } else {
         const localUser = await AsyncStorage.getItem('currentUser');
         if (localUser) {
@@ -193,31 +180,12 @@ const CommunityPage = () => {
   const loadUsers = async () => {
     try {
       const allUsers = await getAllUsers();
-      // Ensure each user has their proper display_name from metadata
-      const processedUsers = allUsers.map(user => ({
-        ...user,
-        display_name: user.user_metadata?.display_name || 
-                      user.user_metadata?.name || 
-                      user.user_metadata?.full_name || 
-                      user.user_metadata?.username ||
-                      user.email?.split('@')[0] || 
-                      'User',
-        name: user.user_metadata?.display_name || 
-              user.user_metadata?.name || 
-              user.user_metadata?.full_name || 
-              user.user_metadata?.username ||
-              user.email?.split('@')[0] || 
-              'User',
-        avatar: user.user_metadata?.avatar || '👤'
-      }));
-      const filteredUsers = processedUsers.filter(user => user.id !== currentUser?.id);
-      setAllUsersList(processedUsers);
+      const filteredUsers = allUsers.filter(user => user.id !== currentUser?.id);
+      setAllUsersList(allUsers);
       setUsers(filteredUsers);
       
-      console.log('✅ Loaded users with display names:', processedUsers.map(u => ({ id: u.id, display_name: u.display_name })));
-      
       // Cache users in storage
-      await AsyncStorage.setItem('all_users', JSON.stringify(processedUsers));
+      await AsyncStorage.setItem('all_users', JSON.stringify(allUsers));
     } catch (error) {
       console.error('Error loading users:', error);
       const cachedUsers = await AsyncStorage.getItem('all_users');
@@ -242,15 +210,11 @@ const CommunityPage = () => {
       const chatId = `chat_${currentUser.id}_${user.id}`;
       let existingConversation = chats.find(chat => chat.userId === user.id);
       
-      // Use display_name for the chat
-      const displayName = user.display_name || user.name || 'User';
-      
       if (!existingConversation) {
         const newConversation = {
           id: chatId,
           userId: user.id,
-          userName: displayName,
-          display_name: displayName,
+          userName: user.name,
           avatar: user.avatar || '👤',
           lastMessage: 'Start a conversation',
           timestamp: new Date().toLocaleTimeString(),
@@ -259,6 +223,7 @@ const CommunityPage = () => {
         };
         
         // Don't add to chats yet - only add when a message is sent
+        // The conversation will appear only after first message is sent
         console.log('New conversation will appear after first message');
       }
       
@@ -266,8 +231,7 @@ const CommunityPage = () => {
         pathname: '/app-pages/solo-chat',
         params: { 
           chatId: chatId,
-          userName: displayName,
-          display_name: displayName,
+          userName: user.name, 
           userId: user.id, 
           avatar: user.avatar || '👤'
         }
@@ -292,20 +256,11 @@ const CommunityPage = () => {
     try {
       await markConversationAsRead(chat.userId);
       
-      // Get the user's display_name from the users list
-      const userDetails = users.find(u => u.id === chat.userId);
-      const displayName = userDetails?.display_name || 
-                         userDetails?.name || 
-                         chat.userName || 
-                         chat.display_name || 
-                         'User';
-      
       router.push({
         pathname: '/app-pages/solo-chat',
         params: { 
           chatId: chat.id, 
-          userName: displayName,
-          display_name: displayName,
+          userName: chat.userName, 
           userId: chat.userId, 
           avatar: chat.avatar 
         }
@@ -394,7 +349,6 @@ const CommunityPage = () => {
           id: `chat_${currentUser.id}_${userId}`,
           userId: userId,
           userName: userName,
-          display_name: userName,
           avatar: userAvatar || '👤',
           lastMessage: 'Start a conversation',
           timestamp: new Date().toLocaleTimeString(),
@@ -414,36 +368,26 @@ const CommunityPage = () => {
     }
   };
 
-  const renderChatItem = ({ item }) => {
-    // Get the user's display_name from the users list if available
-    const userDetails = users.find(u => u.id === item.userId);
-    const displayName = userDetails?.display_name || 
-                       userDetails?.name || 
-                       item.display_name ||
-                       item.userName || 
-                       'User';
-    
-    return (
-      <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)}>
-        <View style={styles.avatarContainer}>
-          <Text style={styles.avatarText}>{item.avatar || '👤'}</Text>
-          {item.isOnline && <View style={styles.onlineDot} />}
-        </View>
-        <View style={styles.chatInfo}>
-          <Text style={styles.chatName}>{displayName}</Text>
-          <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'Start a conversation'}</Text>
-        </View>
-        <View style={styles.chatMeta}>
-          <Text style={styles.timestamp}>{item.timestamp}</Text>
-          {item.unread > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{item.unread}</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderChatItem = ({ item }) => (
+    <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)}>
+      <View style={styles.avatarContainer}>
+        <Text style={styles.avatarText}>{item.avatar || '👤'}</Text>
+        {item.isOnline && <View style={styles.onlineDot} />}
+      </View>
+      <View style={styles.chatInfo}>
+        <Text style={styles.chatName}>{item.userName}</Text>
+        <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'Start a conversation'}</Text>
+      </View>
+      <View style={styles.chatMeta}>
+        <Text style={styles.timestamp}>{item.timestamp}</Text>
+        {item.unread > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadText}>{item.unread}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
 
   const renderGroupItem = ({ item }) => (
     <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenGroupChat(item)}>
@@ -466,40 +410,29 @@ const CommunityPage = () => {
     </TouchableOpacity>
   );
 
-  const renderUserItem = ({ item }) => {
-    const displayName = item.display_name || item.name || 'User';
-    return (
-      <TouchableOpacity style={styles.userItem} onPress={() => handleStartChat(item)}>
-        <View style={styles.userAvatarContainer}>
-          <Text style={styles.userAvatarText}>{item.avatar || '👤'}</Text>
-          {item.isProfessional && <View style={styles.proBadge}><Text style={styles.proBadgeText}>Pro</Text></View>}
-        </View>
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{displayName}</Text>
-          <Text style={styles.userLocation}>{item.location || 'Traveler'}</Text>
-        </View>
-        <TouchableOpacity style={styles.messageButton} onPress={() => handleStartChat(item)}>
-          <Text style={styles.messageButtonText}>Message</Text>
-        </TouchableOpacity>
+  const renderUserItem = ({ item }) => (
+    <TouchableOpacity style={styles.userItem} onPress={() => handleStartChat(item)}>
+      <View style={styles.userAvatarContainer}>
+        <Text style={styles.userAvatarText}>{item.avatar || '👤'}</Text>
+        {item.isProfessional && <View style={styles.proBadge}><Text style={styles.proBadgeText}>Pro</Text></View>}
+      </View>
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{item.name}</Text>
+        <Text style={styles.userLocation}>{item.location || 'Traveler'}</Text>
+      </View>
+      <TouchableOpacity style={styles.messageButton} onPress={() => handleStartChat(item)}>
+        <Text style={styles.messageButtonText}>Message</Text>
       </TouchableOpacity>
-    );
-  };
+    </TouchableOpacity>
+  );
 
-  const filteredUsers = users.filter(user => {
-    const displayName = user.display_name || user.name || '';
-    return displayName.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredUsers = users.filter(user => 
+    user.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const filteredChats = chats.filter(chat => {
-    // Get the user's display_name from the users list
-    const userDetails = users.find(u => u.id === chat.userId);
-    const displayName = userDetails?.display_name || 
-                       userDetails?.name || 
-                       chat.display_name ||
-                       chat.userName || 
-                       '';
-    return displayName.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredChats = chats.filter(chat => 
+    chat.userName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const filteredGroups = groups.filter(group => 
     group.name?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -530,7 +463,7 @@ const CommunityPage = () => {
         <Text style={styles.searchIcon}>🔍</Text>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search Travelers.."
+          placeholder="Search any things..."
           placeholderTextColor="#8E8E93"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -543,7 +476,7 @@ const CommunityPage = () => {
           onPress={() => setActiveTab('chats')}
         >
           <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>
-            Inbox ({chats.length})
+            Direct Messages ({chats.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -551,7 +484,7 @@ const CommunityPage = () => {
           onPress={() => setActiveTab('groups')}
         >
           <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>
-            Groups ({groups.length})
+            Community Chat ({groups.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -618,20 +551,17 @@ const CommunityPage = () => {
             
             <Text style={styles.inputLabel}>Add Members</Text>
             <ScrollView style={styles.userSelectList} showsVerticalScrollIndicator={false}>
-              {availableUsersForGroup.map(user => {
-                const displayName = user.display_name || user.name || 'User';
-                return (
-                  <TouchableOpacity
-                    key={user.id}
-                    style={styles.userSelectItem}
-                    onPress={() => setSelectedUsers([...selectedUsers, user.id])}
-                  >
-                    <Text style={styles.userSelectAvatar}>{user.avatar || '👤'}</Text>
-                    <Text style={styles.userSelectName}>{displayName}</Text>
-                    <Text style={styles.userSelectAdd}>+ Add</Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {availableUsersForGroup.map(user => (
+                <TouchableOpacity
+                  key={user.id}
+                  style={styles.userSelectItem}
+                  onPress={() => setSelectedUsers([...selectedUsers, user.id])}
+                >
+                  <Text style={styles.userSelectAvatar}>{user.avatar || '👤'}</Text>
+                  <Text style={styles.userSelectName}>{user.name}</Text>
+                  <Text style={styles.userSelectAdd}>+ Add</Text>
+                </TouchableOpacity>
+              ))}
             </ScrollView>
             
             {selectedUsers.length > 0 && (
@@ -640,10 +570,9 @@ const CommunityPage = () => {
                 <View style={styles.selectedUsersList}>
                   {selectedUsers.map(userId => {
                     const user = allUsersList.find(u => u.id === userId);
-                    const displayName = user?.display_name || user?.name || 'User';
                     return user ? (
                       <View key={userId} style={styles.selectedUserChip}>
-                        <Text style={styles.selectedUserText}>{displayName}</Text>
+                        <Text style={styles.selectedUserText}>{user.name}</Text>
                         <TouchableOpacity onPress={() => setSelectedUsers(selectedUsers.filter(id => id !== userId))}>
                           <Text style={styles.removeUserText}>✕</Text>
                         </TouchableOpacity>
