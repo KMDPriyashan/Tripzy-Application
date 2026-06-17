@@ -476,7 +476,7 @@ const CommunityPage = () => {
           onPress={() => setActiveTab('chats')}
         >
           <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>
-            Direct Messages ({chats.length})
+            Inbox ({chats.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
@@ -484,7 +484,7 @@ const CommunityPage = () => {
           onPress={() => setActiveTab('groups')}
         >
           <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>
-            Community Chat ({groups.length})
+            Group Chat ({groups.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity 
