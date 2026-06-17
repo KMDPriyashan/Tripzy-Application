@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
+  Animated,
   FlatList,
   Image,
   Modal,
@@ -17,6 +18,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { supabase } from '../../lib/supabase';
 
 const CommunityPage = () => {
@@ -38,10 +40,13 @@ const CommunityPage = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   
-  // Group Profile Picture States (Local only)
+  // Group Profile Picture States
   const [groupAvatar, setGroupAvatar] = useState('👥');
   const [groupAvatarUri, setGroupAvatarUri] = useState(null);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  
+  // User Profile Picture States (Local only - NOT connected to Travel Feed)
+  const [userProfileImage, setUserProfileImage] = useState(null);
+  const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false);
 
   // Load user data immediately on component mount
   useEffect(() => {
@@ -50,7 +55,21 @@ const CommunityPage = () => {
 
   const initializeUser = async () => {
     await loadCurrentUser();
+    await loadUserProfileImage();
     setIsInitialized(true);
+  };
+
+  // ─── LOAD USER PROFILE IMAGE (Local only) ──────
+  const loadUserProfileImage = async () => {
+    try {
+      const savedImage = await AsyncStorage.getItem('userProfileImage');
+      if (savedImage) {
+        setUserProfileImage(savedImage);
+        console.log('✅ Loaded user profile image from storage (local only)');
+      }
+    } catch (error) {
+      console.error('Error loading profile image:', error);
+    }
   };
 
   // Load all data when user is loaded and when page focuses
@@ -77,15 +96,21 @@ const CommunityPage = () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       
       if (user && !error) {
+        // ✅ display_name එකට මනාපය දෙන්න
         const userName = user.user_metadata?.display_name || 
                          user.user_metadata?.name || 
                          user.user_metadata?.full_name || 
                          user.email?.split('@')[0] || 
                          'User';
+        
+        const savedImage = await AsyncStorage.getItem('userProfileImage');
+        const avatar = savedImage || user.user_metadata?.avatar || '👤';
+        
         setCurrentUser({ 
           id: user.id, 
-          name: userName, 
-          avatar: user.user_metadata?.avatar || '👤',
+          name: userName,
+          display_name: userName, // ✅ display_name එකත් set කරන්න
+          avatar: avatar,
           email: user.email
         });
         console.log('✅ Current user loaded from Supabase:', userName);
@@ -96,7 +121,7 @@ const CommunityPage = () => {
           setCurrentUser(parsedUser);
           console.log('✅ Current user loaded from storage:', parsedUser.name);
         } else {
-          const demoUser = { id: 'demo_user_1', name: 'Demo User', avatar: '👤' };
+          const demoUser = { id: 'demo_user_1', name: 'Demo User', display_name: 'Demo User', avatar: '👤' };
           setCurrentUser(demoUser);
           await AsyncStorage.setItem('currentUser', JSON.stringify(demoUser));
           console.log('✅ Demo user created');
@@ -104,7 +129,7 @@ const CommunityPage = () => {
       }
     } catch (error) {
       console.error('Error loading user:', error);
-      const demoUser = { id: 'demo_user_1', name: 'Demo User', avatar: '👤' };
+      const demoUser = { id: 'demo_user_1', name: 'Demo User', display_name: 'Demo User', avatar: '👤' };
       setCurrentUser(demoUser);
     }
   };
@@ -301,6 +326,11 @@ const CommunityPage = () => {
         avatarsMap[user.id] = user.avatar || user.user_metadata?.avatar || '👤';
       });
       
+      // Update current user avatar in map if profile image exists (LOCAL ONLY)
+      if (currentUser?.id && userProfileImage) {
+        avatarsMap[currentUser.id] = userProfileImage;
+      }
+      
       setUserNamesMap(namesMap);
       setUserAvatarsMap(avatarsMap);
       setAllUsersList(uniqueUsers);
@@ -369,6 +399,174 @@ const CommunityPage = () => {
     setRefreshing(false);
   };
 
+  // ─── PICK USER PROFILE IMAGE (LOCAL ONLY) ─────
+  const pickUserProfileImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload profile image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        
+        if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
+          Alert.alert('Error', 'Image size should be less than 2MB');
+          return;
+        }
+
+        setIsUploadingProfileImage(true);
+        
+        // Save to AsyncStorage (LOCAL ONLY)
+        await AsyncStorage.setItem('userProfileImage', asset.uri);
+        setUserProfileImage(asset.uri);
+        
+        // Update current user's avatar (LOCAL ONLY - NOT connected to Travel Feed)
+        if (currentUser) {
+          const updatedUser = { ...currentUser, avatar: asset.uri };
+          setCurrentUser(updatedUser);
+          await AsyncStorage.setItem('currentUser', JSON.stringify(updatedUser));
+          
+          // Update in allUsersList
+          const updatedUsers = allUsersList.map(u => {
+            if (u.id === currentUser.id) {
+              return { ...u, avatar: asset.uri };
+            }
+            return u;
+          });
+          setAllUsersList(updatedUsers);
+          await AsyncStorage.setItem('all_users', JSON.stringify(updatedUsers));
+          
+          // Update userAvatarsMap
+          const updatedAvatarsMap = { ...userAvatarsMap, [currentUser.id]: asset.uri };
+          setUserAvatarsMap(updatedAvatarsMap);
+          
+          // Update users list
+          const updatedFilteredUsers = users.map(u => {
+            if (u.id === currentUser.id) {
+              return { ...u, avatar: asset.uri };
+            }
+            return u;
+          });
+          setUsers(updatedFilteredUsers);
+        }
+        
+        setIsUploadingProfileImage(false);
+        Alert.alert('Success', 'Profile picture updated successfully (Community only)!');
+        console.log('✅ User profile image saved locally (NOT connected to Travel Feed):', asset.uri);
+      }
+    } catch (error) {
+      console.error('Error picking profile image:', error);
+      setIsUploadingProfileImage(false);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
+  };
+
+  // ─── DELETE CHAT ──────────────────────────────────
+  const deleteChat = async (chatId, userId) => {
+    Alert.alert(
+      'Delete Chat',
+      'Are you sure you want to delete this conversation?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Remove from chats list
+              const updatedChats = chats.filter(chat => chat.id !== chatId);
+              setChats(updatedChats);
+              
+              // Remove from storage
+              const conversationsKey = `conversations_${currentUser.id}`;
+              await AsyncStorage.setItem(conversationsKey, JSON.stringify(updatedChats));
+              
+              // Remove messages
+              const messagesKey = `messages_${currentUser.id}_${userId}`;
+              await AsyncStorage.removeItem(messagesKey);
+              
+              Alert.alert('Success', 'Chat deleted successfully');
+            } catch (error) {
+              console.error('Error deleting chat:', error);
+              Alert.alert('Error', 'Failed to delete chat');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // ─── DELETE GROUP ─────────────────────────────────
+  const deleteGroup = async (groupId) => {
+    Alert.alert(
+      'Delete Group',
+      'Are you sure you want to delete this group?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Remove from groups list
+              const updatedGroups = groups.filter(group => group.id !== groupId);
+              setGroups(updatedGroups);
+              
+              // Remove from storage
+              const groupsKey = `groups_${currentUser.id}`;
+              await AsyncStorage.setItem(groupsKey, JSON.stringify(updatedGroups));
+              
+              // Remove messages
+              const messagesKey = `group_messages_${groupId}`;
+              await AsyncStorage.removeItem(messagesKey);
+              
+              // Remove group members
+              const membersKey = `group_members_${groupId}`;
+              await AsyncStorage.removeItem(membersKey);
+              
+              Alert.alert('Success', 'Group deleted successfully');
+            } catch (error) {
+              console.error('Error deleting group:', error);
+              Alert.alert('Error', 'Failed to delete group');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // ─── RENDER RIGHT ACTIONS (Swipe Delete) ─────────
+  const renderRightActions = (progress, dragX, onDelete) => {
+    const trans = dragX.interpolate({
+      inputRange: [-100, 0],
+      outputRange: [1, 0],
+      extrapolate: 'clamp',
+    });
+    
+    return (
+      <TouchableOpacity 
+        style={styles.deleteAction}
+        onPress={onDelete}
+        activeOpacity={0.8}
+      >
+        <Animated.View style={{ transform: [{ scale: trans }], alignItems: 'center' }}>
+          <Text style={styles.deleteActionText}>🗑️</Text>
+          <Text style={styles.deleteActionTextSmall}>Delete</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
+
   const handleStartChat = async (user) => {
     try {
       if (!currentUser?.id) return;
@@ -393,10 +591,14 @@ const CommunityPage = () => {
 
   const handleOpenGroupChat = (group) => {
     try {
+      // Pass members data to group chat
       const gid = encodeURIComponent(String(group.id));
       const gname = encodeURIComponent(String(group.name || ''));
       const gav = encodeURIComponent(String(group.avatar || ''));
-      router.push(`/app-pages/group-chat?groupId=${gid}&groupName=${gname}&avatar=${gav}`);
+      const membersData = JSON.stringify(group.members || []);
+      const encodedMembers = encodeURIComponent(membersData);
+      
+      router.push(`/app-pages/group-chat?groupId=${gid}&groupName=${gname}&avatar=${gav}&members=${encodedMembers}`);
     } catch (e) {
       console.error('Error navigating to group chat (encoding failed):', e);
       router.push({
@@ -404,7 +606,8 @@ const CommunityPage = () => {
         params: {
           groupId: String(group.id),
           groupName: String(group.name || ''),
-          avatar: String(group.avatar || '')
+          avatar: String(group.avatar || ''),
+          members: JSON.stringify(group.members || [])
         }
       });
     }
@@ -429,7 +632,7 @@ const CommunityPage = () => {
     }
   };
 
-  // ─── PICK GROUP AVATAR (Local Only) ─────────────
+  // ─── PICK GROUP AVATAR ──────────────────────────
   const pickGroupAvatar = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -449,13 +652,11 @@ const CommunityPage = () => {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         
-        // Check file size (max 2MB)
         if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
           Alert.alert('Error', 'Image size should be less than 2MB');
           return;
         }
 
-        // ✅ Save URI locally (not uploading to Supabase)
         setGroupAvatarUri(asset.uri);
         setGroupAvatar(asset.uri);
         console.log('✅ Group avatar selected (local only):', asset.uri);
@@ -472,7 +673,7 @@ const CommunityPage = () => {
     setGroupAvatarUri(null);
   };
 
-  // ─── CREATE GROUP (Local Avatar Only) ────────────
+  // ─── CREATE GROUP ────────────────────────────────
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       Alert.alert('Error', 'Please enter a group name');
@@ -493,7 +694,6 @@ const CommunityPage = () => {
     console.log('Creating group:', newGroupName);
     
     try {
-      // ✅ Use local avatar URI or emoji (no Supabase upload)
       const finalAvatar = groupAvatarUri || '👥';
       
       const groupId = `group_${Date.now()}`;
@@ -502,12 +702,12 @@ const CommunityPage = () => {
       const newGroup = {
         id: groupId,
         name: newGroupName.trim(),
-        avatar: finalAvatar, // Local URI or emoji
+        avatar: finalAvatar,
         lastMessage: 'Group created',
         timestamp: new Date().toLocaleTimeString(),
         unread: 0,
         memberCount: 1 + selectedUsers.length,
-        members: allMembers,
+        members: allMembers, // ✅ Store members for group chat
         createdBy: currentUser.id,
         createdAt: new Date().toISOString()
       };
@@ -516,14 +716,16 @@ const CommunityPage = () => {
       setGroups(updatedGroups);
       await saveGroupsToStorage(updatedGroups);
       
-      // Try to save to Supabase (without avatar)
+      // ✅ Save group members separately for easy access
+      await AsyncStorage.setItem(`group_members_${groupId}`, JSON.stringify(allMembers));
+      
       try {
         const { error } = await supabase
           .from('groups')
           .insert([{
             id: groupId,
             name: newGroup.name,
-            avatar: '👥', // Default emoji for Supabase
+            avatar: '👥',
             created_by: currentUser.id,
             created_at: new Date().toISOString()
           }]);
@@ -534,7 +736,6 @@ const CommunityPage = () => {
           console.log('✅ Group saved to Supabase');
         }
         
-        // Save members
         for (const memberId of allMembers) {
           await supabase
             .from('group_members')
@@ -554,7 +755,7 @@ const CommunityPage = () => {
       setGroupAvatar('👥');
       setGroupAvatarUri(null);
       
-      Alert.alert('Success', `Group "${newGroupName.trim()}" created successfully!`);
+      Alert.alert('Success', `Group "${newGroupName.trim()}" created with ${allMembers.length} members!`);
     } catch (error) {
       console.error('Error creating group:', error);
       Alert.alert('Error', 'Failed to create group. Please try again.');
@@ -563,74 +764,94 @@ const CommunityPage = () => {
     }
   };
 
-  // ─── RENDER CHAT ITEM ────────────────────────────
+  // ─── RENDER CHAT ITEM WITH SWIPE DELETE ──────────
   const renderChatItem = ({ item }) => {
+    // ✅ Get actual user name from map - never show "User"
     const displayName = userNamesMap[item.userId] || item.userName || 'Traveler';
     const avatar = userAvatarsMap[item.userId] || item.avatar || '👤';
     
     return (
-      <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)}>
-        <View style={styles.avatarContainer}>
-          {avatar && avatar.startsWith('file://') ? (
-            <Image source={{ uri: avatar }} style={styles.avatarImage} />
-          ) : avatar && avatar.startsWith('http') ? (
-            <Image source={{ uri: avatar }} style={styles.avatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{avatar || '👤'}</Text>
-          )}
-          {item.isOnline && <View style={styles.onlineDot} />}
-        </View>
-        <View style={styles.chatInfo}>
-          <Text style={styles.chatName}>{displayName}</Text>
-          <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'No messages yet'}</Text>
-        </View>
-        <View style={styles.chatMeta}>
-          <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
-        </View>
-      </TouchableOpacity>
+      <Swipeable
+        renderRightActions={(progress, dragX) => 
+          renderRightActions(progress, dragX, () => deleteChat(item.id, item.userId))
+        }
+        overshootRight={false}
+        key={item.id}
+      >
+        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)}>
+          <View style={styles.avatarContainer}>
+            {avatar && avatar.startsWith('file://') ? (
+              <Image source={{ uri: avatar }} style={styles.avatarImage} />
+            ) : avatar && avatar.startsWith('http') ? (
+              <Image source={{ uri: avatar }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{avatar || '👤'}</Text>
+            )}
+            {item.isOnline && <View style={styles.onlineDot} />}
+          </View>
+          <View style={styles.chatInfo}>
+            <Text style={styles.chatName}>{displayName}</Text>
+            <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'No messages yet'}</Text>
+          </View>
+          <View style={styles.chatMeta}>
+            <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
+          </View>
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
 
-  // ─── RENDER GROUP ITEM ────────────────────────────
+  // ─── RENDER GROUP ITEM WITH SWIPE DELETE ──────────
   const renderGroupItem = ({ item }) => {
     const isLocalImage = item.avatar && item.avatar.startsWith('file://');
     const isUrlImage = item.avatar && item.avatar.startsWith('http');
     
     return (
-      <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenGroupChat(item)}>
-        <View style={styles.avatarContainer}>
-          {isLocalImage || isUrlImage ? (
-            <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{item.avatar || '👥'}</Text>
-          )}
-        </View>
-        <View style={styles.chatInfo}>
-          <Text style={styles.chatName}>{item.name}</Text>
-          <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'No messages yet'}</Text>
-          <Text style={styles.memberCount}>{item.memberCount || 0} members</Text>
-        </View>
-        <View style={styles.chatMeta}>
-          <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
-          {item.unread > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{item.unread}</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
+      <Swipeable
+        renderRightActions={(progress, dragX) => 
+          renderRightActions(progress, dragX, () => deleteGroup(item.id))
+        }
+        overshootRight={false}
+        key={item.id}
+      >
+        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenGroupChat(item)}>
+          <View style={styles.avatarContainer}>
+            {isLocalImage || isUrlImage ? (
+              <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{item.avatar || '👥'}</Text>
+            )}
+          </View>
+          <View style={styles.chatInfo}>
+            <Text style={styles.chatName}>{item.name}</Text>
+            <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'No messages yet'}</Text>
+            <Text style={styles.memberCount}>{item.memberCount || 0} members</Text>
+          </View>
+          <View style={styles.chatMeta}>
+            <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
+            {item.unread > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{item.unread}</Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Swipeable>
     );
   };
 
   // ─── RENDER USER ITEM ────────────────────────────
   const renderUserItem = ({ item }) => {
+    // ✅ Get actual display name - prioritize display_name, never show "User"
     const displayName = item.display_name || 
                         item.name || 
                         item.full_name || 
                         item.user_metadata?.display_name ||
                         item.user_metadata?.name ||
+                        item.user_metadata?.full_name ||
                         item.email?.split('@')[0] || 
                         'Traveler';
+    
     const avatar = item.avatar || item.user_metadata?.avatar || '👤';
     
     return (
@@ -655,22 +876,26 @@ const CommunityPage = () => {
     );
   };
 
+  // ─── FILTERED USERS ──────────────────────────────
   const filteredUsers = users.filter(user => {
     const displayName = user.display_name || 
                         user.name || 
                         user.full_name || 
                         user.user_metadata?.display_name ||
                         user.user_metadata?.name ||
+                        user.user_metadata?.full_name ||
                         user.email?.split('@')[0] || 
                         'Traveler';
     return displayName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  // ─── FILTERED CHATS ──────────────────────────────
   const filteredChats = chats.filter(chat => {
     const displayName = userNamesMap[chat.userId] || chat.userName || 'Traveler';
     return displayName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
+  // ─── FILTERED GROUPS ─────────────────────────────
   const filteredGroups = groups.filter(group => 
     group.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -690,219 +915,254 @@ const CommunityPage = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Travel Community</Text>
-        <Text style={styles.headerSubtitle}>🔖 Where every journey begins with connection finding your tribe and sharing the adventure together. 🔖</Text>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <Text style={styles.searchIcon}>🔍</Text>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search any things..."
-          placeholderTextColor="#8E8E93"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'chats' && styles.activeTab]} 
-          onPress={() => setActiveTab('chats')}
-        >
-          <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>
-            Inbox ({chats.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'groups' && styles.activeTab]} 
-          onPress={() => setActiveTab('groups')}
-        >
-          <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>
-            Group Chat ({groups.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'users' && styles.activeTab]} 
-          onPress={() => setActiveTab('users')}
-        >
-          <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
-            Find Travelers ({users.length})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {loadingUsers ? (
-        <View style={styles.loadingUsersContainer}>
-          <Text>Loading users...</Text>
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Travel Community</Text>
+          <Text style={styles.headerSubtitle}>🔖 Where every journey begins with connection finding your tribe and sharing the adventure together. 🔖</Text>
         </View>
-      ) : (
-        <FlatList
-          data={
-            activeTab === 'chats' ? filteredChats :
-            activeTab === 'groups' ? filteredGroups : filteredUsers
-          }
-          keyExtractor={(item) => item.id || String(Math.random())}
-          renderItem={
-            activeTab === 'chats' ? renderChatItem :
-            activeTab === 'groups' ? renderGroupItem : renderUserItem
-          }
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {activeTab === 'chats' ? 'No conversations yet. Start a chat from "Find Travelers" tab!' : 
-                 activeTab === 'groups' ? 'No groups yet. Create one!' : 
-                 'No users found. Pull down to refresh or sign up more users!'}
-              </Text>
-            </View>
-          }
-        />
-      )}
 
-      {activeTab === 'groups' && (
-        <TouchableOpacity style={styles.fab} onPress={() => setShowCreateGroup(true)}>
-          <Text style={styles.fabText}>+</Text>
-        </TouchableOpacity>
-      )}
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search any things..."
+            placeholderTextColor="#8E8E93"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
 
-      <Modal
-        visible={showCreateGroup}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => {
-          setShowCreateGroup(false);
-          setSelectedUsers([]);
-          setNewGroupName('');
-          setGroupAvatar('👥');
-          setGroupAvatarUri(null);
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create New Group</Text>
-              <TouchableOpacity onPress={() => {
-                setShowCreateGroup(false);
-                setSelectedUsers([]);
-                setNewGroupName('');
-                setGroupAvatar('👥');
-                setGroupAvatarUri(null);
-              }}>
-                <Text style={styles.modalClose}>✕</Text>
+        <View style={styles.tabContainer}>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'chats' && styles.activeTab]} 
+            onPress={() => setActiveTab('chats')}
+          >
+            <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>
+              Inbox ({chats.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'groups' && styles.activeTab]} 
+            onPress={() => setActiveTab('groups')}
+          >
+            <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>
+              Group Chat ({groups.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.tab, activeTab === 'users' && styles.activeTab]} 
+            onPress={() => setActiveTab('users')}
+          >
+            <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
+              Find Travelers ({users.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {loadingUsers ? (
+          <View style={styles.loadingUsersContainer}>
+            <Text>Loading users...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={
+              activeTab === 'chats' ? filteredChats :
+              activeTab === 'groups' ? filteredGroups : filteredUsers
+            }
+            keyExtractor={(item) => item.id || String(Math.random())}
+            renderItem={
+              activeTab === 'chats' ? renderChatItem :
+              activeTab === 'groups' ? renderGroupItem : renderUserItem
+            }
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListHeaderComponent={
+              // ─── FIND TRAVELERS HEADER WITH EDIT BUTTON ───
+              activeTab === 'users' && currentUser ? (
+                <View style={styles.userProfileHeader}>
+                  <View style={styles.userProfileHeaderLeft}>
+                    {userProfileImage ? (
+                      <Image source={{ uri: userProfileImage }} style={styles.userProfileHeaderImage} />
+                    ) : (
+                      <View style={styles.userProfileHeaderPlaceholder}>
+                        <Text style={styles.userProfileHeaderEmoji}>👤</Text>
+                      </View>
+                    )}
+                    <View>
+                      {/* ✅ Current User ගේ ඇත්ත නම පෙන්වයි */}
+                      <Text style={styles.userProfileHeaderName}>
+                        {currentUser.display_name || currentUser.name || 'User'}
+                      </Text>
+                      <Text style={styles.userProfileHeaderSub}>
+                        @{currentUser.display_name || currentUser.name || 'user'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.userProfileHeaderEditButton} 
+                    onPress={pickUserProfileImage}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.userProfileHeaderEditText}>✏️</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {activeTab === 'chats' ? 'No conversations yet. Start a chat from "Find Travelers" tab!' : 
+                   activeTab === 'groups' ? 'No groups yet. Create one!' : 
+                   'No users found. Pull down to refresh or sign up more users!'}
+                </Text>
+              </View>
+            }
+          />
+        )}
+
+        {activeTab === 'groups' && (
+          <TouchableOpacity style={styles.fab} onPress={() => setShowCreateGroup(true)}>
+            <Text style={styles.fabText}>+</Text>
+          </TouchableOpacity>
+        )}
+
+        <Modal
+          visible={showCreateGroup}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => {
+            setShowCreateGroup(false);
+            setSelectedUsers([]);
+            setNewGroupName('');
+            setGroupAvatar('👥');
+            setGroupAvatarUri(null);
+          }}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Create New Group</Text>
+                <TouchableOpacity onPress={() => {
+                  setShowCreateGroup(false);
+                  setSelectedUsers([]);
+                  setNewGroupName('');
+                  setGroupAvatar('👥');
+                  setGroupAvatarUri(null);
+                }}>
+                  <Text style={styles.modalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <Text style={styles.inputLabel}>Group Picture</Text>
+              <TouchableOpacity style={styles.groupAvatarContainer} onPress={pickGroupAvatar}>
+                {groupAvatarUri ? (
+                  <Image source={{ uri: groupAvatarUri }} style={styles.groupAvatarImage} />
+                ) : (
+                  <View style={styles.groupAvatarPlaceholder}>
+                    <Text style={styles.groupAvatarEmoji}>{groupAvatar || '👥'}</Text>
+                    <Text style={styles.groupAvatarText}>Tap to add photo</Text>
+                  </View>
+                )}
+                {groupAvatarUri && (
+                  <TouchableOpacity style={styles.removeAvatarButton} onPress={removeGroupAvatar}>
+                    <Text style={styles.removeAvatarText}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+              
+              <Text style={styles.inputLabel}>Group Name</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Enter your group name"
+                value={newGroupName}
+                onChangeText={setNewGroupName}
+              />
+              
+              <Text style={styles.inputLabel}>Add Members ({availableUsersForGroup.length} available)</Text>
+              <ScrollView style={styles.userSelectList} showsVerticalScrollIndicator={false}>
+                {availableUsersForGroup.length > 0 ? (
+                  availableUsersForGroup.map(user => {
+                    // ✅ Get actual display name
+                    const displayName = user.display_name || 
+                                        user.name || 
+                                        user.full_name || 
+                                        user.user_metadata?.display_name ||
+                                        user.user_metadata?.name ||
+                                        user.email?.split('@')[0] || 
+                                        'Traveler';
+                    const isSelected = selectedUsers.includes(user.id);
+                    return (
+                      <TouchableOpacity
+                        key={user.id}
+                        style={[styles.userSelectItem, isSelected && styles.userSelectItemSelected]}
+                        onPress={() => {
+                          if (isSelected) {
+                            setSelectedUsers(selectedUsers.filter(id => id !== user.id));
+                          } else {
+                            setSelectedUsers([...selectedUsers, user.id]);
+                          }
+                        }}
+                      >
+                        <Text style={styles.userSelectAvatar}>{user.avatar || '👤'}</Text>
+                        <Text style={styles.userSelectName}>{displayName}</Text>
+                        <Text style={[styles.userSelectAdd, isSelected && styles.userSelectAdded]}>
+                          {isSelected ? '✓ Added' : '+ Add'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <Text style={styles.noUsersText}>No other users available. Pull down to refresh or sign up more users!</Text>
+                )}
+              </ScrollView>
+              
+              {selectedUsers.length > 0 && (
+                <View style={styles.selectedUsersContainer}>
+                  <Text style={styles.selectedUsersTitle}>Selected ({selectedUsers.length}):</Text>
+                  <View style={styles.selectedUsersList}>
+                    {selectedUsers.map(userId => {
+                      const user = allUsersList.find(u => u.id === userId);
+                      // ✅ Get actual display name
+                      const displayName = user?.display_name || 
+                                         user?.name || 
+                                         user?.full_name || 
+                                         user?.user_metadata?.display_name ||
+                                         user?.user_metadata?.name ||
+                                         user?.email?.split('@')[0] || 
+                                         'Traveler';
+                      return user ? (
+                        <View key={userId} style={styles.selectedUserChip}>
+                          <Text style={styles.selectedUserText}>{displayName}</Text>
+                          <TouchableOpacity onPress={() => setSelectedUsers(selectedUsers.filter(id => id !== userId))}>
+                            <Text style={styles.removeUserText}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null;
+                    })}
+                  </View>
+                </View>
+              )}
+              
+              <TouchableOpacity 
+                style={[
+                  styles.createGroupButton, 
+                  (!newGroupName.trim() || selectedUsers.length === 0 || isCreatingGroup) && styles.createGroupButtonDisabled
+                ]} 
+                onPress={handleCreateGroup}
+                disabled={!newGroupName.trim() || selectedUsers.length === 0 || isCreatingGroup}
+              >
+                <Text style={styles.createGroupButtonText}>
+                  {isCreatingGroup ? 'Creating...' : `Create Group (${selectedUsers.length + 1} members)`}
+                </Text>
               </TouchableOpacity>
             </View>
-            
-            {/* ─── GROUP AVATAR SELECTOR ────────── */}
-            <Text style={styles.inputLabel}>Group Picture</Text>
-            <TouchableOpacity style={styles.groupAvatarContainer} onPress={pickGroupAvatar}>
-              {groupAvatarUri ? (
-                <Image source={{ uri: groupAvatarUri }} style={styles.groupAvatarImage} />
-              ) : (
-                <View style={styles.groupAvatarPlaceholder}>
-                  <Text style={styles.groupAvatarEmoji}>{groupAvatar || '👥'}</Text>
-                  <Text style={styles.groupAvatarText}>Tap to add photo</Text>
-                </View>
-              )}
-              {groupAvatarUri && (
-                <TouchableOpacity style={styles.removeAvatarButton} onPress={removeGroupAvatar}>
-                  <Text style={styles.removeAvatarText}>✕</Text>
-                </TouchableOpacity>
-              )}
-            </TouchableOpacity>
-            
-            <Text style={styles.inputLabel}>Group Name</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Enter your group name"
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-            />
-            
-            <Text style={styles.inputLabel}>Add Members ({availableUsersForGroup.length} available)</Text>
-            <ScrollView style={styles.userSelectList} showsVerticalScrollIndicator={false}>
-              {availableUsersForGroup.length > 0 ? (
-                availableUsersForGroup.map(user => {
-                  const displayName = user.display_name || 
-                                      user.name || 
-                                      user.full_name || 
-                                      user.user_metadata?.display_name ||
-                                      user.user_metadata?.name ||
-                                      user.email?.split('@')[0] || 
-                                      'Traveler';
-                  const isSelected = selectedUsers.includes(user.id);
-                  return (
-                    <TouchableOpacity
-                      key={user.id}
-                      style={[styles.userSelectItem, isSelected && styles.userSelectItemSelected]}
-                      onPress={() => {
-                        if (isSelected) {
-                          setSelectedUsers(selectedUsers.filter(id => id !== user.id));
-                        } else {
-                          setSelectedUsers([...selectedUsers, user.id]);
-                        }
-                      }}
-                    >
-                      <Text style={styles.userSelectAvatar}>{user.avatar || '👤'}</Text>
-                      <Text style={styles.userSelectName}>{displayName}</Text>
-                      <Text style={[styles.userSelectAdd, isSelected && styles.userSelectAdded]}>
-                        {isSelected ? '✓ Added' : '+ Add'}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })
-              ) : (
-                <Text style={styles.noUsersText}>No other users available. Pull down to refresh or sign up more users!</Text>
-              )}
-            </ScrollView>
-            
-            {selectedUsers.length > 0 && (
-              <View style={styles.selectedUsersContainer}>
-                <Text style={styles.selectedUsersTitle}>Selected ({selectedUsers.length}):</Text>
-                <View style={styles.selectedUsersList}>
-                  {selectedUsers.map(userId => {
-                    const user = allUsersList.find(u => u.id === userId);
-                    const displayName = user?.display_name || 
-                                       user?.name || 
-                                       user?.full_name || 
-                                       user?.user_metadata?.display_name ||
-                                       user?.user_metadata?.name ||
-                                       user?.email?.split('@')[0] || 
-                                       'Traveler';
-                    return user ? (
-                      <View key={userId} style={styles.selectedUserChip}>
-                        <Text style={styles.selectedUserText}>{displayName}</Text>
-                        <TouchableOpacity onPress={() => setSelectedUsers(selectedUsers.filter(id => id !== userId))}>
-                          <Text style={styles.removeUserText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null;
-                  })}
-                </View>
-              </View>
-            )}
-            
-            <TouchableOpacity 
-              style={[
-                styles.createGroupButton, 
-                (!newGroupName.trim() || selectedUsers.length === 0 || isCreatingGroup) && styles.createGroupButtonDisabled
-              ]} 
-              onPress={handleCreateGroup}
-              disabled={!newGroupName.trim() || selectedUsers.length === 0 || isCreatingGroup}
-            >
-              <Text style={styles.createGroupButtonText}>
-                {isCreatingGroup ? 'Creating...' : `Create Group (${selectedUsers.length + 1} members)`}
-              </Text>
-            </TouchableOpacity>
           </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+        </Modal>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 };
 
@@ -993,6 +1253,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
+  // ─── CHAT ITEM STYLES ────────────────────────────
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1069,6 +1330,96 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  // ─── DELETE ACTION ──────────────────────────────
+  deleteAction: {
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
+    marginBottom: 12,
+  },
+  deleteActionText: {
+    fontSize: 28,
+    color: '#ffffff',
+  },
+  deleteActionTextSmall: {
+    fontSize: 12,
+    color: '#ffffff',
+    marginTop: 2,
+  },
+  // ─── USER PROFILE HEADER STYLES ──────────────────
+  userProfileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  userProfileHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  userProfileHeaderImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  userProfileHeaderPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#f0f2f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderStyle: 'dashed',
+  },
+  userProfileHeaderEmoji: {
+    fontSize: 28,
+  },
+  userProfileHeaderName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginLeft: 12,
+  },
+  userProfileHeaderSub: {
+    fontSize: 12,
+    color: '#999',
+    marginLeft: 12,
+  },
+  userProfileHeaderEditButton: {
+    backgroundColor: '#007AFF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  userProfileHeaderEditText: {
+    fontSize: 18,
+    color: '#ffffff',
+  },
+  // ─── USER ITEM STYLES ────────────────────────────
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1127,6 +1478,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  // ─── EMPTY STATE ──────────────────────────────────
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1137,6 +1489,7 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
   },
+  // ─── FAB BUTTON ──────────────────────────────────
   fab: {
     position: 'absolute',
     bottom: 140,
@@ -1158,6 +1511,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '600',
   },
+  // ─── MODAL STYLES ──────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1203,7 +1557,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#f8f9fa',
   },
-  // ─── GROUP AVATAR STYLES ────────────────────────
+  // ─── GROUP AVATAR STYLES ──────────────────────────
   groupAvatarContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1255,6 +1609,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
+  // ─── USER SELECT LIST STYLES ─────────────────────
   userSelectList: {
     maxHeight: 200,
     borderWidth: 1,
@@ -1299,6 +1654,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#999',
   },
+  // ─── SELECTED USERS ──────────────────────────────
   selectedUsersContainer: {
     marginTop: 12,
   },
@@ -1331,6 +1687,7 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     paddingHorizontal: 2,
   },
+  // ─── CREATE GROUP BUTTON ──────────────────────────
   createGroupButton: {
     backgroundColor: '#007AFF',
     borderRadius: 12,

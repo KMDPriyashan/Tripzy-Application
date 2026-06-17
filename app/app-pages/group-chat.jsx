@@ -37,6 +37,7 @@ const GroupChatPage = () => {
   const [isSending, setIsSending] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [mediaType, setMediaType] = useState(null);
+  const [groupProfileImage, setGroupProfileImage] = useState(null);
   const flatListRef = useRef(null);
   let messageSubscription = null;
 
@@ -48,6 +49,7 @@ const GroupChatPage = () => {
 
   useEffect(() => {
     initializeChat();
+    loadGroupProfileImage();
     
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
       setKeyboardVisible(true);
@@ -67,6 +69,19 @@ const GroupChatPage = () => {
       keyboardDidHideListener.remove();
     };
   }, [groupId]);
+
+  // ─── LOAD GROUP PROFILE IMAGE ──────────────────
+  const loadGroupProfileImage = async () => {
+    try {
+      const savedImage = await AsyncStorage.getItem(`group_profile_${groupId}`);
+      if (savedImage) {
+        setGroupProfileImage(savedImage);
+        console.log('✅ Loaded group profile image from storage');
+      }
+    } catch (error) {
+      console.error('Error loading group profile image:', error);
+    }
+  };
 
   const initializeChat = async () => {
     await loadCurrentUser();
@@ -226,7 +241,6 @@ const GroupChatPage = () => {
         }
       }
 
-      // ✅ Format messages with media support
       const formattedMessages = groupMessages.map(msg => ({
         id: msg.id,
         text: msg.content || msg.text || msg.message,
@@ -279,6 +293,56 @@ const GroupChatPage = () => {
       });
     } catch (error) {
       console.log('Realtime subscription error:', error);
+    }
+  };
+
+  // ─── PICK GROUP PROFILE IMAGE ──────────────────
+  const pickGroupProfileImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera roll permissions.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        
+        if (asset.fileSize && asset.fileSize > 2 * 1024 * 1024) {
+          Alert.alert('Error', 'Image size should be less than 2MB');
+          return;
+        }
+
+        await AsyncStorage.setItem(`group_profile_${groupId}`, asset.uri);
+        setGroupProfileImage(asset.uri);
+        
+        const groupsKey = `groups_${currentUser?.id || 'default'}`;
+        const savedGroups = await AsyncStorage.getItem(groupsKey);
+        if (savedGroups) {
+          const parsedGroups = JSON.parse(savedGroups);
+          const updatedGroups = parsedGroups.map(group => 
+            group.id === groupId 
+              ? { ...group, avatar: asset.uri }
+              : group
+          );
+          await AsyncStorage.setItem(groupsKey, JSON.stringify(updatedGroups));
+        }
+        
+        setShowOptionsModal(false);
+        Alert.alert('Success', 'Group profile picture updated!');
+        console.log('✅ Group profile image saved:', asset.uri);
+      }
+    } catch (error) {
+      console.error('Error picking profile image:', error);
+      Alert.alert('Error', 'Failed to pick image.');
     }
   };
 
@@ -339,17 +403,14 @@ const GroupChatPage = () => {
       mediaType: type
     };
 
-    // ✅ Add to UI immediately
     setMessages(prev => [...prev, newMessage]);
     
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
 
-    // ✅ Save to local storage with media
     await saveMessageToLocalStorage(newMessage);
 
-    // ✅ Try to send to Supabase with media
     if (isValidUUID(groupId)) {
       try {
         const messageData = {
@@ -403,10 +464,8 @@ const GroupChatPage = () => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
 
-    // ✅ Save to local storage
     await saveMessageToLocalStorage(newMessage);
 
-    // ✅ Try to send to Supabase
     if (isValidUUID(groupId)) {
       const sentMessage = await sendGroupMessage(groupId, currentUser.id, messageText);
       if (!sentMessage) {
@@ -424,7 +483,6 @@ const GroupChatPage = () => {
       const savedMessages = await AsyncStorage.getItem(messagesKey);
       let allMessages = savedMessages ? JSON.parse(savedMessages) : [];
       
-      // ✅ Add new message with all fields
       allMessages.push({
         id: message.id,
         text: message.text,
@@ -439,7 +497,6 @@ const GroupChatPage = () => {
       await AsyncStorage.setItem(messagesKey, JSON.stringify(allMessages));
       console.log('💾 Message saved to local storage');
       
-      // Update group last message
       const groupsKey = `groups_${currentUser?.id || 'default'}`;
       const savedGroups = await AsyncStorage.getItem(groupsKey);
       if (savedGroups) {
@@ -566,6 +623,7 @@ const GroupChatPage = () => {
     return avatarStr.startsWith('http') || avatarStr.startsWith('file://');
   };
 
+  // ─── RENDER MESSAGE ─────────────────────────────
   const renderMessage = ({ item }) => {
     const isCurrentUser = item.senderId === (currentUser?.id);
     const isMedia = item.media && item.mediaType;
@@ -614,14 +672,50 @@ const GroupChatPage = () => {
     );
   };
 
+  // ─── RENDER MEMBER ITEM ──────────────────────────
   const renderMemberItem = ({ item }) => (
-    <View style={styles.memberItem}>
-      <Text style={styles.memberAvatar}>{item.avatar || '👤'}</Text>
+    <TouchableOpacity 
+      style={styles.memberItem}
+      onPress={() => {
+        console.log('👤 Member clicked:', item.name);
+        setShowMembersModal(false);
+        router.push({
+          pathname: '/app-pages/tour-guide-profile',
+          params: { userId: item.id }
+        });
+      }}
+      activeOpacity={0.7}
+    >
+      <View style={styles.memberAvatarContainer}>
+        {item.avatar && item.avatar.startsWith('http') ? (
+          <Image source={{ uri: item.avatar }} style={styles.memberAvatarImage} />
+        ) : (
+          <Text style={styles.memberAvatar}>{item.avatar || '👤'}</Text>
+        )}
+      </View>
       <View style={styles.memberInfo}>
         <Text style={styles.memberName}>{item.name}</Text>
-        <Text style={styles.memberStatus}>{item.id === currentUser?.id ? 'You' : 'Member'}</Text>
+        <Text style={styles.memberStatus}>
+          {item.id === currentUser?.id ? '👑 You' : 'Member'}
+        </Text>
       </View>
-    </View>
+      <TouchableOpacity 
+        style={styles.memberChatButton}
+        onPress={() => {
+          setShowMembersModal(false);
+          router.push({
+            pathname: '/app-pages/solo-chat',
+            params: { 
+              userId: item.id,
+              userName: item.name,
+              avatar: item.avatar || '👤'
+            }
+          });
+        }}
+      >
+        <Text style={styles.memberChatButtonText}>💬</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
   );
 
   if (loading) {
@@ -637,13 +731,24 @@ const GroupChatPage = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* ─── HEADER ─────────────────────────────────── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerInfo} onPress={() => setShowMembersModal(true)}>
-          {isImageAvatar(avatar) ? (
+        
+        {/* ─── GROUP NAME TAP → MEMBERS ────────── */}
+        <TouchableOpacity 
+          style={styles.headerInfo} 
+          onPress={() => {
+            console.log('👥 Group name tapped, opening members modal...');
+            setShowMembersModal(true);
+          }}
+          activeOpacity={0.7}
+        >
+          {groupProfileImage ? (
+            <Image source={{ uri: groupProfileImage }} style={styles.headerAvatarImage} />
+          ) : isImageAvatar(avatar) ? (
             <Image source={{ uri: avatar }} style={styles.headerAvatarImage} />
           ) : (
             <Text style={styles.headerAvatar}>{avatar || '👥'}</Text>
@@ -653,12 +758,13 @@ const GroupChatPage = () => {
             <Text style={styles.headerStatus}>{groupMembers.length} members</Text>
           </View>
         </TouchableOpacity>
+        
         <TouchableOpacity style={styles.menuButton} onPress={() => setShowOptionsModal(true)}>
           <Text style={styles.menuButtonText}>⋮</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Messages */}
+      {/* ─── MESSAGES ──────────────────────────────── */}
       <TouchableWithoutFeedback onPress={dismissKeyboard}>
         <FlatList
           ref={flatListRef}
@@ -677,7 +783,7 @@ const GroupChatPage = () => {
         />
       </TouchableWithoutFeedback>
 
-      {/* Input Area */}
+      {/* ─── INPUT AREA ────────────────────────────── */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
@@ -727,7 +833,7 @@ const GroupChatPage = () => {
         {Platform.OS === 'android' && !keyboardVisible && <View style={styles.bottomSpacer} />}
       </KeyboardAvoidingView>
 
-      {/* Options Modal */}
+      {/* ─── OPTIONS MODAL ─────────────────────────── */}
       <Modal
         visible={showOptionsModal}
         animationType="fade"
@@ -747,11 +853,11 @@ const GroupChatPage = () => {
               </TouchableOpacity>
             </View>
             
-            <TouchableOpacity style={styles.optionItem} onPress={handleShareGroup}>
-              <Text style={styles.optionIcon}>📤</Text>
+            <TouchableOpacity style={styles.optionItem} onPress={pickGroupProfileImage}>
+              <Text style={styles.optionIcon}>🖼️</Text>
               <View>
-                <Text style={styles.optionTitle}>Share Group</Text>
-                <Text style={styles.optionDescription}>Invite others to join this group</Text>
+                <Text style={styles.optionTitle}>Change Group Photo</Text>
+                <Text style={styles.optionDescription}>Update group profile picture</Text>
               </View>
             </TouchableOpacity>
             
@@ -763,6 +869,14 @@ const GroupChatPage = () => {
               <View>
                 <Text style={styles.optionTitle}>View Members</Text>
                 <Text style={styles.optionDescription}>See all group members</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleShareGroup}>
+              <Text style={styles.optionIcon}>📤</Text>
+              <View>
+                <Text style={styles.optionTitle}>Share Group</Text>
+                <Text style={styles.optionDescription}>Invite others to join this group</Text>
               </View>
             </TouchableOpacity>
             
@@ -785,7 +899,7 @@ const GroupChatPage = () => {
         </TouchableOpacity>
       </Modal>
 
-      {/* Members Modal */}
+      {/* ─── MEMBERS MODAL ─────────────────────────── */}
       <Modal
         visible={showMembersModal}
         animationType="slide"
@@ -795,7 +909,9 @@ const GroupChatPage = () => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Group Members</Text>
+              <Text style={styles.modalTitle}>
+                👥 Group Members ({groupMembers.length})
+              </Text>
               <TouchableOpacity onPress={() => setShowMembersModal(false)}>
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
@@ -1095,7 +1211,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
   },
-  // ─── MODAL STYLES ──────────────────────────────
+  // ─── MEMBERS MODAL ──────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1132,12 +1248,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  memberAvatarContainer: {
+    marginRight: 12,
   },
   memberAvatar: {
     fontSize: 40,
-    marginRight: 12,
+  },
+  memberAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   memberInfo: {
     flex: 1,
@@ -1150,6 +1277,17 @@ const styles = StyleSheet.create({
   memberStatus: {
     fontSize: 12,
     color: '#666',
+    marginTop: 2,
+  },
+  memberChatButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  memberChatButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
   },
   emptyContainer: {
     flex: 1,
