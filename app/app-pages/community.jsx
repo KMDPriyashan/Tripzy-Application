@@ -309,8 +309,6 @@ const CommunityPage = () => {
         return true;
       });
       
-      const filteredUsers = uniqueUsers.filter(user => user.id !== currentUser?.id);
-      
       const namesMap = {};
       const avatarsMap = {};
       uniqueUsers.forEach(user => {
@@ -334,10 +332,10 @@ const CommunityPage = () => {
       setUserNamesMap(namesMap);
       setUserAvatarsMap(avatarsMap);
       setAllUsersList(uniqueUsers);
-      setUsers(filteredUsers);
+      setUsers(uniqueUsers);
       
       console.log('📊 TOTAL UNIQUE USERS:', uniqueUsers.length);
-      console.log('📊 FILTERED USERS (excluding current):', filteredUsers.length);
+      console.log('📊 USERS SHOWN IN FIND TRAVELERS:', uniqueUsers.length);
       
       await AsyncStorage.setItem('all_users', JSON.stringify(uniqueUsers));
       
@@ -349,7 +347,7 @@ const CommunityPage = () => {
         try {
           const parsedUsers = JSON.parse(cachedUsers);
           setAllUsersList(parsedUsers);
-          setUsers(parsedUsers.filter(u => u.id !== currentUser?.id));
+          setUsers(parsedUsers);
           console.log('✅ Loaded users from cache (fallback):', parsedUsers.length);
         } catch (e) {
           console.error('Error parsing cached users:', e);
@@ -367,7 +365,7 @@ const CommunityPage = () => {
             });
           }
           setAllUsersList(fallbackUsers);
-          setUsers(fallbackUsers.filter(u => u.id !== currentUser?.id));
+          setUsers(fallbackUsers);
         }
       } else {
         const fallbackUsers = [
@@ -385,7 +383,7 @@ const CommunityPage = () => {
           });
         }
         setAllUsersList(fallbackUsers);
-        setUsers(fallbackUsers.filter(u => u.id !== currentUser?.id));
+        setUsers(fallbackUsers);
       }
     } finally {
       setLoadingUsers(false);
