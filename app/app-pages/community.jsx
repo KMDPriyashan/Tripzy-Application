@@ -6,12 +6,14 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Animated,
+  Dimensions,
   FlatList,
   Image,
   Modal,
   RefreshControl,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -20,6 +22,8 @@ import {
 } from 'react-native';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { supabase } from '../../lib/supabase';
+
+const { width, height } = Dimensions.get('window');
 
 const CommunityPage = () => {
   const router = useRouter();
@@ -39,19 +43,42 @@ const CommunityPage = () => {
   const [userAvatarsMap, setUserAvatarsMap] = useState({});
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [showOnlineUsers, setShowOnlineUsers] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   
   // Group Profile Picture States
   const [groupAvatar, setGroupAvatar] = useState('👥');
   const [groupAvatarUri, setGroupAvatarUri] = useState(null);
   
-  // User Profile Picture States (Local only - NOT connected to Travel Feed)
+  // User Profile Picture States
   const [userProfileImage, setUserProfileImage] = useState(null);
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false);
+
+  // Animation values
+  const fadeAnim = useState(new Animated.Value(0))[0];
+  const scaleAnim = useState(new Animated.Value(0.95))[0];
 
   // Load user data immediately on component mount
   useEffect(() => {
     initializeUser();
+    animateEntrance();
   }, []);
+
+  const animateEntrance = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      })
+    ]).start();
+  };
 
   const initializeUser = async () => {
     await loadCurrentUser();
@@ -59,20 +86,17 @@ const CommunityPage = () => {
     setIsInitialized(true);
   };
 
-  // ─── LOAD USER PROFILE IMAGE (Local only) ──────
   const loadUserProfileImage = async () => {
     try {
       const savedImage = await AsyncStorage.getItem('userProfileImage');
       if (savedImage) {
         setUserProfileImage(savedImage);
-        console.log('✅ Loaded user profile image from storage (local only)');
       }
     } catch (error) {
       console.error('Error loading profile image:', error);
     }
   };
 
-  // Load all data when user is loaded and when page focuses
   useFocusEffect(
     useCallback(() => {
       if (isInitialized && currentUser?.id) {
@@ -83,7 +107,6 @@ const CommunityPage = () => {
 
   const loadAllData = async () => {
     if (!currentUser?.id) return;
-    console.log('Loading all data for user:', currentUser.id);
     await Promise.all([
       loadChatsFromStorage(),
       loadGroupsFromStorage(),
@@ -96,7 +119,6 @@ const CommunityPage = () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       
       if (user && !error) {
-        // ✅ display_name එකට මනාපය දෙන්න
         const userName = user.user_metadata?.display_name || 
                          user.user_metadata?.name || 
                          user.user_metadata?.full_name || 
@@ -109,22 +131,19 @@ const CommunityPage = () => {
         setCurrentUser({ 
           id: user.id, 
           name: userName,
-          display_name: userName, // ✅ display_name එකත් set කරන්න
+          display_name: userName,
           avatar: avatar,
           email: user.email
         });
-        console.log('✅ Current user loaded from Supabase:', userName);
       } else {
         const localUser = await AsyncStorage.getItem('currentUser');
         if (localUser) {
           const parsedUser = JSON.parse(localUser);
           setCurrentUser(parsedUser);
-          console.log('✅ Current user loaded from storage:', parsedUser.name);
         } else {
           const demoUser = { id: 'demo_user_1', name: 'Demo User', display_name: 'Demo User', avatar: '👤' };
           setCurrentUser(demoUser);
           await AsyncStorage.setItem('currentUser', JSON.stringify(demoUser));
-          console.log('✅ Demo user created');
         }
       }
     } catch (error) {
@@ -148,10 +167,8 @@ const CommunityPage = () => {
           unread: 0
         }));
         setChats(cleanedConversations);
-        console.log('✅ Loaded chats from storage:', cleanedConversations.length);
       } else {
         setChats([]);
-        console.log('No chats found in storage');
       }
     } catch (error) {
       console.error('Error loading chats:', error);
@@ -169,10 +186,8 @@ const CommunityPage = () => {
       if (savedGroups) {
         const parsedGroups = JSON.parse(savedGroups);
         setGroups(parsedGroups);
-        console.log('✅ Loaded groups from storage:', parsedGroups.length);
       } else {
         setGroups([]);
-        console.log('No groups found in storage');
       }
     } catch (error) {
       console.error('Error loading groups:', error);
@@ -189,7 +204,6 @@ const CommunityPage = () => {
         unread: 0
       }));
       await AsyncStorage.setItem(conversationsKey, JSON.stringify(cleanedConversations));
-      console.log('💾 Conversations saved to storage:', cleanedConversations.length);
     } catch (error) {
       console.error('Error saving conversations:', error);
     }
@@ -200,7 +214,6 @@ const CommunityPage = () => {
       if (!currentUser?.id) return;
       const groupsKey = `groups_${currentUser.id}`;
       await AsyncStorage.setItem(groupsKey, JSON.stringify(groupsToSave));
-      console.log('💾 Groups saved to storage:', groupsToSave.length);
     } catch (error) {
       console.error('Error saving groups:', error);
     }
@@ -217,7 +230,6 @@ const CommunityPage = () => {
         try {
           const parsedUsers = JSON.parse(cachedUsers);
           if (parsedUsers.length > 0) {
-            console.log('✅ Loaded users from cache:', parsedUsers.length);
             allUsers = parsedUsers;
           }
         } catch (e) {
@@ -231,7 +243,6 @@ const CommunityPage = () => {
           .select('*');
         
         if (!profilesError && profilesData && profilesData.length > 0) {
-          console.log('✅ Loaded from profiles:', profilesData.length);
           allUsers = profilesData.map(p => ({
             id: p.id || p.user_id,
             name: p.display_name || p.name || p.full_name || p.username || 'Traveler',
@@ -250,7 +261,6 @@ const CommunityPage = () => {
           .select('*');
         
         if (!usersError && usersData && usersData.length > 0) {
-          console.log('✅ Loaded from users:', usersData.length);
           allUsers = usersData.map(u => ({
             ...u,
             display_name: u.display_name || u.name || u.full_name || u.email?.split('@')[0] || 'Traveler'
@@ -269,12 +279,10 @@ const CommunityPage = () => {
             avatar: currentUser.avatar || '👤',
             location: 'Traveler'
           });
-          console.log('✅ Added current user to list');
         }
       }
       
       if (allUsers.length === 0) {
-        console.log('No users found, using demo users');
         const demoUsers = [
           { id: 'demo_1', name: 'Sarah Johnson', display_name: 'Sarah Johnson', email: 'sarah@example.com', avatar: '👩', location: 'Bali' },
           { id: 'demo_2', name: 'Mike Chen', display_name: 'Mike Chen', email: 'mike@example.com', avatar: '👨', location: 'Tokyo' },
@@ -298,7 +306,6 @@ const CommunityPage = () => {
         }
         
         allUsers = demoUsers;
-        console.log('✅ Created demo users:', allUsers.length);
       }
       
       const seen = new Set();
@@ -308,6 +315,8 @@ const CommunityPage = () => {
         seen.add(key);
         return true;
       });
+      
+      const filteredUsers = uniqueUsers.filter(user => user.id !== currentUser?.id);
       
       const namesMap = {};
       const avatarsMap = {};
@@ -324,7 +333,6 @@ const CommunityPage = () => {
         avatarsMap[user.id] = user.avatar || user.user_metadata?.avatar || '👤';
       });
       
-      // Update current user avatar in map if profile image exists (LOCAL ONLY)
       if (currentUser?.id && userProfileImage) {
         avatarsMap[currentUser.id] = userProfileImage;
       }
@@ -332,10 +340,7 @@ const CommunityPage = () => {
       setUserNamesMap(namesMap);
       setUserAvatarsMap(avatarsMap);
       setAllUsersList(uniqueUsers);
-      setUsers(uniqueUsers);
-      
-      console.log('📊 TOTAL UNIQUE USERS:', uniqueUsers.length);
-      console.log('📊 USERS SHOWN IN FIND TRAVELERS:', uniqueUsers.length);
+      setUsers(filteredUsers);
       
       await AsyncStorage.setItem('all_users', JSON.stringify(uniqueUsers));
       
@@ -347,8 +352,7 @@ const CommunityPage = () => {
         try {
           const parsedUsers = JSON.parse(cachedUsers);
           setAllUsersList(parsedUsers);
-          setUsers(parsedUsers);
-          console.log('✅ Loaded users from cache (fallback):', parsedUsers.length);
+          setUsers(parsedUsers.filter(u => u.id !== currentUser?.id));
         } catch (e) {
           console.error('Error parsing cached users:', e);
           const fallbackUsers = [
@@ -365,7 +369,7 @@ const CommunityPage = () => {
             });
           }
           setAllUsersList(fallbackUsers);
-          setUsers(fallbackUsers);
+          setUsers(fallbackUsers.filter(u => u.id !== currentUser?.id));
         }
       } else {
         const fallbackUsers = [
@@ -383,7 +387,7 @@ const CommunityPage = () => {
           });
         }
         setAllUsersList(fallbackUsers);
-        setUsers(fallbackUsers);
+        setUsers(fallbackUsers.filter(u => u.id !== currentUser?.id));
       }
     } finally {
       setLoadingUsers(false);
@@ -397,13 +401,12 @@ const CommunityPage = () => {
     setRefreshing(false);
   };
 
-  // ─── PICK USER PROFILE IMAGE (LOCAL ONLY) ─────
   const pickUserProfileImage = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload profile image.');
+        Alert.alert('Permission Required', 'Please grant camera roll permissions.');
         return;
       }
 
@@ -424,17 +427,14 @@ const CommunityPage = () => {
 
         setIsUploadingProfileImage(true);
         
-        // Save to AsyncStorage (LOCAL ONLY)
         await AsyncStorage.setItem('userProfileImage', asset.uri);
         setUserProfileImage(asset.uri);
         
-        // Update current user's avatar (LOCAL ONLY - NOT connected to Travel Feed)
         if (currentUser) {
           const updatedUser = { ...currentUser, avatar: asset.uri };
           setCurrentUser(updatedUser);
           await AsyncStorage.setItem('currentUser', JSON.stringify(updatedUser));
           
-          // Update in allUsersList
           const updatedUsers = allUsersList.map(u => {
             if (u.id === currentUser.id) {
               return { ...u, avatar: asset.uri };
@@ -444,11 +444,9 @@ const CommunityPage = () => {
           setAllUsersList(updatedUsers);
           await AsyncStorage.setItem('all_users', JSON.stringify(updatedUsers));
           
-          // Update userAvatarsMap
           const updatedAvatarsMap = { ...userAvatarsMap, [currentUser.id]: asset.uri };
           setUserAvatarsMap(updatedAvatarsMap);
           
-          // Update users list
           const updatedFilteredUsers = users.map(u => {
             if (u.id === currentUser.id) {
               return { ...u, avatar: asset.uri };
@@ -459,17 +457,15 @@ const CommunityPage = () => {
         }
         
         setIsUploadingProfileImage(false);
-        Alert.alert('Success', 'Profile picture updated successfully (Community only)!');
-        console.log('✅ User profile image saved locally (NOT connected to Travel Feed):', asset.uri);
+        Alert.alert('Success', 'Profile picture updated successfully!');
       }
     } catch (error) {
       console.error('Error picking profile image:', error);
       setIsUploadingProfileImage(false);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert('Error', 'Failed to pick image.');
     }
   };
 
-  // ─── DELETE CHAT ──────────────────────────────────
   const deleteChat = async (chatId, userId) => {
     Alert.alert(
       'Delete Chat',
@@ -481,15 +477,12 @@ const CommunityPage = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Remove from chats list
               const updatedChats = chats.filter(chat => chat.id !== chatId);
               setChats(updatedChats);
               
-              // Remove from storage
               const conversationsKey = `conversations_${currentUser.id}`;
               await AsyncStorage.setItem(conversationsKey, JSON.stringify(updatedChats));
               
-              // Remove messages
               const messagesKey = `messages_${currentUser.id}_${userId}`;
               await AsyncStorage.removeItem(messagesKey);
               
@@ -504,7 +497,6 @@ const CommunityPage = () => {
     );
   };
 
-  // ─── DELETE GROUP ─────────────────────────────────
   const deleteGroup = async (groupId) => {
     Alert.alert(
       'Delete Group',
@@ -516,19 +508,15 @@ const CommunityPage = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Remove from groups list
               const updatedGroups = groups.filter(group => group.id !== groupId);
               setGroups(updatedGroups);
               
-              // Remove from storage
               const groupsKey = `groups_${currentUser.id}`;
               await AsyncStorage.setItem(groupsKey, JSON.stringify(updatedGroups));
               
-              // Remove messages
               const messagesKey = `group_messages_${groupId}`;
               await AsyncStorage.removeItem(messagesKey);
               
-              // Remove group members
               const membersKey = `group_members_${groupId}`;
               await AsyncStorage.removeItem(membersKey);
               
@@ -543,7 +531,6 @@ const CommunityPage = () => {
     );
   };
 
-  // ─── RENDER RIGHT ACTIONS (Swipe Delete) ─────────
   const renderRightActions = (progress, dragX, onDelete) => {
     const trans = dragX.interpolate({
       inputRange: [-100, 0],
@@ -589,7 +576,6 @@ const CommunityPage = () => {
 
   const handleOpenGroupChat = (group) => {
     try {
-      // Pass members data to group chat
       const gid = encodeURIComponent(String(group.id));
       const gname = encodeURIComponent(String(group.name || ''));
       const gav = encodeURIComponent(String(group.avatar || ''));
@@ -598,7 +584,7 @@ const CommunityPage = () => {
       
       router.push(`/app-pages/group-chat?groupId=${gid}&groupName=${gname}&avatar=${gav}&members=${encodedMembers}`);
     } catch (e) {
-      console.error('Error navigating to group chat (encoding failed):', e);
+      console.error('Error navigating to group chat:', e);
       router.push({
         pathname: '/app-pages/group-chat',
         params: {
@@ -630,13 +616,12 @@ const CommunityPage = () => {
     }
   };
 
-  // ─── PICK GROUP AVATAR ──────────────────────────
   const pickGroupAvatar = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload group image.');
+        Alert.alert('Permission Required', 'Please grant camera roll permissions.');
         return;
       }
 
@@ -657,21 +642,18 @@ const CommunityPage = () => {
 
         setGroupAvatarUri(asset.uri);
         setGroupAvatar(asset.uri);
-        console.log('✅ Group avatar selected (local only):', asset.uri);
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
+      Alert.alert('Error', 'Failed to pick image.');
     }
   };
 
-  // ─── REMOVE GROUP AVATAR ────────────────────────
   const removeGroupAvatar = () => {
     setGroupAvatar('👥');
     setGroupAvatarUri(null);
   };
 
-  // ─── CREATE GROUP ────────────────────────────────
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       Alert.alert('Error', 'Please enter a group name');
@@ -689,7 +671,6 @@ const CommunityPage = () => {
     }
 
     setIsCreatingGroup(true);
-    console.log('Creating group:', newGroupName);
     
     try {
       const finalAvatar = groupAvatarUri || '👥';
@@ -701,11 +682,11 @@ const CommunityPage = () => {
         id: groupId,
         name: newGroupName.trim(),
         avatar: finalAvatar,
-        lastMessage: 'Group created',
+        lastMessage: 'Group created 🎉',
         timestamp: new Date().toLocaleTimeString(),
         unread: 0,
         memberCount: 1 + selectedUsers.length,
-        members: allMembers, // ✅ Store members for group chat
+        members: allMembers,
         createdBy: currentUser.id,
         createdAt: new Date().toISOString()
       };
@@ -714,7 +695,6 @@ const CommunityPage = () => {
       setGroups(updatedGroups);
       await saveGroupsToStorage(updatedGroups);
       
-      // ✅ Save group members separately for easy access
       await AsyncStorage.setItem(`group_members_${groupId}`, JSON.stringify(allMembers));
       
       try {
@@ -728,20 +708,16 @@ const CommunityPage = () => {
             created_at: new Date().toISOString()
           }]);
         
-        if (error) {
-          console.log('Supabase group save error:', error.message);
-        } else {
-          console.log('✅ Group saved to Supabase');
-        }
-        
-        for (const memberId of allMembers) {
-          await supabase
-            .from('group_members')
-            .insert([{
-              group_id: groupId,
-              user_id: memberId,
-              joined_at: new Date().toISOString()
-            }]);
+        if (!error) {
+          for (const memberId of allMembers) {
+            await supabase
+              .from('group_members')
+              .insert([{
+                group_id: groupId,
+                user_id: memberId,
+                joined_at: new Date().toISOString()
+              }]);
+          }
         }
       } catch (supabaseError) {
         console.log('Supabase save skipped:', supabaseError);
@@ -753,18 +729,16 @@ const CommunityPage = () => {
       setGroupAvatar('👥');
       setGroupAvatarUri(null);
       
-      Alert.alert('Success', `Group "${newGroupName.trim()}" created with ${allMembers.length} members!`);
+      Alert.alert('Success 🎉', `Group "${newGroupName.trim()}" created with ${allMembers.length} members!`);
     } catch (error) {
       console.error('Error creating group:', error);
-      Alert.alert('Error', 'Failed to create group. Please try again.');
+      Alert.alert('Error', 'Failed to create group.');
     } finally {
       setIsCreatingGroup(false);
     }
   };
 
-  // ─── RENDER CHAT ITEM WITH SWIPE DELETE ──────────
   const renderChatItem = ({ item }) => {
-    // ✅ Get actual user name from map - never show "User"
     const displayName = userNamesMap[item.userId] || item.userName || 'Traveler';
     const avatar = userAvatarsMap[item.userId] || item.avatar || '👤';
     
@@ -776,30 +750,31 @@ const CommunityPage = () => {
         overshootRight={false}
         key={item.id}
       >
-        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)}>
+        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenDirectChat(item)} activeOpacity={0.7}>
           <View style={styles.avatarContainer}>
             {avatar && avatar.startsWith('file://') ? (
               <Image source={{ uri: avatar }} style={styles.avatarImage} />
             ) : avatar && avatar.startsWith('http') ? (
               <Image source={{ uri: avatar }} style={styles.avatarImage} />
             ) : (
-              <Text style={styles.avatarText}>{avatar || '👤'}</Text>
+              <View style={styles.avatarEmojiContainer}>
+                <Text style={styles.avatarText}>{avatar || '👤'}</Text>
+              </View>
             )}
             {item.isOnline && <View style={styles.onlineDot} />}
           </View>
           <View style={styles.chatInfo}>
-            <Text style={styles.chatName}>{displayName}</Text>
+            <View style={styles.chatHeader}>
+              <Text style={styles.chatName}>{displayName}</Text>
+              <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
+            </View>
             <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'No messages yet'}</Text>
-          </View>
-          <View style={styles.chatMeta}>
-            <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
           </View>
         </TouchableOpacity>
       </Swipeable>
     );
   };
 
-  // ─── RENDER GROUP ITEM WITH SWIPE DELETE ──────────
   const renderGroupItem = ({ item }) => {
     const isLocalImage = item.avatar && item.avatar.startsWith('file://');
     const isUrlImage = item.avatar && item.avatar.startsWith('http');
@@ -812,35 +787,37 @@ const CommunityPage = () => {
         overshootRight={false}
         key={item.id}
       >
-        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenGroupChat(item)}>
+        <TouchableOpacity style={styles.chatItem} onPress={() => handleOpenGroupChat(item)} activeOpacity={0.7}>
           <View style={styles.avatarContainer}>
             {isLocalImage || isUrlImage ? (
               <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
             ) : (
-              <Text style={styles.avatarText}>{item.avatar || '👥'}</Text>
+              <View style={styles.avatarEmojiContainer}>
+                <Text style={styles.avatarText}>{item.avatar || '👥'}</Text>
+              </View>
             )}
           </View>
           <View style={styles.chatInfo}>
-            <Text style={styles.chatName}>{item.name}</Text>
+            <View style={styles.chatHeader}>
+              <Text style={styles.chatName}>{item.name}</Text>
+              <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
+            </View>
             <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage || 'No messages yet'}</Text>
-            <Text style={styles.memberCount}>{item.memberCount || 0} members</Text>
-          </View>
-          <View style={styles.chatMeta}>
-            <Text style={styles.timestamp}>{item.timestamp || ''}</Text>
-            {item.unread > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{item.unread}</Text>
-              </View>
-            )}
+            <View style={styles.groupMeta}>
+              <Text style={styles.memberCount}>👥 {item.memberCount || 0} members</Text>
+              {item.unread > 0 && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadText}>{item.unread}</Text>
+                </View>
+              )}
+            </View>
           </View>
         </TouchableOpacity>
       </Swipeable>
     );
   };
 
-  // ─── RENDER USER ITEM ────────────────────────────
   const renderUserItem = ({ item }) => {
-    // ✅ Get actual display name - prioritize display_name, never show "User"
     const displayName = item.display_name || 
                         item.name || 
                         item.full_name || 
@@ -853,28 +830,33 @@ const CommunityPage = () => {
     const avatar = item.avatar || item.user_metadata?.avatar || '👤';
     
     return (
-      <TouchableOpacity style={styles.userItem} onPress={() => handleStartChat(item)}>
+      <TouchableOpacity style={styles.userItem} onPress={() => handleStartChat(item)} activeOpacity={0.7}>
         <View style={styles.userAvatarContainer}>
           {avatar && avatar.startsWith('file://') ? (
             <Image source={{ uri: avatar }} style={styles.userAvatarImage} />
           ) : avatar && avatar.startsWith('http') ? (
             <Image source={{ uri: avatar }} style={styles.userAvatarImage} />
           ) : (
-            <Text style={styles.userAvatarText}>{avatar || '👤'}</Text>
+            <View style={styles.userAvatarEmojiContainer}>
+              <Text style={styles.userAvatarText}>{avatar || '👤'}</Text>
+            </View>
           )}
+          <View style={styles.userOnlineDot} />
         </View>
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{displayName}</Text>
-          <Text style={styles.userLocation}>{item.location || 'Traveler'}</Text>
+          <View style={styles.userLocationContainer}>
+            <Text style={styles.userLocationPin}>📍</Text>
+            <Text style={styles.userLocation}>{item.location || 'Traveler'}</Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.messageButton} onPress={() => handleStartChat(item)}>
-          <Text style={styles.messageButtonText}>Message</Text>
+          <Text style={styles.messageButtonText}>💬</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
-  // ─── FILTERED USERS ──────────────────────────────
   const filteredUsers = users.filter(user => {
     const displayName = user.display_name || 
                         user.name || 
@@ -887,13 +869,11 @@ const CommunityPage = () => {
     return displayName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // ─── FILTERED CHATS ──────────────────────────────
   const filteredChats = chats.filter(chat => {
     const displayName = userNamesMap[chat.userId] || chat.userName || 'Traveler';
     return displayName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // ─── FILTERED GROUPS ─────────────────────────────
   const filteredGroups = groups.filter(group => 
     group.name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -902,11 +882,21 @@ const CommunityPage = () => {
     user.id !== currentUser?.id && !selectedUsers.includes(user.id)
   );
 
+  const getTabCount = (tab) => {
+    switch(tab) {
+      case 'chats': return chats.length;
+      case 'groups': return groups.length;
+      case 'users': return users.length;
+      default: return 0;
+    }
+  };
+
   if (!isInitialized) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text>Loading...</Text>
+          <Text style={styles.loadingText}>🌍</Text>
+          <Text style={styles.loadingSubText}>Loading Community...</Text>
         </View>
       </SafeAreaView>
     );
@@ -915,118 +905,160 @@ const CommunityPage = () => {
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Travel Community</Text>
-          <Text style={styles.headerSubtitle}>🔖 Where every journey begins with connection finding your tribe and sharing the adventure together. 🔖</Text>
-        </View>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        
+        {/* Header */}
+        <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.headerTitle}>Travel Community</Text>
+              <Text style={styles.headerSubtitle}>🌍 Connect with fellow travelers</Text>
+            </View>
+            {currentUser && (
+              <TouchableOpacity style={styles.headerProfileButton} onPress={pickUserProfileImage}>
+                {userProfileImage ? (
+                  <Image source={{ uri: userProfileImage }} style={styles.headerProfileImage} />
+                ) : (
+                  <View style={styles.headerProfilePlaceholder}>
+                    <Text style={styles.headerProfileEmoji}>👤</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
 
-        <View style={styles.searchContainer}>
+        {/* Search Bar */}
+        <Animated.View style={[styles.searchContainer, isSearchFocused && styles.searchContainerFocused]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search any things..."
+            placeholder="Search anything..."
             placeholderTextColor="#8E8E93"
             value={searchQuery}
             onChangeText={setSearchQuery}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
           />
-        </View>
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Text style={styles.searchClear}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </Animated.View>
 
+        {/* Tabs */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'chats' && styles.activeTab]} 
-            onPress={() => setActiveTab('chats')}
-          >
-            <Text style={[styles.tabText, activeTab === 'chats' && styles.activeTabText]}>
-              Inbox ({chats.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'groups' && styles.activeTab]} 
-            onPress={() => setActiveTab('groups')}
-          >
-            <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>
-              Group Chat ({groups.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'users' && styles.activeTab]} 
-            onPress={() => setActiveTab('users')}
-          >
-            <Text style={[styles.tabText, activeTab === 'users' && styles.activeTabText]}>
-              Find Travelers ({users.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {loadingUsers ? (
-          <View style={styles.loadingUsersContainer}>
-            <Text>Loading users...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={
-              activeTab === 'chats' ? filteredChats :
-              activeTab === 'groups' ? filteredGroups : filteredUsers
-            }
-            keyExtractor={(item) => item.id || String(Math.random())}
-            renderItem={
-              activeTab === 'chats' ? renderChatItem :
-              activeTab === 'groups' ? renderGroupItem : renderUserItem
-            }
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            ListHeaderComponent={
-              // ─── FIND TRAVELERS HEADER WITH EDIT BUTTON ───
-              activeTab === 'users' && currentUser ? (
-                <View style={styles.userProfileHeader}>
-                  <View style={styles.userProfileHeaderLeft}>
-                    {userProfileImage ? (
-                      <Image source={{ uri: userProfileImage }} style={styles.userProfileHeaderImage} />
-                    ) : (
-                      <View style={styles.userProfileHeaderPlaceholder}>
-                        <Text style={styles.userProfileHeaderEmoji}>👤</Text>
-                      </View>
-                    )}
-                    <View>
-                      {/* ✅ Current User ගේ ඇත්ත නම පෙන්වයි */}
-                      <Text style={styles.userProfileHeaderName}>
-                        {currentUser.display_name || currentUser.name || 'User'}
-                      </Text>
-                      <Text style={styles.userProfileHeaderSub}>
-                        @{currentUser.display_name || currentUser.name || 'user'}
-                      </Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity 
-                    style={styles.userProfileHeaderEditButton} 
-                    onPress={pickUserProfileImage}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.userProfileHeaderEditText}>✏️</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {activeTab === 'chats' ? 'No conversations yet. Start a chat from "Find Travelers" tab!' : 
-                   activeTab === 'groups' ? 'No groups yet. Create one!' : 
-                   'No users found. Pull down to refresh or sign up more users!'}
+          {['chats', 'groups', 'users'].map((tab) => (
+            <TouchableOpacity 
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.activeTab]} 
+              onPress={() => setActiveTab(tab)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                {tab === 'chats' && '💬 '}
+                {tab === 'groups' && '👥 '}
+                {tab === 'users' && '👤 '}
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </Text>
+              <View style={[styles.tabBadge, activeTab === tab && styles.activeTabBadge]}>
+                <Text style={[styles.tabBadgeText, activeTab === tab && styles.activeTabBadgeText]}>
+                  {getTabCount(tab)}
                 </Text>
               </View>
-            }
-          />
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Content */}
+        {loadingUsers ? (
+          <View style={styles.loadingUsersContainer}>
+            <Text style={styles.loadingEmoji}>✈️</Text>
+            <Text style={styles.loadingSubText}>Finding travelers...</Text>
+          </View>
+        ) : (
+          <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+            <FlatList
+              data={
+                activeTab === 'chats' ? filteredChats :
+                activeTab === 'groups' ? filteredGroups : filteredUsers
+              }
+              keyExtractor={(item) => item.id || String(Math.random())}
+              renderItem={
+                activeTab === 'chats' ? renderChatItem :
+                activeTab === 'groups' ? renderGroupItem : renderUserItem
+              }
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl 
+                  refreshing={refreshing} 
+                  onRefresh={onRefresh}
+                  colors={['#007AFF']}
+                  tintColor="#007AFF"
+                />
+              }
+              ListHeaderComponent={
+                activeTab === 'users' && currentUser ? (
+                  <Animated.View style={[styles.userProfileHeader, { opacity: fadeAnim }]}>
+                    <View style={styles.userProfileHeaderLeft}>
+                      {userProfileImage ? (
+                        <Image source={{ uri: userProfileImage }} style={styles.userProfileHeaderImage} />
+                      ) : (
+                        <View style={styles.userProfileHeaderPlaceholder}>
+                          <Text style={styles.userProfileHeaderEmoji}>👤</Text>
+                        </View>
+                      )}
+                      <View>
+                        <Text style={styles.userProfileHeaderName}>
+                          {currentUser.display_name || currentUser.name || 'User'}
+                        </Text>
+                        <Text style={styles.userProfileHeaderSub}>
+                          ✈️ {currentUser.display_name || currentUser.name || 'user'}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.userProfileHeaderEditButton} 
+                      onPress={pickUserProfileImage}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.userProfileHeaderEditText}>📷</Text>
+                    </TouchableOpacity>
+                  </Animated.View>
+                ) : null
+              }
+              ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyEmoji}>
+                    {activeTab === 'chats' ? '💬' : 
+                     activeTab === 'groups' ? '👥' : 
+                     '🌍'}
+                  </Text>
+                  <Text style={styles.emptyText}>
+                    {activeTab === 'chats' ? 'No conversations yet' : 
+                     activeTab === 'groups' ? 'No groups yet' : 
+                     'No travelers found'}
+                  </Text>
+                  <Text style={styles.emptySubText}>
+                    {activeTab === 'chats' ? 'Start a chat from "Find Travelers" tab!' : 
+                     activeTab === 'groups' ? 'Create a group and invite friends!' : 
+                     'Pull down to refresh or sign up more users!'}
+                  </Text>
+                </View>
+              }
+            />
+          </Animated.View>
         )}
 
+        {/* FAB */}
         {activeTab === 'groups' && (
-          <TouchableOpacity style={styles.fab} onPress={() => setShowCreateGroup(true)}>
+          <TouchableOpacity style={styles.fab} onPress={() => setShowCreateGroup(true)} activeOpacity={0.8}>
             <Text style={styles.fabText}>+</Text>
           </TouchableOpacity>
         )}
 
+        {/* Create Group Modal */}
         <Modal
           visible={showCreateGroup}
           animationType="slide"
@@ -1042,7 +1074,7 @@ const CommunityPage = () => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Create New Group</Text>
+                <Text style={styles.modalTitle}>👥 Create New Group</Text>
                 <TouchableOpacity onPress={() => {
                   setShowCreateGroup(false);
                   setSelectedUsers([]);
@@ -1075,6 +1107,7 @@ const CommunityPage = () => {
               <TextInput
                 style={styles.modalInput}
                 placeholder="Enter your group name"
+                placeholderTextColor="#999"
                 value={newGroupName}
                 onChangeText={setNewGroupName}
               />
@@ -1083,7 +1116,6 @@ const CommunityPage = () => {
               <ScrollView style={styles.userSelectList} showsVerticalScrollIndicator={false}>
                 {availableUsersForGroup.length > 0 ? (
                   availableUsersForGroup.map(user => {
-                    // ✅ Get actual display name
                     const displayName = user.display_name || 
                                         user.name || 
                                         user.full_name || 
@@ -1103,11 +1135,12 @@ const CommunityPage = () => {
                             setSelectedUsers([...selectedUsers, user.id]);
                           }
                         }}
+                        activeOpacity={0.7}
                       >
                         <Text style={styles.userSelectAvatar}>{user.avatar || '👤'}</Text>
                         <Text style={styles.userSelectName}>{displayName}</Text>
                         <Text style={[styles.userSelectAdd, isSelected && styles.userSelectAdded]}>
-                          {isSelected ? '✓ Added' : '+ Add'}
+                          {isSelected ? '✅ Added' : '+ Add'}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1123,7 +1156,6 @@ const CommunityPage = () => {
                   <View style={styles.selectedUsersList}>
                     {selectedUsers.map(userId => {
                       const user = allUsersList.find(u => u.id === userId);
-                      // ✅ Get actual display name
                       const displayName = user?.display_name || 
                                          user?.name || 
                                          user?.full_name || 
@@ -1153,7 +1185,7 @@ const CommunityPage = () => {
                 disabled={!newGroupName.trim() || selectedUsers.length === 0 || isCreatingGroup}
               >
                 <Text style={styles.createGroupButtonText}>
-                  {isCreatingGroup ? 'Creating...' : `Create Group (${selectedUsers.length + 1} members)`}
+                  {isCreatingGroup ? '⏳ Creating...' : `🚀 Create Group (${selectedUsers.length + 1} members)`}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1174,32 +1206,73 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  loadingText: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  loadingSubText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  loadingEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
   loadingUsersContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 40,
   },
+  // ─── HEADER ──────────────────────────────────────
   header: {
     paddingHorizontal: 20,
-    paddingTop: 70,
-    paddingBottom: 15,
+    paddingTop: 12,
+    paddingBottom: 16,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1a1a1a',
-    marginBottom: 4,
-    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 13,
     color: '#666',
-    textAlign: 'center',
+    marginTop: 2,
   },
+  headerProfileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  headerProfileImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  headerProfilePlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0f2f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerProfileEmoji: {
+    fontSize: 20,
+  },
+  // ─── SEARCH ─────────────────────────────────────
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1212,6 +1285,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#f0f0f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  searchContainerFocused: {
+    borderColor: '#007AFF',
+    shadowOpacity: 0.1,
   },
   searchIcon: {
     fontSize: 18,
@@ -1222,6 +1304,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
+  searchClear: {
+    fontSize: 16,
+    color: '#999',
+    padding: 4,
+  },
+  // ─── TABS ──────────────────────────────────────
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#ffffff',
@@ -1229,29 +1317,56 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 4,
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tab: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   activeTab: {
     backgroundColor: '#007AFF',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#666',
   },
   activeTabText: {
     color: '#ffffff',
   },
+  tabBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f0',
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  activeTabBadge: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  tabBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+  },
+  activeTabBadgeText: {
+    color: '#ffffff',
+  },
   listContent: {
     paddingHorizontal: 20,
     paddingBottom: 100,
   },
-  // ─── CHAT ITEM STYLES ────────────────────────────
+  // ─── CHAT ITEM ──────────────────────────────────
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1260,7 +1375,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
@@ -1269,13 +1384,21 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 16,
   },
+  avatarEmojiContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f0f2f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   avatarText: {
-    fontSize: 44,
+    fontSize: 28,
   },
   avatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
   onlineDot: {
     position: 'absolute',
@@ -1291,28 +1414,33 @@ const styles = StyleSheet.create({
   chatInfo: {
     flex: 1,
   },
+  chatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   chatName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginBottom: 4,
   },
   lastMessage: {
     fontSize: 13,
     color: '#666',
   },
-  memberCount: {
-    fontSize: 11,
-    color: '#999',
-    marginTop: 2,
-  },
-  chatMeta: {
-    alignItems: 'flex-end',
-  },
   timestamp: {
     fontSize: 11,
     color: '#999',
-    marginBottom: 6,
+  },
+  groupMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  memberCount: {
+    fontSize: 11,
+    color: '#999',
   },
   unreadBadge: {
     backgroundColor: '#007AFF',
@@ -1322,6 +1450,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 6,
+    marginLeft: 8,
   },
   unreadText: {
     color: '#ffffff',
@@ -1348,7 +1477,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginTop: 2,
   },
-  // ─── USER PROFILE HEADER STYLES ──────────────────
+  // ─── USER PROFILE HEADER ──────────────────────
   userProfileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1359,7 +1488,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -1417,7 +1546,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#ffffff',
   },
-  // ─── USER ITEM STYLES ────────────────────────────
+  // ─── USER ITEM ──────────────────────────────────
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1425,32 +1554,42 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   userAvatarContainer: {
     position: 'relative',
     marginRight: 16,
   },
+  userAvatarEmojiContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#f0f2f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   userAvatarText: {
-    fontSize: 44,
+    fontSize: 28,
   },
   userAvatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
-  proBadge: {
+  userOnlineDot: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#FF3B30',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  proBadgeText: {
-    fontSize: 8,
-    color: '#ffffff',
-    fontWeight: '700',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#4CD964',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   userInfo: {
     flex: 1,
@@ -1461,55 +1600,78 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     marginBottom: 2,
   },
+  userLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userLocationPin: {
+    fontSize: 12,
+    marginRight: 4,
+  },
   userLocation: {
     fontSize: 12,
     color: '#666',
   },
   messageButton: {
     backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    width: 40,
+    height: 40,
     borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
   messageButtonText: {
+    fontSize: 18,
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '600',
   },
-  // ─── EMPTY STATE ──────────────────────────────────
+  // ─── EMPTY STATE ──────────────────────────────
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 60,
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
+  emptyEmoji: {
+    fontSize: 48,
+    marginBottom: 12,
   },
-  // ─── FAB BUTTON ──────────────────────────────────
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#999',
+    marginBottom: 4,
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#bbb',
+  },
+  // ─── FAB ──────────────────────────────────────
   fab: {
     position: 'absolute',
-    bottom: 140,
+    bottom: 120,
     right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#007AFF',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 8,
-    elevation: 5,
+    elevation: 6,
   },
   fabText: {
-    fontSize: 28,
+    fontSize: 30,
     color: '#ffffff',
     fontWeight: '600',
   },
-  // ─── MODAL STYLES ──────────────────────────────────
+  // ─── MODAL ─────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1554,8 +1716,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 16,
     backgroundColor: '#f8f9fa',
+    color: '#1a1a1a',
   },
-  // ─── GROUP AVATAR STYLES ──────────────────────────
+  // ─── GROUP AVATAR ─────────────────────────────
   groupAvatarContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1607,7 +1770,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
   },
-  // ─── USER SELECT LIST STYLES ─────────────────────
+  // ─── USER SELECT ──────────────────────────────
   userSelectList: {
     maxHeight: 200,
     borderWidth: 1,
@@ -1652,7 +1815,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#999',
   },
-  // ─── SELECTED USERS ──────────────────────────────
+  // ─── SELECTED USERS ────────────────────────────
   selectedUsersContainer: {
     marginTop: 12,
   },
@@ -1685,7 +1848,7 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     paddingHorizontal: 2,
   },
-  // ─── CREATE GROUP BUTTON ──────────────────────────
+  // ─── CREATE GROUP BUTTON ──────────────────────
   createGroupButton: {
     backgroundColor: '#007AFF',
     borderRadius: 12,
