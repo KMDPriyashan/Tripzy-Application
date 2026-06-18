@@ -26,8 +26,8 @@ const C = {
   whatsappSoft: "#E8FBF0",
 };
 
-const WHATSAPP_NUMBER = "+94 77 123 4567"; // ← update to your real number
-const WHATSAPP_RAW = "94771234567"; // ← digits only (no + or spaces)
+const WHATSAPP_NUMBER = "+94 72 471 9902"; // ← update to your real number
+const WHATSAPP_RAW = "94724719902"; // ← digits only (no + or spaces)
 
 const FAQ_ITEMS = [
   {
