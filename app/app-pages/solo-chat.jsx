@@ -41,13 +41,28 @@ const SoloChatPage = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [userProfileImage, setUserProfileImage] = useState(null);
   const flatListRef = useRef(null);
   const messageSubscriptionRef = useRef(null);
 
   // Load current user first
   useEffect(() => {
     loadCurrentUser();
+    loadUserProfileImage();
   }, []);
+
+  // ─── LOAD USER PROFILE IMAGE ──────────────────
+  const loadUserProfileImage = async () => {
+    try {
+      const savedImage = await AsyncStorage.getItem('userProfileImage');
+      if (savedImage) {
+        setUserProfileImage(savedImage);
+        console.log('✅ Loaded user profile image in solo-chat');
+      }
+    } catch (error) {
+      console.error('Error loading profile image:', error);
+    }
+  };
 
   // Once current user is loaded, load everything else
   useEffect(() => {
@@ -475,15 +490,46 @@ const SoloChatPage = () => {
     Keyboard.dismiss();
   };
 
+  // ─── GET MESSAGE AVATAR ──────────────────────────
+  const getMessageAvatar = (item) => {
+    // If this is current user's message, use profile image if available
+    if (item.senderId === currentUser?.id) {
+      return userProfileImage || '👤';
+    }
+    // If this is other user's message, use their avatar
+    if (item.senderId === otherUser?.id) {
+      const avatar = otherUser?.avatar || avatar || '👤';
+      return avatar;
+    }
+    return '👤';
+  };
+
+  // ─── GET HEADER AVATAR ───────────────────────────
+  const getHeaderAvatar = () => {
+    // If chatting with yourself (rare case), use profile image
+    if (otherUser?.id === currentUser?.id && userProfileImage) {
+      return userProfileImage;
+    }
+    return otherUser?.avatar || avatar || '👤';
+  };
+
+  // ─── RENDER MESSAGE ─────────────────────────────
   const renderMessage = ({ item }) => {
     const isCurrentUser = item.senderId === (currentUser?.id || 'user1');
     const isMedia = item.media && item.mediaType;
+    const avatar = getMessageAvatar(item);
     
     return (
       <View style={[styles.messageRow, isCurrentUser ? styles.currentUserRow : styles.otherUserRow]}>
         {!isCurrentUser && (
           <View style={styles.messageAvatar}>
-            <Text style={styles.messageAvatarText}>{otherUser?.avatar || avatar || '👤'}</Text>
+            {avatar && avatar.startsWith('file://') ? (
+              <Image source={{ uri: avatar }} style={styles.messageAvatarImage} />
+            ) : avatar && avatar.startsWith('http') ? (
+              <Image source={{ uri: avatar }} style={styles.messageAvatarImage} />
+            ) : (
+              <Text style={styles.messageAvatarText}>{avatar || '👤'}</Text>
+            )}
           </View>
         )}
         <View style={[styles.messageBubble, isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble]}>
@@ -536,7 +582,13 @@ const SoloChatPage = () => {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerAvatar}>{otherUser?.avatar || avatar || '👤'}</Text>
+          {getHeaderAvatar() && getHeaderAvatar().startsWith('file://') ? (
+            <Image source={{ uri: getHeaderAvatar() }} style={styles.headerAvatarImage} />
+          ) : getHeaderAvatar() && getHeaderAvatar().startsWith('http') ? (
+            <Image source={{ uri: getHeaderAvatar() }} style={styles.headerAvatarImage} />
+          ) : (
+            <Text style={styles.headerAvatar}>{getHeaderAvatar() || '👤'}</Text>
+          )}
           <View>
             <Text style={styles.headerName}>{otherUser?.name || userName || 'User'}</Text>
             <Text style={styles.headerStatus}>Online</Text>
@@ -704,6 +756,12 @@ const styles = StyleSheet.create({
     fontSize: 36,
     marginRight: 12,
   },
+  headerAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
   headerName: {
     fontSize: 16,
     fontWeight: '600',
@@ -742,6 +800,11 @@ const styles = StyleSheet.create({
   },
   messageAvatarText: {
     fontSize: 32,
+  },
+  messageAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   messageBubble: {
     maxWidth: '75%',
