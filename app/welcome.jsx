@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import {
   Animated,
   Dimensions,
-  Easing,
   Image,
   StatusBar,
   StyleSheet,
@@ -15,17 +14,13 @@ import {
 const { width, height } = Dimensions.get("window");
 
 const C = {
-  bg: "#F9FAFC",
-  primary: "#1A6BFF",
+  bg: "#F9FAFC", // Soft premium white canvas
+  primary: "#1A6BFF", // Rich functional blue
   primarySubtle: "rgba(26, 107, 255, 0.05)",
-  textMain: "#09152E",
-  textMuted: "#6B7C96",
+  textMain: "#09152E", // Midnight slate
+  textMuted: "#6B7C96", // Smooth neutral body text
   cardBg: "#FFFFFF",
   cardBorder: "#EAEFF8",
-  navy: "#0A1F44",
-  blue: "#1877f2",
-  blueSoft: "#EAF0FF",
-  white: "#FFFFFF",
 };
 
 const FEATURES = [
@@ -42,7 +37,6 @@ const Welcome = () => {
   const fadeContent = useRef(new Animated.Value(0)).current;
   const slideHeader = useRef(new Animated.Value(40)).current;
   const imageScale = useRef(new Animated.Value(0.95)).current;
-  const imageFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -65,13 +59,6 @@ const Welcome = () => {
           useNativeDriver: true,
         }),
       ]),
-      Animated.timing(imageFade, {
-        toValue: 1,
-        duration: 700,
-        delay: 300,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
     ]).start();
   }, []);
 
@@ -167,7 +154,7 @@ const Welcome = () => {
             activeOpacity={0.88}
             onPress={() => router.push("/signup")}
           >
-            <Text style={s.buttonPrimaryText}>Get Started — It's Free</Text>
+            <Text style={s.buttonPrimaryText}>User Sign Up</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -197,15 +184,15 @@ const s = StyleSheet.create({
   mainContainer: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: height * 0.05,
+    paddingTop: height * 0.05, // Screen එකේ උස අනුව dynamic padding
     paddingBottom: height * 0.03,
-    justifyContent: "space-between",
+    justifyContent: "space-between", // Elements ටික screen එක පුරා සමානව බෙදී යයි
   },
 
   // Image Layout
   heroVisualWrapper: {
     width: "100%",
-    height: height * 0.28,
+    height: height * 0.28, // Scroll නොවීමට image එක මදක් කුඩා කර ඇත
     position: "relative",
   },
   heroImage: {

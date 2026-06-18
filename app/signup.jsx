@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from "react";
 import {
@@ -13,7 +14,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { supabase } from '../lib/supabase'; // Adjust path as needed
+import { supabase } from '../lib/supabase';
 
 const { width } = Dimensions.get("window");
 
@@ -65,6 +66,7 @@ const SignupPage = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lastAttemptTime, setLastAttemptTime] = useState(0);
 
   const heroFade = useRef(new Animated.Value(0)).current;
   const heroSlide = useRef(new Animated.Value(-20)).current;
@@ -100,6 +102,85 @@ const SignupPage = () => {
     ]).start();
   }, []);
 
+  // ─── SAVE USER TO USERS TABLE ──────────────────
+  const saveUserToUsersTable = async (userId, email, fullName) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .insert([{
+          id: userId,
+          email: email,
+          display_name: fullName,
+          name: fullName,
+          full_name: fullName,
+          avatar: '👤',
+          location: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }]);
+
+      if (error) {
+        console.log('Users table insert error:', error.message);
+        return false;
+      }
+      console.log('✅ User saved to users table with display_name:', fullName);
+      return true;
+    } catch (error) {
+      console.error('Error saving to users table:', error);
+      return false;
+    }
+  };
+
+  // ─── SAVE USER TO PROFILES TABLE ──────────────────
+  const saveUserToProfilesTable = async (userId, email, fullName) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .insert([{
+          user_id: userId,
+          email: email,
+          display_name: fullName,
+          name: fullName,
+          full_name: fullName,
+          avatar: '👤',
+          location: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }]);
+
+      if (error) {
+        console.log('Profiles table insert error:', error.message);
+        return false;
+      }
+      console.log('✅ User saved to profiles table with display_name:', fullName);
+      return true;
+    } catch (error) {
+      console.error('Error saving to profiles table:', error);
+      return false;
+    }
+  };
+
+  // ─── CHECK IF USER EXISTS ──────────────────────
+  const checkIfUserExists = async (email) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, display_name')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (error) {
+        console.log('Check user error:', error);
+        return null;
+      }
+      return data;
+    } catch (error) {
+      console.log('Check user error:', error);
+      return null;
+    }
+  };
+
+  // ─── SIGNUP HANDLER ─────────────────────────────
   const handleSignup = async () => {
     // Basic validation
     if (!fullName.trim() || !email.trim() || !password.trim()) {
@@ -112,33 +193,131 @@ const SignupPage = () => {
       return;
     }
 
+    // Check for rate limiting (5 minutes cooldown)
+    const now = Date.now();
+    const timeSinceLastAttempt = (now - lastAttemptTime) / 1000 / 60; // in minutes
+    
+    if (lastAttemptTime > 0 && timeSinceLastAttempt < 5) {
+      const remainingMinutes = Math.ceil(5 - timeSinceLastAttempt);
+      Alert.alert(
+        'Please Wait',
+        `Too many signup attempts. Please wait ${remainingMinutes} minute(s) before trying again.`
+      );
+      return;
+    }
+
+    setLastAttemptTime(now);
     setLoading(true);
 
     try {
+      // Check if user already exists
+      const existingUser = await checkIfUserExists(email.trim());
+      
+      if (existingUser) {
+        Alert.alert(
+          'Account Exists',
+          'This email is already registered. Please login instead.',
+          [
+            { text: 'Login', onPress: () => router.push('/loginpage') },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        setLoading(false);
+        return;
+      }
+
+      // ─── SIGN UP WITH SUPABASE AUTH ──────────
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: password,
         options: {
           data: {
+            display_name: fullName.trim(),
+            name: fullName.trim(),
             full_name: fullName.trim(),
           }
         }
       });
 
       if (error) {
-        Alert.alert('Signup Error', error.message);
+        // Handle specific errors
+        if (error.message.includes('rate limit')) {
+          Alert.alert(
+            '⏳ Rate Limit Exceeded',
+            'Too many signup attempts. Please wait 5-10 minutes before trying again.\n\n' +
+            'If you already have an account, please login.',
+            [
+              { text: 'Login', onPress: () => router.push('/loginpage') },
+              { text: 'Try Later', style: 'cancel' }
+            ]
+          );
+        } else if (error.message.includes('already registered')) {
+          Alert.alert(
+            'Account Exists',
+            'This email is already registered. Please login.',
+            [
+              { text: 'Login', onPress: () => router.push('/loginpage') },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+        } else if (error.message.includes('User already registered')) {
+          Alert.alert(
+            'Account Exists',
+            'This email is already registered. Please login or reset your password.',
+            [
+              { text: 'Login', onPress: () => router.push('/loginpage') },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+        } else {
+          Alert.alert('Signup Error', error.message);
+        }
+        setLoading(false);
         return;
       }
 
       if (data.user) {
+        console.log('✅ Auth user created:', data.user.id);
+
+        // ─── SAVE TO USERS TABLE ──────────────
+        await saveUserToUsersTable(
+          data.user.id,
+          email.trim(),
+          fullName.trim()
+        );
+
+        // ─── SAVE TO PROFILES TABLE ────────────
+        await saveUserToProfilesTable(
+          data.user.id,
+          email.trim(),
+          fullName.trim()
+        );
+
+        // ─── SAVE TO ASYNCSTORAGE ──────────────
+        try {
+          const currentUser = {
+            id: data.user.id,
+            email: email.trim(),
+            display_name: fullName.trim(),
+            name: fullName.trim(),
+            full_name: fullName.trim(),
+            avatar: '👤',
+            location: ''
+          };
+          await AsyncStorage.setItem('currentUser', JSON.stringify(currentUser));
+          console.log('✅ User saved to AsyncStorage');
+        } catch (storageError) {
+          console.log('AsyncStorage save error:', storageError);
+        }
+
+        // ─── SHOW SUCCESS ──────────────────────
         Alert.alert(
-          'Success', 
-          'Account created successfully! Please check your email for verification.',
+          '🎉 Success!',
+          `Account created successfully! Welcome ${fullName.trim()}! 🎉\n\nPlease check your email for verification.`,
           [
             {
               text: 'OK',
               onPress: () => {
-                // Navigate to login page or clear form
                 setEmail('');
                 setPassword('');
                 setFullName('');
@@ -150,7 +329,14 @@ const SignupPage = () => {
       }
 
     } catch (error) {
-      Alert.alert('Error', 'An unexpected error occurred');
+      if (error.message?.includes('rate limit')) {
+        Alert.alert(
+          'Rate Limit Exceeded',
+          'Please wait a few minutes before trying again.'
+        );
+      } else {
+        Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      }
       console.error('Signup error:', error);
     } finally {
       setLoading(false);

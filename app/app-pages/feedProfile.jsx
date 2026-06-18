@@ -470,11 +470,21 @@ const feedProfile = () => {
     );
   };
   
+  // ─── RENDER PHOTO ITEM (Updated) ────────────────
   const renderPhotoItem = ({ item }) => (
-    <TouchableOpacity style={styles.photoGridItem}>
+    <TouchableOpacity 
+      style={styles.photoGridItem} 
+      onPress={() => {
+        // Optional: View photo full screen
+        Alert.alert('Photo', 'View photo details here');
+      }}
+    >
       <Image source={{ uri: item.image }} style={styles.photoGridImage} />
       <View style={styles.photoOverlay}>
-        <Text style={styles.photoLikes}>👍 {item.likes}</Text>
+        <Text style={styles.photoLikes}>👍 {item.likes || 0}</Text>
+        {item.caption && (
+          <Text style={styles.photoCaption} numberOfLines={1}>{item.caption}</Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -500,6 +510,7 @@ const feedProfile = () => {
       case 'posts':
         return (
           <FlatList
+            key={`flatlist-posts`}
             data={userPosts}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderPostItem}
@@ -514,9 +525,18 @@ const feedProfile = () => {
           />
         );
       case 'photos':
+        // ✅ Get all posts with images
+        const photoPosts = userPosts.filter(post => post.image);
+        
+        // ✅ Sort by newest first
+        const sortedPhotoPosts = [...photoPosts].sort((a, b) => {
+          return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+        
         return (
           <FlatList
-            data={userPosts.filter(post => post.image && post.type !== 'feeling')}
+            key={`flatlist-photos`}
+            data={sortedPhotoPosts}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderPhotoItem}
             numColumns={3}
@@ -533,6 +553,7 @@ const feedProfile = () => {
       case 'saved':
         return (
           <FlatList
+            key={`flatlist-saved`}
             data={savedPosts.length > 0 ? savedPosts : sampleSavedPosts}
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderSavedItem}
@@ -1327,14 +1348,16 @@ const styles = StyleSheet.create({
   actionButtonTextActive: {
     color: '#1877f2',
   },
+  // ─── PHOTO GRID STYLES ────────────────────────────
   photoGridItem: {
     flex: 1,
     margin: 1,
     position: 'relative',
+    aspectRatio: 1,
   },
   photoGridImage: {
     width: '100%',
-    aspectRatio: 1,
+    height: '100%',
   },
   photoOverlay: {
     position: 'absolute',
@@ -1347,6 +1370,11 @@ const styles = StyleSheet.create({
   photoLikes: {
     color: '#ffffff',
     fontSize: 12,
+  },
+  photoCaption: {
+    color: '#ffffff',
+    fontSize: 11,
+    marginTop: 2,
   },
   savedItem: {
     flexDirection: 'row',

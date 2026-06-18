@@ -1,13 +1,18 @@
 // app-pages/solo-chat.jsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
+  Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -20,7 +25,8 @@ import {
   getDirectMessages,
   getUserProfile,
   sendDirectMessage,
-  subscribeToDirectMessages
+  subscribeToDirectMessages,
+  supabase
 } from '../../lib/supabase';
 
 const SoloChatPage = () => {
@@ -33,6 +39,8 @@ const SoloChatPage = () => {
   const [loading, setLoading] = useState(true);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const flatListRef = useRef(null);
   const messageSubscriptionRef = useRef(null);
 
@@ -47,7 +55,6 @@ const SoloChatPage = () => {
       initializeChat();
     }
     
-    // Cleanup subscription on unmount
     return () => {
       if (messageSubscriptionRef.current) {
         console.log('Cleaning up subscription...');
@@ -141,7 +148,9 @@ const SoloChatPage = () => {
             id: msg.id,
             text: msg.message,
             senderId: msg.sender_id,
-            timestamp: msg.created_at
+            timestamp: msg.created_at,
+            media: msg.media || null,
+            mediaType: msg.media_type || null
           }));
           console.log('✅ Found messages in Supabase:', formattedMessages.length);
           setMessages(formattedMessages);
@@ -208,7 +217,6 @@ const SoloChatPage = () => {
     }
   };
 
-  // New function to update global conversations for community page
   const updateGlobalConversations = async (messageText) => {
     try {
       if (!currentUser?.id || !userId) return;
@@ -224,7 +232,6 @@ const SoloChatPage = () => {
         conversations[existingIndex].timestamp = new Date().toLocaleTimeString();
         conversations[existingIndex].unread = (conversations[existingIndex].unread || 0) + 1;
       } else {
-        // Create new conversation if it doesn't exist
         const newConversation = {
           id: chatId || `conv_${userId}`,
           userId: userId,
@@ -252,7 +259,6 @@ const SoloChatPage = () => {
       return;
     }
     
-    // Clean up existing subscription if any
     if (messageSubscriptionRef.current) {
       console.log('Cleaning up existing subscription...');
       messageSubscriptionRef.current.unsubscribe();
@@ -261,14 +267,12 @@ const SoloChatPage = () => {
     
     console.log('Setting up new subscription for user:', currentUser.id);
     
-    // Create new subscription
     const subscription = subscribeToDirectMessages(currentUser.id, async (newMessage) => {
       if (newMessage.senderId === userId) {
         console.log('📨 Received new message:', newMessage.text);
         setMessages(prevMessages => {
           const updatedMessages = [...prevMessages, newMessage];
           saveMessages(updatedMessages);
-          // Update global conversations for received message
           updateGlobalConversations(newMessage.text);
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });
@@ -281,8 +285,96 @@ const SoloChatPage = () => {
     messageSubscriptionRef.current = subscription;
   };
 
+  // ─── PICK MEDIA (Photo/Video) ──────────────────
+  const pickMedia = async (type) => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant media library permissions to share files.');
+        return;
+      }
+
+      const options = {
+        mediaTypes: type === 'photo' 
+          ? ImagePicker.MediaTypeOptions.Images 
+          : ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: type === 'photo',
+        quality: 0.7,
+        videoMaxDuration: 60,
+      };
+
+      const result = await ImagePicker.launchImageLibraryAsync(options);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        
+        if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+          Alert.alert('Error', 'File size should be less than 10MB');
+          return;
+        }
+
+        await sendMediaMessage(asset.uri, type);
+      }
+    } catch (error) {
+      console.error('Error picking media:', error);
+      Alert.alert('Error', 'Failed to pick media. Please try again.');
+    }
+  };
+
+  // ─── SEND MEDIA MESSAGE ─────────────────────────
+  const sendMediaMessage = async (mediaUri, type) => {
+    if (!currentUser?.id || !userId) return;
+
+    setIsSending(true);
+    
+    const messageText = type === 'photo' ? '📷 Photo shared' : '🎥 Video shared';
+    const newMessage = {
+      id: `media_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      text: messageText,
+      senderId: currentUser.id,
+      timestamp: new Date().toISOString(),
+      media: mediaUri,
+      mediaType: type
+    };
+
+    const updatedMessages = [...messages, newMessage];
+    setMessages(updatedMessages);
+    
+    await saveMessages(updatedMessages);
+    await updateConversationLastMessage(newMessage);
+    await updateGlobalConversations(messageText);
+    
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+
+    // Send to Supabase with media
+    try {
+      const messageData = {
+        sender_id: currentUser.id,
+        receiver_id: userId,
+        message: messageText,
+        media: mediaUri,
+        media_type: type,
+        created_at: new Date().toISOString(),
+        is_read: false
+      };
+      
+      await supabase
+        .from('direct_messages')
+        .insert([messageData]);
+      console.log('✅ Media message sent to Supabase');
+    } catch (error) {
+      console.error('Supabase error:', error);
+    }
+    
+    setIsSending(false);
+  };
+
+  // ─── SEND TEXT MESSAGE ──────────────────────────
   const sendMessage = async () => {
-    if (!inputText.trim() || !currentUser?.id || !userId) return;
+    if (!inputText.trim() || !currentUser?.id || !userId || isSending) return;
 
     const messageText = inputText.trim();
     const newMessage = {
@@ -290,6 +382,8 @@ const SoloChatPage = () => {
       text: messageText,
       senderId: currentUser.id,
       timestamp: new Date().toISOString(),
+      media: null,
+      mediaType: null
     };
 
     console.log('📤 Sending message:', messageText);
@@ -300,16 +394,65 @@ const SoloChatPage = () => {
     
     await saveMessages(updatedMessages);
     await updateConversationLastMessage(newMessage);
-    // Update global conversations for sent message
     await updateGlobalConversations(messageText);
     
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
 
-    // Send to Supabase (don't await)
     sendDirectMessage(currentUser.id, userId, messageText).catch(error => {
       console.error('Supabase error:', error);
+    });
+  };
+
+  // ─── SHARE CHAT ──────────────────────────────────
+  const handleShareChat = async () => {
+    try {
+      const message = `💬 Chat with ${otherUser?.name || userName || 'User'} on Tripzy!\n\nStart chatting and share your travel experiences! ✈️🌍`;
+      
+      await Share.share({
+        message: message,
+        title: `Tripzy Chat - ${otherUser?.name || userName || 'User'}`
+      });
+      setShowOptionsModal(false);
+    } catch (error) {
+      console.error('Error sharing chat:', error);
+    }
+  };
+
+  // ─── CLEAR CHAT ──────────────────────────────────
+  const handleClearChat = async () => {
+    Alert.alert(
+      'Clear Chat',
+      'Are you sure you want to clear all messages?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const storageKey = `messages_${currentUser.id}_${userId}`;
+              await AsyncStorage.removeItem(storageKey);
+              setMessages([]);
+              setShowOptionsModal(false);
+              Alert.alert('Success', 'Chat cleared successfully!');
+            } catch (error) {
+              console.error('Error clearing chat:', error);
+              Alert.alert('Error', 'Failed to clear chat.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // ─── VIEW PROFILE ────────────────────────────────
+  const handleViewProfile = () => {
+    setShowOptionsModal(false);
+    router.push({
+      pathname: '/app-pages/tour-guide-profile',
+      params: { userId: userId }
     });
   };
 
@@ -334,6 +477,7 @@ const SoloChatPage = () => {
 
   const renderMessage = ({ item }) => {
     const isCurrentUser = item.senderId === (currentUser?.id || 'user1');
+    const isMedia = item.media && item.mediaType;
     
     return (
       <View style={[styles.messageRow, isCurrentUser ? styles.currentUserRow : styles.otherUserRow]}>
@@ -343,9 +487,29 @@ const SoloChatPage = () => {
           </View>
         )}
         <View style={[styles.messageBubble, isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble]}>
-          <Text style={[styles.messageText, isCurrentUser ? styles.currentUserText : styles.otherUserText]}>
-            {item.text}
-          </Text>
+          {isMedia ? (
+            <View>
+              {item.mediaType === 'photo' ? (
+                <Image 
+                  source={{ uri: item.media }} 
+                  style={styles.mediaImage} 
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.videoPlaceholder}>
+                  <Text style={styles.videoIcon}>🎥</Text>
+                  <Text style={styles.videoText}>Video</Text>
+                </View>
+              )}
+              <Text style={[styles.messageText, isCurrentUser ? styles.currentUserText : styles.otherUserText]}>
+                {item.text}
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.messageText, isCurrentUser ? styles.currentUserText : styles.otherUserText]}>
+              {item.text}
+            </Text>
+          )}
           <Text style={[styles.messageTime, isCurrentUser ? styles.currentUserTime : styles.otherUserTime]}>
             {formatTime(item.timestamp)}
           </Text>
@@ -366,6 +530,7 @@ const SoloChatPage = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
@@ -377,11 +542,12 @@ const SoloChatPage = () => {
             <Text style={styles.headerStatus}>Online</Text>
           </View>
         </View>
-        <TouchableOpacity style={styles.menuButton}>
+        <TouchableOpacity style={styles.menuButton} onPress={() => setShowOptionsModal(true)}>
           <Text style={styles.menuButtonText}>⋮</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Messages */}
       <TouchableWithoutFeedback onPress={dismissKeyboard}>
         <FlatList
           ref={flatListRef}
@@ -391,9 +557,16 @@ const SoloChatPage = () => {
           contentContainerStyle={styles.messagesList}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No messages yet</Text>
+              <Text style={styles.emptySubText}>Start the conversation! 💬</Text>
+            </View>
+          }
         />
       </TouchableWithoutFeedback>
 
+      {/* Input Area */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
@@ -403,7 +576,20 @@ const SoloChatPage = () => {
           styles.inputContainer,
           Platform.OS === 'android' && styles.androidInputContainer
         ]}>
-          <TouchableOpacity style={styles.attachButton}>
+          <TouchableOpacity 
+            style={styles.attachButton} 
+            onPress={() => {
+              Alert.alert(
+                'Share Media',
+                'Choose what to share',
+                [
+                  { text: '📷 Photo', onPress: () => pickMedia('photo') },
+                  { text: '🎥 Video', onPress: () => pickMedia('video') },
+                  { text: 'Cancel', style: 'cancel' }
+                ]
+              );
+            }}
+          >
             <Text style={styles.attachButtonText}>+</Text>
           </TouchableOpacity>
           <TextInput
@@ -415,17 +601,67 @@ const SoloChatPage = () => {
             multiline
             returnKeyType="send"
             onSubmitEditing={sendMessage}
+            editable={!isSending}
           />
           <TouchableOpacity 
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} 
+            style={[styles.sendButton, (!inputText.trim() || isSending) && styles.sendButtonDisabled]} 
             onPress={sendMessage}
-            disabled={!inputText.trim()}
+            disabled={!inputText.trim() || isSending}
           >
-            <Text style={styles.sendButtonText}>➤</Text>
+            <Text style={styles.sendButtonText}>
+              {isSending ? '⏳' : '➤'}
+            </Text>
           </TouchableOpacity>
         </View>
         {Platform.OS === 'android' && !keyboardVisible && <View style={styles.bottomSpacer} />}
       </KeyboardAvoidingView>
+
+      {/* Options Modal (Three Dots Menu) */}
+      <Modal
+        visible={showOptionsModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.optionsOverlay} 
+          activeOpacity={1} 
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <View style={styles.optionsContainer}>
+            <View style={styles.optionsHeader}>
+              <Text style={styles.optionsTitle}>Options</Text>
+              <TouchableOpacity onPress={() => setShowOptionsModal(false)}>
+                <Text style={styles.optionsClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleViewProfile}>
+              <Text style={styles.optionIcon}>👤</Text>
+              <View>
+                <Text style={styles.optionTitle}>View Profile</Text>
+                <Text style={styles.optionDescription}>See user profile</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.optionItem} onPress={handleShareChat}>
+              <Text style={styles.optionIcon}>📤</Text>
+              <View>
+                <Text style={styles.optionTitle}>Share Chat</Text>
+                <Text style={styles.optionDescription}>Share this conversation</Text>
+              </View>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={[styles.optionItem, styles.optionItemDanger]} onPress={handleClearChat}>
+              <Text style={styles.optionIcon}>🗑️</Text>
+              <View>
+                <Text style={[styles.optionTitle, styles.optionTitleDanger]}>Clear Chat</Text>
+                <Text style={styles.optionDescription}>Delete all messages</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -488,6 +724,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 20,
     paddingBottom: 20,
+    flexGrow: 1,
   },
   messageRow: {
     flexDirection: 'row',
@@ -540,6 +777,30 @@ const styles = StyleSheet.create({
   },
   otherUserTime: {
     color: '#999',
+  },
+  // ─── MEDIA STYLES ───────────────────────────────
+  mediaImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 6,
+  },
+  videoPlaceholder: {
+    width: 200,
+    height: 150,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  videoIcon: {
+    fontSize: 48,
+  },
+  videoText: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 4,
   },
   keyboardAvoidingView: {
     backgroundColor: '#ffffff',
@@ -597,6 +858,81 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 34,
     backgroundColor: '#ffffff',
+  },
+  // ─── OPTIONS MODAL ──────────────────────────────
+  optionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionsContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    width: '85%',
+    maxWidth: 350,
+    overflow: 'hidden',
+  },
+  optionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  optionsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  optionsClose: {
+    fontSize: 20,
+    color: '#999',
+    padding: 4,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  optionItemDanger: {
+    borderBottomWidth: 0,
+  },
+  optionIcon: {
+    fontSize: 24,
+    marginRight: 14,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  optionTitleDanger: {
+    color: '#FF3B30',
+  },
+  optionDescription: {
+    fontSize: 12,
+    color: '#999',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#999',
+  },
+  emptySubText: {
+    fontSize: 14,
+    color: '#bbb',
+    marginTop: 8,
   },
 });
 
