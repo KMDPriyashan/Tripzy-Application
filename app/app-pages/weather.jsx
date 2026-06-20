@@ -5,16 +5,16 @@ import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,6 +23,25 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Open-Meteo API (Free, no API key required)
 const WEATHER_API_BASE = 'https://api.open-meteo.com/v1';
 const GEOCODING_API_BASE = 'https://geocoding-api.open-meteo.com/v1';
+
+// Sri Lankan cities coordinates
+const SRI_LANKAN_CITIES = {
+    'Colombo': { lat: 6.9271, lon: 79.8612 },
+    'Kandy': { lat: 7.2906, lon: 80.6337 },
+    'Galle': { lat: 6.0328, lon: 80.2168 },
+    'Jaffna': { lat: 9.6615, lon: 80.0255 },
+    'Nuwara Eliya': { lat: 6.9701, lon: 80.7829 },
+    'Trincomalee': { lat: 8.5874, lon: 81.2152 },
+    'Negombo': { lat: 7.2088, lon: 79.8359 },
+    'Batticaloa': { lat: 7.7171, lon: 81.7005 },
+    'Anuradhapura': { lat: 8.3114, lon: 80.4037 },
+    'Polonnaruwa': { lat: 7.9393, lon: 81.0000 },
+    'Ratnapura': { lat: 6.6827, lon: 80.4037 },
+    'Badulla': { lat: 6.9935, lon: 81.0550 },
+    'Kurunegala': { lat: 7.4863, lon: 80.3645 },
+    'Matara': { lat: 5.9495, lon: 80.5448 },
+    'Kalutara': { lat: 6.5855, lon: 79.9607 }
+};
 
 export default function WeatherPage() {
   const router = useRouter();
@@ -61,52 +80,30 @@ export default function WeatherPage() {
     }
   };
 
-  // Get weather by city name - IMPROVED with better search
+  // Get weather by city name - Sri Lanka only
   const getWeatherByCity = async (cityName) => {
     try {
-      // First attempt: Direct search with geocoding API
-      const geoResponse = await axios.get(`${GEOCODING_API_BASE}/search`, {
-        params: {
-          name: cityName,
-          count: 5,
-          language: 'en',
-          format: 'json'
-        },
-        timeout: 10000
-      });
+      // Check if city is in Sri Lankan cities list
+      const normalizedCity = cityName.toLowerCase().trim();
+      let matchedCity = null;
       
-      if (!geoResponse.data.results || geoResponse.data.results.length === 0) {
-        // Second attempt: Try with different formatting
-        const formattedCity = cityName.trim().replace(/\s+/g, ' ');
-        const retryResponse = await axios.get(`${GEOCODING_API_BASE}/search`, {
-          params: {
-            name: formattedCity,
-            count: 5,
-            language: 'en',
-            format: 'json'
-          },
-          timeout: 10000
-        });
-        
-        if (!retryResponse.data.results || retryResponse.data.results.length === 0) {
-          throw new Error(`City "${cityName}" not found. Please check spelling or try a nearby city.`);
+      for (const [city, coords] of Object.entries(SRI_LANKAN_CITIES)) {
+        if (city.toLowerCase() === normalizedCity || normalizedCity.includes(city.toLowerCase())) {
+          matchedCity = { name: city, ...coords };
+          break;
         }
-        
-        var results = retryResponse.data.results;
-      } else {
-        var results = geoResponse.data.results;
       }
       
-      // Take the best match (first result)
-      const { latitude, longitude, name, country, admin1 } = results[0];
-      const displayCity = name || cityName;
-      const displayRegion = admin1 || country || '';
+      if (!matchedCity) {
+        throw new Error(`"${cityName}" is not a city in Sri Lanka. Please search for cities in Sri Lanka only.`);
+      }
       
-      const weatherData = await getWeatherByCoordinates(latitude, longitude);
+      const { lat: latitude, lon: longitude, name: cityDisplayName } = matchedCity;
+      const weatherDataResult = await getWeatherByCoordinates(latitude, longitude);
       
       return {
-        ...weatherData,
-        location: { name: displayCity, country: displayRegion, latitude, longitude }
+        ...weatherDataResult,
+        location: { name: cityDisplayName, country: 'Sri Lanka', latitude, longitude }
       };
     } catch (error) {
       console.error('Error fetching weather by city:', error.message);
@@ -114,7 +111,7 @@ export default function WeatherPage() {
     }
   };
 
-  // Get weather for current location
+  // Get weather for current location (Sri Lanka only)
   const getCurrentLocationWeather = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -127,15 +124,22 @@ export default function WeatherPage() {
       });
       
       const { latitude, longitude } = location.coords;
+      
+      // Check if coordinates are within Sri Lanka bounds (approx)
+      const isInSriLanka = latitude >= 5.9 && latitude <= 9.8 && longitude >= 79.5 && longitude <= 81.9;
+      
+      if (!isInSriLanka) {
+        throw new Error('Location outside Sri Lanka. Showing default city (Colombo).');
+      }
+      
       const reverseGeo = await Location.reverseGeocodeAsync({ latitude, longitude });
       const cityName = reverseGeo[0]?.city || reverseGeo[0]?.region || reverseGeo[0]?.subregion || '';
-      const country = reverseGeo[0]?.country || '';
       
-      const weatherData = await getWeatherByCoordinates(latitude, longitude);
+      const weatherDataResult = await getWeatherByCoordinates(latitude, longitude);
       
       return {
-        ...weatherData,
-        location: { name: cityName || 'Current Location', country, latitude, longitude }
+        ...weatherDataResult,
+        location: { name: cityName || 'Current Location', country: 'Sri Lanka', latitude, longitude }
       };
     } catch (error) {
       console.error('Error getting current location weather:', error);
@@ -239,9 +243,9 @@ export default function WeatherPage() {
         try {
           data = await getCurrentLocationWeather();
         } catch (locationError) {
-          console.log('Location failed, falling back to default city');
+          console.log('Location failed, falling back to default city Colombo');
           data = await getWeatherByCity('Colombo');
-          Alert.alert('Info', 'Using default location (Colombo). Please enable location services for current weather.');
+          Alert.alert('Info', 'Using default location (Colombo). Please enable location services for current weather in Sri Lanka.');
         }
       } else if (searchCity.trim()) {
         data = await getWeatherByCity(searchCity);
@@ -254,9 +258,9 @@ export default function WeatherPage() {
     } catch (error) {
       console.error('Error loading weather:', error);
       setSearchError(error.message || 'Could not fetch weather data');
-      Alert.alert('Weather Error', error.message || 'Could not fetch weather data. Please try another city name.');
+      Alert.alert('Weather Error', error.message || 'Could not fetch weather data. Please enter a valid Sri Lankan city.');
       
-      // Fallback to default city only if we don't have data
+      // Fallback to Colombo if we don't have data
       if (!weatherData) {
         try {
           const fallbackData = await getWeatherByCity('Colombo');
@@ -278,7 +282,7 @@ export default function WeatherPage() {
 
   const handleSearch = () => {
     if (!searchCity.trim()) {
-      Alert.alert('Error', 'Please enter a city name');
+      Alert.alert('Error', 'Please enter a Sri Lankan city name');
       return;
     }
     setUseCurrentLocation(false);
@@ -429,8 +433,6 @@ export default function WeatherPage() {
     if (!weatherData?.current) return null;
     
     const { current } = weatherData;
-    const sunrise = "6:00 AM";
-    const sunset = "6:00 PM";
     const uvIndex = "7";
     
     return (
@@ -467,7 +469,7 @@ export default function WeatherPage() {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Fetching weather data...</Text>
+          <Text style={styles.loadingText}>Fetching weather data for Sri Lanka...</Text>
         </View>
       </SafeAreaView>
     );
@@ -480,7 +482,7 @@ export default function WeatherPage() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Weather</Text>
+        <Text style={styles.headerTitle}>Weather - Sri Lanka</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -491,7 +493,7 @@ export default function WeatherPage() {
           
         </View>
         <Text style={styles.heroSubtitle}>
-          Plan your day with accurate weather updates and travel recommendations
+          Plan your day with accurate weather updates for Sri Lankan cities
         </Text>
       </View>
 
@@ -503,7 +505,7 @@ export default function WeatherPage() {
           </View>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search any city worldwide..."
+            placeholder="Search Sri Lankan city..."
             placeholderTextColor="rgba(255,255,255,0.7)"
             value={searchCity}
             onChangeText={setSearchCity}
@@ -526,6 +528,7 @@ export default function WeatherPage() {
           </Text>
         </TouchableOpacity>
       </View>
+      <Text style={styles.searchNote}>Supported cities: Colombo, Kandy, Galle, Jaffna, Nuwara Eliya, and more</Text>
 
       {/* Main Content */}
       <ScrollView
@@ -546,7 +549,7 @@ export default function WeatherPage() {
           <Text style={styles.tipTitle}>Travel Tip</Text>
           <Text style={styles.tipText}>
             Plan your outdoor activities based on the weather forecast. 
-            Early mornings usually offer the best conditions for sightseeing and photography.
+            Early mornings usually offer the best conditions for sightseeing and photography in Sri Lanka.
           </Text>
         </View>
       </ScrollView>
@@ -633,7 +636,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
     gap: 12,
   },
   searchContainer: {
@@ -690,6 +693,13 @@ const styles = StyleSheet.create({
   },
   locationButtonTextActive: {
     color: '#fff',
+  },
+  searchNote: {
+    fontSize: 11,
+    color: '#999',
+    marginLeft: 16,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   loadingContainer: {
     flex: 1,
