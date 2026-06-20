@@ -5,6 +5,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -34,54 +35,49 @@ const C = {
   dangerSoft: "#FFF0EF",
 };
 
+// ─── FEATURE CARDS DATA (No Emojis/Icons) ────────
 const featureCardsData = [
   {
     name: "Trip Planning",
-    description: "Craft the perfect journey, stop by stop.",
-    icon: "📅",
+    description: "Craft the perfect journey",
     target: "/app-pages/plan",
-    accentBg: "#EAF0FF",
-    accentIcon: "#1A6BFF",
+    accentColor: "#1A6BFF",
+    backgroundImage: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=500&fit=crop",
   },
   {
     name: "Travel Map",
-    description: "Pin your world. Own your adventures.",
-    icon: "🗺️",
+    description: "Pin your world adventures",
     target: "/app-pages/map",
-    accentBg: "#E6F9F8",
-    accentIcon: "#0CB8B0",
+    accentColor: "#0CB8B0",
+    backgroundImage: "https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&h=500&fit=crop",
   },
   {
     name: "Travel Feed",
-    description: "Stories that inspire your next escape.",
-    icon: "🔖",
+    description: "Stories that inspire",
     target: "/app-pages/feed",
-    accentBg: "#EDE8FF",
-    accentIcon: "#6C47FF",
+    accentColor: "#6C47FF",
+    backgroundImage: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=500&fit=crop",
   },
   {
     name: "Travel Guide",
-    description: "Local wisdom, curated for you.",
-    icon: "📖",
+    description: "Local wisdom curated",
     target: "/app-pages/TourGuide",
-    accentBg: "#E8F5FF",
-    accentIcon: "#1A6BFF",
+    accentColor: "#1A6BFF",
+    backgroundImage: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&h=500&fit=crop",
   },
   {
     name: "Community",
-    description: "Find your tribe across the globe.",
-    icon: "💬",
+    description: "Find your global tribe",
     target: "/app-pages/community",
-    accentBg: "#E6F9F1",
-    accentIcon: "#0CB870",
+    accentColor: "#0CB870",
+    backgroundImage: "https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=600&h=500&fit=crop",
   },
   {
     name: "Weather",
-    description: "Pack smart. Travel confident.",
-    icon: "⛅",
+    description: "Pack smart & confident",
     target: "/app-pages/weather",
-    accentBg: "#E8F2FF",
-    accentIcon: "#3B9EFF",
+    accentColor: "#3B9EFF",
+    backgroundImage: "https://images.unsplash.com/photo-1504608524841-42fe6f032b4b?w=600&h=500&fit=crop",
   },
 ];
 
@@ -91,19 +87,16 @@ const MENU_ITEMS = [
     label: "Notifications",
     icon: "notifications-outline",
     target: "/app-pages/Notifications",
-    color: C.navy,
   },
   {
     label: "Settings & Privacy",
     icon: "settings-outline",
     target: "/app-pages/SettingsPrivacy",
-    color: C.navy,
   },
   {
     label: "Help & Support",
     icon: "help-circle-outline",
     target: "/app-pages/HelpSupport",
-    color: C.navy,
   },
 ];
 
@@ -135,7 +128,7 @@ const FloatOrb = ({ style, delay = 0 }) => {
   return <Animated.View style={[style, { transform: [{ translateY }] }]} />;
 };
 
-// ─── Feature Card ─────────────────────────────────
+// ─── FEATURE CARD (No Emojis) ──────────────────────
 const FeatureCard = ({ feature, index, onPress }) => {
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(28)).current;
@@ -187,26 +180,25 @@ const FeatureCard = ({ feature, index, onPress }) => {
           }).start()
         }
       >
-        <View style={[styles.card, { borderColor: feature.accentIcon + "28" }]}>
-          <View
-            style={[styles.cardStripe, { backgroundColor: feature.accentIcon }]}
+        <View style={styles.card}>
+          {/* ── Background Image ── */}
+          <Image
+            source={{ uri: feature.backgroundImage }}
+            style={styles.cardBackgroundImage}
+            resizeMode="cover"
           />
-          <View
-            style={[styles.iconWrap, { backgroundColor: feature.accentBg }]}
-          >
-            <Text style={styles.cardIcon}>{feature.icon}</Text>
-          </View>
-          <Text style={styles.cardName}>{feature.name}</Text>
-          <Text style={styles.cardDesc}>{feature.description}</Text>
-          <View
-            style={[
-              styles.cardChip,
-              { backgroundColor: feature.accentIcon + "15" },
-            ]}
-          >
-            <Text style={[styles.cardChipText, { color: feature.accentIcon }]}>
-              Explore →
-            </Text>
+          
+          {/* ── Bottom Shadow Gradient ── */}
+          <View style={styles.cardShadowOverlay} />
+          
+          {/* ── Content ── */}
+          <View style={styles.cardContent}>
+            <View style={[styles.cardAccentLine, { backgroundColor: feature.accentColor }]} />
+            <Text style={styles.cardName}>{feature.name}</Text>
+            <Text style={styles.cardDesc}>{feature.description}</Text>
+            <View style={[styles.cardChip, { backgroundColor: feature.accentColor + "30" }]}>
+              <Text style={[styles.cardChipText, { color: feature.accentColor }]}>Explore →</Text>
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -290,14 +282,12 @@ const HomePage = () => {
 
   const handleLogoutPress = () => {
     setMenuVisible(false);
-    // Small delay so the dropdown closes before the dialog appears
     setTimeout(() => setLogoutVisible(true), 150);
   };
 
   const confirmLogout = async () => {
     setLogoutVisible(false);
     await supabase.auth.signOut();
-    // onAuthStateChange above will fire SIGNED_OUT and redirect
   };
 
   // ── Splash / loading ──
@@ -359,7 +349,6 @@ const HomePage = () => {
               Tripzy
             </Animated.Text>
 
-            {/* ── Three-dot menu button (replaces profile emoji) ── */}
             <TouchableOpacity
               style={styles.menuBtn}
               onPress={() => setMenuVisible(true)}
@@ -372,7 +361,7 @@ const HomePage = () => {
           {/* Welcome pill */}
           <Animated.View style={[styles.welcomePill, { opacity: pillFade }]}>
             <View style={styles.pillDot} />
-            <Text style={styles.pillText}>Welcome back, {firstName}! 🌍</Text>
+            <Text style={styles.pillText}>Welcome back, {firstName} 🌍</Text>
           </Animated.View>
 
           {/* Headline */}
@@ -394,7 +383,7 @@ const HomePage = () => {
               style={styles.ctaPrimary}
               onPress={() => router.push("/app-pages/plan")}
             >
-              <Text style={styles.ctaPrimaryText}>＋ Plan a Trip</Text>
+              <Text style={styles.ctaPrimaryText}>Plan a Trip</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.ctaSecondary}
@@ -442,7 +431,7 @@ const HomePage = () => {
 
       <BottomNav />
 
-      {/* ══ DROPDOWN MENU ════════════════════════════════════════════════ */}
+      {/* ══ DROPDOWN MENU ════════════════════════════ */}
       <Modal
         visible={menuVisible}
         transparent
@@ -454,7 +443,6 @@ const HomePage = () => {
           onPress={() => setMenuVisible(false)}
         >
           <View style={styles.dropdown}>
-            {/* Decorative accent bar at top */}
             <View style={styles.dropdownAccent} />
 
             {MENU_ITEMS.map((item, idx) => (
@@ -481,7 +469,6 @@ const HomePage = () => {
 
             <View style={styles.dropdownDivider} />
 
-            {/* Logout row */}
             <TouchableOpacity
               style={styles.dropdownRow}
               onPress={handleLogoutPress}
@@ -500,7 +487,7 @@ const HomePage = () => {
         </Pressable>
       </Modal>
 
-      {/* ══ LOGOUT CONFIRMATION ══════════════════════════════════════════ */}
+      {/* ══ LOGOUT CONFIRMATION ═══════════════════════ */}
       <Modal
         visible={logoutVisible}
         transparent
@@ -647,7 +634,6 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
   },
 
-  // ── Three-dot button — same sizing/shape as the original profileBtn ──
   menuBtn: {
     width: 44,
     height: 44,
@@ -783,50 +769,68 @@ const styles = StyleSheet.create({
   // Grid
   grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20 },
 
-  // Cards
+  // ─── CARD STYLES (No Emojis) ──────────────────────
   card: {
-    backgroundColor: C.white,
     borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
     overflow: "hidden",
-    shadowColor: C.navy,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 6,
+    height: 190,
   },
-  cardStripe: {
-    position: "absolute",
+  cardBackgroundImage: {
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: 3.5,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
-  iconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
-    marginBottom: 10,
+  cardShadowOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '70%',
+    backgroundColor: 'transparent',
+    backgroundImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.75))',
   },
-  cardIcon: { fontSize: 22 },
+  cardContent: {
+    position: 'relative',
+    zIndex: 1,
+    padding: 16,
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  cardAccentLine: {
+    width: 30,
+    height: 3,
+    borderRadius: 2,
+    marginBottom: 8,
+  },
   cardName: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "800",
-    color: C.navy,
-    marginBottom: 5,
-    letterSpacing: 0.1,
+    color: "#FFFFFF",
+    marginBottom: 2,
+    letterSpacing: 0.2,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   cardDesc: {
     fontSize: 12,
-    color: C.textMuted,
-    lineHeight: 17,
-    marginBottom: 12,
+    color: "rgba(255,255,255,0.85)",
+    lineHeight: 16,
+    marginBottom: 10,
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   cardChip: {
     alignSelf: "flex-start",
@@ -834,13 +838,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-  cardChipText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
+  cardChipText: { 
+    fontSize: 11, 
+    fontWeight: "700", 
+    letterSpacing: 0.3 
+  },
 
-  // ── Dropdown ──────────────────────────────────────────────────────────
+  // ── Dropdown ──────────────────────────────────────
   menuOverlay: { flex: 1, backgroundColor: "rgba(10,31,68,0.18)" },
   dropdown: {
     position: "absolute",
-    top: 72, // just below the top bar
+    top: 72,
     right: 20,
     width: 230,
     backgroundColor: C.white,
@@ -886,7 +894,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
 
-  // ── Logout confirmation ───────────────────────────────────────────────
+  // ── Logout confirmation ──────────────────────────
   confirmOverlay: {
     flex: 1,
     backgroundColor: "rgba(10,31,68,0.35)",
