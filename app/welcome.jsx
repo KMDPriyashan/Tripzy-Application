@@ -184,15 +184,15 @@ const s = StyleSheet.create({
   mainContainer: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: height * 0.05, // Screen එකේ උස අනුව dynamic padding
+    paddingTop: height * 0.05,
     paddingBottom: height * 0.03,
-    justifyContent: "space-between", // Elements ටික screen එක පුරා සමානව බෙදී යයි
+    justifyContent: "space-between",
   },
 
   // Image Layout
   heroVisualWrapper: {
     width: "100%",
-    height: height * 0.28, // Scroll නොවීමට image එක මදක් කුඩා කර ඇත
+    height: height * 0.28,
     position: "relative",
   },
   heroImage: {
