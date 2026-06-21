@@ -154,7 +154,7 @@ const Welcome = () => {
             activeOpacity={0.88}
             onPress={() => router.push("/signup")}
           >
-            <Text style={s.buttonPrimaryText}>User Sign Up</Text>
+            <Text style={s.buttonPrimaryText}>Sign Up</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -162,7 +162,7 @@ const Welcome = () => {
             activeOpacity={0.75}
             onPress={() => router.push("/loginpage")}
           >
-            <Text style={s.buttonSecondaryText}>I Already Have an Account</Text>
+            <Text style={s.buttonSecondaryText}>I already have an account</Text>
           </TouchableOpacity>
 
           <Text style={s.legalFootnote}>
