@@ -1,10 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   Easing,
+  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -34,54 +36,67 @@ const C = {
   dangerSoft: "#FFF0EF",
 };
 
+// ─── Feature data — now with a themed photo + colored gradient per card ──
 const featureCardsData = [
   {
     name: "Trip Planning",
     description: "Craft the perfect journey, stop by stop.",
     icon: "📅",
     target: "/app-pages/plan",
-    accentBg: "#EAF0FF",
     accentIcon: "#1A6BFF",
+    image:
+      "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&q=80",
+    gradient: ["transparent", "rgba(26,107,255,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Travel Map",
     description: "Pin your world. Own your adventures.",
     icon: "🗺️",
     target: "/app-pages/map",
-    accentBg: "#E6F9F8",
     accentIcon: "#0CB8B0",
+    image:
+      "https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80",
+    gradient: ["transparent", "rgba(12,184,176,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Travel Feed",
     description: "Stories that inspire your next escape.",
     icon: "🔖",
     target: "/app-pages/feed",
-    accentBg: "#EDE8FF",
     accentIcon: "#6C47FF",
+    image:
+      "https://images.unsplash.com/photo-1488085061387-422e29b40080?w=600&q=80",
+    gradient: ["transparent", "rgba(108,71,255,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Travel Guide",
     description: "Local wisdom, curated for you.",
     icon: "📖",
     target: "/app-pages/TourGuide",
-    accentBg: "#E8F5FF",
     accentIcon: "#1A6BFF",
+    image:
+      "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=600&q=80",
+    gradient: ["transparent", "rgba(26,107,255,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Community",
     description: "Find your tribe across the globe.",
     icon: "💬",
     target: "/app-pages/community",
-    accentBg: "#E6F9F1",
     accentIcon: "#0CB870",
+    image:
+      "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600&q=80",
+    gradient: ["transparent", "rgba(12,184,112,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Weather",
     description: "Pack smart. Travel confident.",
     icon: "⛅",
     target: "/app-pages/weather",
-    accentBg: "#E8F2FF",
     accentIcon: "#3B9EFF",
+    image:
+      "https://images.unsplash.com/photo-1601297183305-6df142704ea2?w=600&q=80",
+    gradient: ["transparent", "rgba(59,158,255,0.55)", "rgba(10,31,68,0.92)"],
   },
 ];
 
@@ -135,7 +150,7 @@ const FloatOrb = ({ style, delay = 0 }) => {
   return <Animated.View style={[style, { transform: [{ translateY }] }]} />;
 };
 
-// ─── Feature Card ─────────────────────────────────
+// ─── Feature Card (now photo-backed, gradient overlay, press-scale) ──────
 const FeatureCard = ({ feature, index, onPress }) => {
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(28)).current;
@@ -171,7 +186,7 @@ const FeatureCard = ({ feature, index, onPress }) => {
       }}
     >
       <TouchableOpacity
-        activeOpacity={0.88}
+        activeOpacity={0.92}
         onPress={() => onPress(feature.target)}
         onPressIn={() =>
           Animated.spring(scale, {
@@ -187,27 +202,36 @@ const FeatureCard = ({ feature, index, onPress }) => {
           }).start()
         }
       >
-        <View style={[styles.card, { borderColor: feature.accentIcon + "28" }]}>
-          <View
-            style={[styles.cardStripe, { backgroundColor: feature.accentIcon }]}
-          />
-          <View
-            style={[styles.iconWrap, { backgroundColor: feature.accentBg }]}
+        <View style={styles.card}>
+          <ImageBackground
+            source={{ uri: feature.image }}
+            style={styles.cardImageBg}
+            imageStyle={styles.cardImageRadius}
           >
-            <Text style={styles.cardIcon}>{feature.icon}</Text>
-          </View>
-          <Text style={styles.cardName}>{feature.name}</Text>
-          <Text style={styles.cardDesc}>{feature.description}</Text>
-          <View
-            style={[
-              styles.cardChip,
-              { backgroundColor: feature.accentIcon + "15" },
-            ]}
-          >
-            <Text style={[styles.cardChipText, { color: feature.accentIcon }]}>
-              Explore →
-            </Text>
-          </View>
+            {/* Colorful gradient overlay — keeps the title readable on any photo */}
+            <LinearGradient
+              colors={feature.gradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.cardGradient}
+            />
+
+            {/* Floating icon badge */}
+            <View style={styles.iconWrap}>
+              <Text style={styles.cardIcon}>{feature.icon}</Text>
+            </View>
+
+            {/* Title / description / chip sit on top of the gradient */}
+            <View style={styles.cardBottomContent}>
+              <Text style={styles.cardName}>{feature.name}</Text>
+              <Text style={styles.cardDesc} numberOfLines={2}>
+                {feature.description}
+              </Text>
+              <View style={styles.cardChip}>
+                <Text style={styles.cardChipText}>Explore →</Text>
+              </View>
+            </View>
+          </ImageBackground>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -783,58 +807,78 @@ const styles = StyleSheet.create({
   // Grid
   grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20 },
 
-  // Cards
+  // ── Photo-backed cards ──────────────────────────────────────────────
   card: {
-    backgroundColor: C.white,
     borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
     overflow: "hidden",
     shadowColor: C.navy,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  cardStripe: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3.5,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  cardImageBg: {
+    width: "100%",
+    height: 190,
+    justifyContent: "space-between",
+  },
+  cardImageRadius: {
+    borderRadius: 20,
+  },
+  cardGradient: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
   },
   iconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.25)",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
-    marginBottom: 10,
+    margin: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
   },
-  cardIcon: { fontSize: 22 },
+  cardIcon: { fontSize: 17 },
+  cardBottomContent: {
+    padding: 14,
+    paddingTop: 0,
+  },
   cardName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
-    color: C.navy,
-    marginBottom: 5,
+    color: "#FFFFFF",
+    marginBottom: 4,
     letterSpacing: 0.1,
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   cardDesc: {
-    fontSize: 12,
-    color: C.textMuted,
-    lineHeight: 17,
-    marginBottom: 12,
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.88)",
+    lineHeight: 16,
+    marginBottom: 10,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   cardChip: {
     alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
   },
-  cardChipText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
+  cardChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    color: "#FFFFFF",
+  },
 
   // ── Dropdown ──────────────────────────────────────────────────────────
   menuOverlay: { flex: 1, backgroundColor: "rgba(10,31,68,0.18)" },
