@@ -44,6 +44,7 @@ const CreatePlan = () => {
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [savedPlanData, setSavedPlanData] = useState(null);
+  const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [selectedPackingItems, setSelectedPackingItems] = useState(() => {
     if (params.savedSelectedPackingItems) {
       try {
@@ -97,6 +98,19 @@ const CreatePlan = () => {
     }
     return null;
   });
+
+  // Province options
+  const provinces = [
+    'Western Province',
+    'Central Province',
+    'Southern Province',
+    'Northern Province',
+    'Eastern Province',
+    'North Western Province',
+    'North Central Province',
+    'Uva Province',
+    'Sabaragamuwa Province'
+  ];
 
   // Save current form state to params before navigating
   const saveFormState = () => {
@@ -451,12 +465,12 @@ const CreatePlan = () => {
           <Text style={styles.pageSubtitle}>
             {isUpdating 
               ? 'Make changes to your travel plan and save updates'
-              : '✏️ Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖'}
+              : ' Start organizing your dream trip with ease choose destinations, set dates, and customize every detail '}
           </Text>
 
           {/* Destination Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}> End Destination</Text>
+            <Text style={styles.label}>Destination</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter destination"
@@ -467,10 +481,10 @@ const CreatePlan = () => {
 
           {/* Post Caption Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Post Caption</Text>
+            <Text style={styles.label}>Description</Text>
             <TextInput
               style={styles.input}
-              placeholder="Write a caption for your post as a long ...."
+              placeholder="Write a description for your plan"
               value={postCaption}
               onChangeText={setPostCaption}
             />
@@ -515,15 +529,79 @@ const CreatePlan = () => {
             </View>
           </View>
 
-          {/* Province */}
+          {/* Province Dropdown - Scrollable */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Your Province</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter province of you stay"
-              value={province}
-              onChangeText={setProvince}
-            />
+            <TouchableOpacity 
+              style={styles.dropdownSelector}
+              onPress={() => setShowProvinceDropdown(!showProvinceDropdown)}
+            >
+              <Text style={[styles.dropdownText, !province && styles.placeholderText]}>
+                {province || 'Select your province'}
+              </Text>
+              <Text style={styles.dropdownArrow}>▼</Text>
+            </TouchableOpacity>
+
+            {showProvinceDropdown && (
+              <View style={styles.dropdownListContainer}>
+                <ScrollView 
+                  style={styles.dropdownScrollView}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
+                  {provinces.map((prov, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.dropdownItem,
+                        prov === province && styles.dropdownItemSelected
+                      ]}
+                      onPress={() => {
+                        setProvince(prov);
+                        setShowProvinceDropdown(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        prov === province && styles.dropdownItemTextSelected
+                      ]}>
+                        {prov}
+                      </Text>
+                      {prov === province && (
+                        <Text style={styles.checkmarkIcon}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+
+          {/* Date Selection - Moved to top of action buttons */}
+          <View style={styles.inputGroup}>
+            <View style={styles.planningContainer}>
+              {/* Start Date */}
+              <View style={styles.dateInputContainer}>
+                <Text style={styles.dateLabel}>Start Date</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  placeholder="12 of May, 2026"
+                  value={startDate}
+                  onChangeText={setStartDate}
+                />
+              </View>
+
+              {/* End Date */}
+              <View style={styles.dateInputContainer}>
+                <Text style={styles.dateLabel}>End Date</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  placeholder="15 of May, 2026" 
+                  value={endDate}
+                  onChangeText={setEndDate}
+                />
+              </View>
+            </View>
           </View>
 
           {/* Selected Packing Items Indicator */}
@@ -563,54 +641,24 @@ const CreatePlan = () => {
             </View>
           )}
 
-          {/* Generate Packing Checklist Button */}
-          <TouchableOpacity
-            style={styles.generateButton}
-            onPress={navigateToPackingList}
-          >
-            <Text style={styles.generateButtonText}>
-              {selectedPackingItems.length > 0
-                ? 'Update Packing Checklist'
-                : 'Generate Packing Checklist'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Planning */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Planning</Text>
-            <View style={styles.planningContainer}>
-              {/* Start Date */}
-              <View style={styles.dateInputContainer}>
-                <Text style={styles.dateLabel}>Start Date</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="12 of May, 2026"
-                  value={startDate}
-                  onChangeText={setStartDate}
-                />
-              </View>
-
-              {/* End Date */}
-              <View style={styles.dateInputContainer}>
-                <Text style={styles.dateLabel}>End Date</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="15 of May, 2026" 
-                  value={endDate}
-                  onChangeText={setEndDate}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Budget Estimate */}
-          <View style={styles.budgetContainer}>
-            <Text style={styles.label}>Estimate your Budget Plan</Text>
+          {/* Action Buttons Row - Generate Packing Checklist & Estimate Budget */}
+          <View style={styles.actionButtonsRow}>
             <TouchableOpacity
-              style={styles.estimateButton}
+              style={[styles.actionButton, styles.packingButton]}
+              onPress={navigateToPackingList}
+            >
+              <Text style={styles.actionButtonText}>
+                Generate Packing Checklist
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.budgetButton]}
               onPress={navigateToBudgetEstimate}
             >
-              <Text style={styles.estimateButtonText}>Estimate</Text>
+              <Text style={styles.actionButtonText}>
+                Estimate Budget
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -734,7 +782,7 @@ const CreatePlan = () => {
 
           {/* Collaborates */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Collaborates For Your Trip</Text>
+            <Text style={styles.label}>Collaborates</Text>
             <TextInput
               style={styles.input}
               placeholder="Add collaborators ( nimal perera , kasun deshan , .... )"
@@ -743,7 +791,7 @@ const CreatePlan = () => {
 
           {/* Trip Notes */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Trip Notes</Text>
+            <Text style={styles.label}> Notes</Text>
             <TextInput
               style={[styles.input, styles.notesInput]}
               placeholder="Write your trip notes here..."
@@ -753,9 +801,9 @@ const CreatePlan = () => {
               onChangeText={setTripNotes}
             />
           </View>
-          <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! 🔖</Text>
+          <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! </Text>
 
-          {/* Complete/Update Plan Button */}
+          {/* Complete/Update Plan Button - Now Blue */}
           <TouchableOpacity
             style={[styles.completeButton, loading && styles.completeButtonDisabled]}
             onPress={savePlan}
@@ -849,17 +897,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 0,
   },
-  generateButton: {
-    backgroundColor: '#34C759',
-    padding: 15,
+  // Action Buttons Row Styles
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    padding: 14,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
   },
-  generateButtonText: {
+  packingButton: {
+    backgroundColor: '#007AFF',
+  },
+  budgetButton: {
+    backgroundColor: '#007AFF',
+  },
+  actionButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
   },
   planningContainer: {
     flexDirection: 'row',
@@ -881,22 +943,63 @@ const styles = StyleSheet.create({
     padding: 10,
     fontSize: 14,
   },
-  budgetContainer: {
+  // Dropdown styles - Scrollable
+  dropdownSelector: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fff',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
   },
-  estimateButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  estimateButtonText: {
-    color: '#fff',
+  dropdownText: {
     fontSize: 14,
+    color: '#333',
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#666',
+  },
+  dropdownListContainer: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginTop: 5,
+    backgroundColor: '#fff',
+    maxHeight: 200,
+    overflow: 'hidden',
+  },
+  dropdownScrollView: {
+    maxHeight: 200,
+  },
+  dropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#007AFF',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  dropdownItemTextSelected: {
+    color: '#fff',
     fontWeight: '500',
+  },
+  checkmarkIcon: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   statusContainer: {
     flexDirection: 'row',
@@ -926,7 +1029,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   completeButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#007AFF', // Changed from '#FF6B6B' to '#007AFF' (Blue)
     padding: 18,
     borderRadius: 8,
     alignItems: 'center',
