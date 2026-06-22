@@ -577,6 +577,33 @@ const CreatePlan = () => {
             )}
           </View>
 
+          {/* Date Selection - Moved to top of action buttons */}
+          <View style={styles.inputGroup}>
+            <View style={styles.planningContainer}>
+              {/* Start Date */}
+              <View style={styles.dateInputContainer}>
+                <Text style={styles.dateLabel}>Start Date</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  placeholder="12 of May, 2026"
+                  value={startDate}
+                  onChangeText={setStartDate}
+                />
+              </View>
+
+              {/* End Date */}
+              <View style={styles.dateInputContainer}>
+                <Text style={styles.dateLabel}>End Date</Text>
+                <TextInput
+                  style={styles.dateInput}
+                  placeholder="15 of May, 2026" 
+                  value={endDate}
+                  onChangeText={setEndDate}
+                />
+              </View>
+            </View>
+          </View>
+
           {/* Selected Packing Items Indicator */}
           {selectedPackingItems.length > 0 && (
             <View style={styles.selectedItemsContainer}>
@@ -633,33 +660,6 @@ const CreatePlan = () => {
                 Estimate Budget
               </Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Date Selection - Removed "Planning" label */}
-          <View style={styles.inputGroup}>
-            <View style={styles.planningContainer}>
-              {/* Start Date */}
-              <View style={styles.dateInputContainer}>
-                <Text style={styles.dateLabel}>Start Date</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="12 of May, 2026"
-                  value={startDate}
-                  onChangeText={setStartDate}
-                />
-              </View>
-
-              {/* End Date */}
-              <View style={styles.dateInputContainer}>
-                <Text style={styles.dateLabel}>End Date</Text>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="15 of May, 2026" 
-                  value={endDate}
-                  onChangeText={setEndDate}
-                />
-              </View>
-            </View>
           </View>
 
           {/* Budget Summary - Shows when budget is calculated */}
@@ -801,7 +801,7 @@ const CreatePlan = () => {
               onChangeText={setTripNotes}
             />
           </View>
-          <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! 🔖</Text>
+          <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! </Text>
 
           {/* Complete/Update Plan Button */}
           <TouchableOpacity
