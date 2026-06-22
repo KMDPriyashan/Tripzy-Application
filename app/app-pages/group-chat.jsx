@@ -38,6 +38,7 @@ const GroupChatPage = () => {
   const [selectedMedia, setSelectedMedia] = useState(null);
   const [mediaType, setMediaType] = useState(null);
   const [groupProfileImage, setGroupProfileImage] = useState(null);
+  const [userProfileImage, setUserProfileImage] = useState(null);
   const flatListRef = useRef(null);
   let messageSubscription = null;
 
@@ -47,9 +48,23 @@ const GroupChatPage = () => {
     return uuidRegex.test(id);
   };
 
+  // ─── LOAD USER PROFILE IMAGE ────────────────────
+  const loadUserProfileImage = async () => {
+    try {
+      const savedImage = await AsyncStorage.getItem('userProfileImage');
+      if (savedImage) {
+        setUserProfileImage(savedImage);
+        console.log('✅ Loaded user profile image in group-chat');
+      }
+    } catch (error) {
+      console.error('Error loading profile image:', error);
+    }
+  };
+
   useEffect(() => {
     initializeChat();
     loadGroupProfileImage();
+    loadUserProfileImage();
     
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
       setKeyboardVisible(true);
@@ -623,16 +638,32 @@ const GroupChatPage = () => {
     return avatarStr.startsWith('http') || avatarStr.startsWith('file://');
   };
 
+  // ─── GET MEMBER AVATAR ──────────────────────────
+  const getMemberAvatar = (member) => {
+    // If this is the current user, use profile image if available
+    if (member.id === currentUser?.id && userProfileImage) {
+      return userProfileImage;
+    }
+    return member.avatar || '👤';
+  };
+
   // ─── RENDER MESSAGE ─────────────────────────────
   const renderMessage = ({ item }) => {
     const isCurrentUser = item.senderId === (currentUser?.id);
     const isMedia = item.media && item.mediaType;
+    const senderAvatar = isCurrentUser && userProfileImage ? userProfileImage : (item.senderAvatar || '👤');
     
     return (
       <View style={[styles.messageRow, isCurrentUser ? styles.currentUserRow : styles.otherUserRow]}>
         {!isCurrentUser && (
           <View style={styles.messageAvatar}>
-            <Text style={styles.messageAvatarText}>{item.senderAvatar || '👤'}</Text>
+            {senderAvatar && senderAvatar.startsWith('file://') ? (
+              <Image source={{ uri: senderAvatar }} style={styles.messageAvatarImage} />
+            ) : senderAvatar && senderAvatar.startsWith('http') ? (
+              <Image source={{ uri: senderAvatar }} style={styles.messageAvatarImage} />
+            ) : (
+              <Text style={styles.messageAvatarText}>{senderAvatar || '👤'}</Text>
+            )}
           </View>
         )}
         <View style={[styles.messageContainer, isCurrentUser ? styles.currentUserContainer : styles.otherUserContainer]}>
@@ -672,51 +703,58 @@ const GroupChatPage = () => {
     );
   };
 
-  // ─── RENDER MEMBER ITEM ──────────────────────────
-  const renderMemberItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.memberItem}
-      onPress={() => {
-        console.log('👤 Member clicked:', item.name);
-        setShowMembersModal(false);
-        router.push({
-          pathname: '/app-pages/tour-guide-profile',
-          params: { userId: item.id }
-        });
-      }}
-      activeOpacity={0.7}
-    >
-      <View style={styles.memberAvatarContainer}>
-        {item.avatar && item.avatar.startsWith('http') ? (
-          <Image source={{ uri: item.avatar }} style={styles.memberAvatarImage} />
-        ) : (
-          <Text style={styles.memberAvatar}>{item.avatar || '👤'}</Text>
-        )}
-      </View>
-      <View style={styles.memberInfo}>
-        <Text style={styles.memberName}>{item.name}</Text>
-        <Text style={styles.memberStatus}>
-          {item.id === currentUser?.id ? '👑 You' : 'Member'}
-        </Text>
-      </View>
+  // ─── RENDER MEMBER ITEM (UPDATED) ──────────────
+  const renderMemberItem = ({ item }) => {
+    const avatar = getMemberAvatar(item);
+    const isCurrentUserMember = item.id === currentUser?.id;
+    
+    return (
       <TouchableOpacity 
-        style={styles.memberChatButton}
+        style={styles.memberItem}
         onPress={() => {
+          console.log('👤 Member clicked:', item.name);
           setShowMembersModal(false);
           router.push({
-            pathname: '/app-pages/solo-chat',
-            params: { 
-              userId: item.id,
-              userName: item.name,
-              avatar: item.avatar || '👤'
-            }
+            pathname: '/app-pages/tour-guide-profile',
+            params: { userId: item.id }
           });
         }}
+        activeOpacity={0.7}
       >
-        <Text style={styles.memberChatButtonText}>💬</Text>
+        <View style={styles.memberAvatarContainer}>
+          {avatar && avatar.startsWith('file://') ? (
+            <Image source={{ uri: avatar }} style={styles.memberAvatarImage} />
+          ) : avatar && avatar.startsWith('http') ? (
+            <Image source={{ uri: avatar }} style={styles.memberAvatarImage} />
+          ) : (
+            <Text style={styles.memberAvatar}>{avatar || '👤'}</Text>
+          )}
+        </View>
+        <View style={styles.memberInfo}>
+          <Text style={styles.memberName}>{item.name}</Text>
+          <Text style={styles.memberStatus}>
+            {isCurrentUserMember ? '👑 You' : 'Member'}
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.memberChatButton}
+          onPress={() => {
+            setShowMembersModal(false);
+            router.push({
+              pathname: '/app-pages/solo-chat',
+              params: { 
+                userId: item.id,
+                userName: item.name,
+                avatar: item.avatar || '👤'
+              }
+            });
+          }}
+        >
+          <Text style={styles.memberChatButtonText}>💬</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -1030,6 +1068,11 @@ const styles = StyleSheet.create({
   },
   messageAvatarText: {
     fontSize: 28,
+  },
+  messageAvatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   senderName: {
     fontSize: 12,
