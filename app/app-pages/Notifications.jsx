@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 3,
+    marginBottom: 13,
   },
   notifTitle: { flex: 1, fontSize: 14, fontWeight: "600", color: C.textMuted },
   notifTitleUnread: { color: C.navy, fontWeight: "700" },

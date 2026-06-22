@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
   Easing,
-  Image,
+  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -35,49 +36,67 @@ const C = {
   dangerSoft: "#FFF0EF",
 };
 
-// ─── FEATURE CARDS DATA (No Emojis/Icons) ────────
+// ─── Feature data — now with a themed photo + colored gradient per card ──
 const featureCardsData = [
   {
     name: "Trip Planning",
-    description: "Craft the perfect journey",
+    description: "Craft the perfect journey, stop by stop.",
+    icon: "📅",
     target: "/app-pages/plan",
-    accentColor: "#1A6BFF",
-    backgroundImage: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&h=500&fit=crop",
+    accentIcon: "#1A6BFF",
+    image:
+      "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600&q=80",
+    gradient: ["transparent", "rgba(26,107,255,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Travel Map",
-    description: "Pin your world adventures",
+    description: "Pin your world. Own your adventures.",
+    icon: "🗺️",
     target: "/app-pages/map",
-    accentColor: "#0CB8B0",
-    backgroundImage: "https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&h=500&fit=crop",
+    accentIcon: "#0CB8B0",
+    image:
+      "https://images.unsplash.com/photo-1551632811-561732d1e306?w=600&q=80",
+    gradient: ["transparent", "rgba(12,184,176,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Travel Feed",
-    description: "Stories that inspire",
+    description: "Stories that inspire your next escape.",
+    icon: "🔖",
     target: "/app-pages/feed",
-    accentColor: "#6C47FF",
-    backgroundImage: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=500&fit=crop",
+    accentIcon: "#6C47FF",
+    image:
+      "https://images.unsplash.com/photo-1488085061387-422e29b40080?w=600&q=80",
+    gradient: ["transparent", "rgba(108,71,255,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Travel Guide",
-    description: "Local wisdom curated",
+    description: "Local wisdom, curated for you.",
+    icon: "📖",
     target: "/app-pages/TourGuide",
-    accentColor: "#1A6BFF",
-    backgroundImage: "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&h=500&fit=crop",
+    accentIcon: "#1A6BFF",
+    image:
+      "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=600&q=80",
+    gradient: ["transparent", "rgba(26,107,255,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Community",
-    description: "Find your global tribe",
+    description: "Find your tribe across the globe.",
+    icon: "💬",
     target: "/app-pages/community",
-    accentColor: "#0CB870",
-    backgroundImage: "https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=600&h=500&fit=crop",
+    accentIcon: "#0CB870",
+    image:
+      "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=600&q=80",
+    gradient: ["transparent", "rgba(12,184,112,0.55)", "rgba(10,31,68,0.92)"],
   },
   {
     name: "Weather",
-    description: "Pack smart & confident",
+    description: "Pack smart. Travel confident.",
+    icon: "⛅",
     target: "/app-pages/weather",
-    accentColor: "#3B9EFF",
-    backgroundImage: "https://images.unsplash.com/photo-1504608524841-42fe6f032b4b?w=600&h=500&fit=crop",
+    accentIcon: "#3B9EFF",
+    image:
+      "https://images.unsplash.com/photo-1601297183305-6df142704ea2?w=600&q=80",
+    gradient: ["transparent", "rgba(59,158,255,0.55)", "rgba(10,31,68,0.92)"],
   },
 ];
 
@@ -87,16 +106,19 @@ const MENU_ITEMS = [
     label: "Notifications",
     icon: "notifications-outline",
     target: "/app-pages/Notifications",
+    color: C.navy,
   },
   {
     label: "Settings & Privacy",
     icon: "settings-outline",
     target: "/app-pages/SettingsPrivacy",
+    color: C.navy,
   },
   {
     label: "Help & Support",
     icon: "help-circle-outline",
     target: "/app-pages/HelpSupport",
+    color: C.navy,
   },
 ];
 
@@ -128,7 +150,7 @@ const FloatOrb = ({ style, delay = 0 }) => {
   return <Animated.View style={[style, { transform: [{ translateY }] }]} />;
 };
 
-// ─── FEATURE CARD (No Emojis) ──────────────────────
+// ─── Feature Card (now photo-backed, gradient overlay, press-scale) ──────
 const FeatureCard = ({ feature, index, onPress }) => {
   const fade = useRef(new Animated.Value(0)).current;
   const slide = useRef(new Animated.Value(28)).current;
@@ -164,7 +186,7 @@ const FeatureCard = ({ feature, index, onPress }) => {
       }}
     >
       <TouchableOpacity
-        activeOpacity={0.88}
+        activeOpacity={0.92}
         onPress={() => onPress(feature.target)}
         onPressIn={() =>
           Animated.spring(scale, {
@@ -181,25 +203,35 @@ const FeatureCard = ({ feature, index, onPress }) => {
         }
       >
         <View style={styles.card}>
-          {/* ── Background Image ── */}
-          <Image
-            source={{ uri: feature.backgroundImage }}
-            style={styles.cardBackgroundImage}
-            resizeMode="cover"
-          />
-          
-          {/* ── Bottom Shadow Gradient ── */}
-          <View style={styles.cardShadowOverlay} />
-          
-          {/* ── Content ── */}
-          <View style={styles.cardContent}>
-            <View style={[styles.cardAccentLine, { backgroundColor: feature.accentColor }]} />
-            <Text style={styles.cardName}>{feature.name}</Text>
-            <Text style={styles.cardDesc}>{feature.description}</Text>
-            <View style={[styles.cardChip, { backgroundColor: feature.accentColor + "30" }]}>
-              <Text style={[styles.cardChipText, { color: feature.accentColor }]}>Explore →</Text>
+          <ImageBackground
+            source={{ uri: feature.image }}
+            style={styles.cardImageBg}
+            imageStyle={styles.cardImageRadius}
+          >
+            {/* Colorful gradient overlay — keeps the title readable on any photo */}
+            <LinearGradient
+              colors={feature.gradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.cardGradient}
+            />
+
+            {/* Floating icon badge */}
+            <View style={styles.iconWrap}>
+              <Text style={styles.cardIcon}>{feature.icon}</Text>
             </View>
-          </View>
+
+            {/* Title / description / chip sit on top of the gradient */}
+            <View style={styles.cardBottomContent}>
+              <Text style={styles.cardName}>{feature.name}</Text>
+              <Text style={styles.cardDesc} numberOfLines={2}>
+                {feature.description}
+              </Text>
+              <View style={styles.cardChip}>
+                <Text style={styles.cardChipText}>Explore →</Text>
+              </View>
+            </View>
+          </ImageBackground>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -282,12 +314,14 @@ const HomePage = () => {
 
   const handleLogoutPress = () => {
     setMenuVisible(false);
+    // Small delay so the dropdown closes before the dialog appears
     setTimeout(() => setLogoutVisible(true), 150);
   };
 
   const confirmLogout = async () => {
     setLogoutVisible(false);
     await supabase.auth.signOut();
+    // onAuthStateChange above will fire SIGNED_OUT and redirect
   };
 
   // ── Splash / loading ──
@@ -349,6 +383,7 @@ const HomePage = () => {
               Tripzy
             </Animated.Text>
 
+            {/* ── Three-dot menu button (replaces profile emoji) ── */}
             <TouchableOpacity
               style={styles.menuBtn}
               onPress={() => setMenuVisible(true)}
@@ -361,7 +396,7 @@ const HomePage = () => {
           {/* Welcome pill */}
           <Animated.View style={[styles.welcomePill, { opacity: pillFade }]}>
             <View style={styles.pillDot} />
-            <Text style={styles.pillText}>Welcome back, {firstName} 🌍</Text>
+            <Text style={styles.pillText}>Welcome back, {firstName}! 🌍</Text>
           </Animated.View>
 
           {/* Headline */}
@@ -383,7 +418,7 @@ const HomePage = () => {
               style={styles.ctaPrimary}
               onPress={() => router.push("/app-pages/plan")}
             >
-              <Text style={styles.ctaPrimaryText}>Plan a Trip</Text>
+              <Text style={styles.ctaPrimaryText}>＋ Plan a Trip</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.ctaSecondary}
@@ -431,7 +466,7 @@ const HomePage = () => {
 
       <BottomNav />
 
-      {/* ══ DROPDOWN MENU ════════════════════════════ */}
+      {/* ══ DROPDOWN MENU ════════════════════════════════════════════════ */}
       <Modal
         visible={menuVisible}
         transparent
@@ -443,6 +478,7 @@ const HomePage = () => {
           onPress={() => setMenuVisible(false)}
         >
           <View style={styles.dropdown}>
+            {/* Decorative accent bar at top */}
             <View style={styles.dropdownAccent} />
 
             {MENU_ITEMS.map((item, idx) => (
@@ -469,6 +505,7 @@ const HomePage = () => {
 
             <View style={styles.dropdownDivider} />
 
+            {/* Logout row */}
             <TouchableOpacity
               style={styles.dropdownRow}
               onPress={handleLogoutPress}
@@ -487,7 +524,7 @@ const HomePage = () => {
         </Pressable>
       </Modal>
 
-      {/* ══ LOGOUT CONFIRMATION ═══════════════════════ */}
+      {/* ══ LOGOUT CONFIRMATION ══════════════════════════════════════════ */}
       <Modal
         visible={logoutVisible}
         transparent
@@ -634,6 +671,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
   },
 
+  // ── Three-dot button — same sizing/shape as the original profileBtn ──
   menuBtn: {
     width: 44,
     height: 44,
@@ -769,86 +807,84 @@ const styles = StyleSheet.create({
   // Grid
   grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20 },
 
-  // ─── CARD STYLES (No Emojis) ──────────────────────
+  // ── Photo-backed cards ──────────────────────────────────────────────
   card: {
     borderRadius: 20,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowColor: C.navy,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  cardImageBg: {
+    width: "100%",
     height: 190,
+    justifyContent: "space-between",
   },
-  cardBackgroundImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
+  cardImageRadius: {
+    borderRadius: 20,
   },
-  cardShadowOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '70%',
-    backgroundColor: 'transparent',
-    backgroundImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.75))',
+  cardGradient: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
   },
-  cardContent: {
-    position: 'relative',
-    zIndex: 1,
-    padding: 16,
-    flex: 1,
-    justifyContent: 'flex-end',
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
   },
-  cardAccentLine: {
-    width: 30,
-    height: 3,
-    borderRadius: 2,
-    marginBottom: 8,
+  cardIcon: { fontSize: 17 },
+  cardBottomContent: {
+    padding: 14,
+    paddingTop: 0,
   },
   cardName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: "#FFFFFF",
-    marginBottom: 2,
-    letterSpacing: 0.2,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    marginBottom: 4,
+    letterSpacing: 0.1,
+    textShadowColor: "rgba(0,0,0,0.4)",
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 4,
   },
   cardDesc: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.85)",
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.88)",
     lineHeight: 16,
     marginBottom: 10,
-    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
   },
   cardChip: {
     alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.35)",
   },
-  cardChipText: { 
-    fontSize: 11, 
-    fontWeight: "700", 
-    letterSpacing: 0.3 
+  cardChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    color: "#FFFFFF",
   },
 
-  // ── Dropdown ──────────────────────────────────────
+  // ── Dropdown ──────────────────────────────────────────────────────────
   menuOverlay: { flex: 1, backgroundColor: "rgba(10,31,68,0.18)" },
   dropdown: {
     position: "absolute",
-    top: 72,
+    top: 72, // just below the top bar
     right: 20,
     width: 230,
     backgroundColor: C.white,
@@ -894,7 +930,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
 
-  // ── Logout confirmation ──────────────────────────
+  // ── Logout confirmation ───────────────────────────────────────────────
   confirmOverlay: {
     flex: 1,
     backgroundColor: "rgba(10,31,68,0.35)",

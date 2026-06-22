@@ -154,7 +154,7 @@ const Welcome = () => {
             activeOpacity={0.88}
             onPress={() => router.push("/signup")}
           >
-            <Text style={s.buttonPrimaryText}>User Sign Up</Text>
+            <Text style={s.buttonPrimaryText}>Sign Up</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -162,7 +162,7 @@ const Welcome = () => {
             activeOpacity={0.75}
             onPress={() => router.push("/loginpage")}
           >
-            <Text style={s.buttonSecondaryText}>I Already Have an Account</Text>
+            <Text style={s.buttonSecondaryText}>I already have an account</Text>
           </TouchableOpacity>
 
           <Text style={s.legalFootnote}>
@@ -184,15 +184,15 @@ const s = StyleSheet.create({
   mainContainer: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: height * 0.05, // Screen එකේ උස අනුව dynamic padding
+    paddingTop: height * 0.05,
     paddingBottom: height * 0.03,
-    justifyContent: "space-between", // Elements ටික screen එක පුරා සමානව බෙදී යයි
+    justifyContent: "space-between",
   },
 
   // Image Layout
   heroVisualWrapper: {
     width: "100%",
-    height: height * 0.28, // Scroll නොවීමට image එක මදක් කුඩා කර ඇත
+    height: height * 0.28,
     position: "relative",
   },
   heroImage: {
