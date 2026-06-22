@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import BottomNav from '../../components/BottomNav'; // Import BottomNav component
+import BottomNav from '../../components/BottomNav';
 import { supabase } from '../../lib/supabase';
 
 const TourGuidePage = () => {
@@ -28,22 +28,12 @@ const TourGuidePage = () => {
   // States for enhanced functionality
   const [loading, setLoading] = useState(false);
   const [specialRequests, setSpecialRequests] = useState('');
-  const [totalPrice, setTotalPrice] = useState(0);
-  const [showPriceBreakdown, setShowPriceBreakdown] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  
-  // Price rates
-  const BASE_PRICE_PER_DAY = 50;
-  const PRICE_PER_PERSON = 25;
 
   useEffect(() => {
     loadCurrentUser();
   }, []);
-
-  useEffect(() => {
-    calculatePrice();
-  }, [groupSize]);
 
   const loadCurrentUser = async () => {
     try {
@@ -54,27 +44,17 @@ const TourGuidePage = () => {
     }
   };
 
-  const calculatePrice = () => {
-    let price = BASE_PRICE_PER_DAY;
-    if (groupSize && parseInt(groupSize) > 1) {
-      price += (parseInt(groupSize) - 1) * PRICE_PER_PERSON;
-    }
-    setTotalPrice(price);
-  };
-
   const sendWhatsAppMessage = async () => {
     if (!whatsappNumber) {
       Alert.alert('Warning', 'Please enter tour guide WhatsApp number to send confirmation');
       return false;
     }
 
-    // Clean the WhatsApp number (remove any spaces, ensure it starts with country code)
     let cleanNumber = whatsappNumber.replace(/\s/g, '');
     if (!cleanNumber.startsWith('+')) {
       cleanNumber = '+' + cleanNumber;
     }
 
-    // Create the message content with user details highlighted (without User ID)
     const message = `*🏖️ TOUR GUIDE BOOKING REQUEST* 🎉\n\n` +
       `*👤 FROM: ${currentUser?.user_metadata?.full_name || 'Guest User'}* \n` +
       `*📧 Email: ${currentUser?.email || 'N/A'}*\n\n` +
@@ -83,19 +63,14 @@ const TourGuidePage = () => {
       `• *📍 Destination:* ${destination}\n` +
       `• *📅 Date:* ${selectedDate}/${currentMonth + 1}/${currentYear}\n` +
       `• *👥 Group Size:* ${groupSize} person(s)\n` +
-      `• *💰 Total Price:* $${totalPrice}\n` +
       `• *📝 Special Requests:* ${specialRequests || 'None'}\n\n` +
       `*✨ Booking Status:* Pending Confirmation\n` +
       `*🕐 Request Time:* ${new Date().toLocaleString()}\n\n` +
       `Please confirm this booking request. Thank you! 🙏`;
 
-    // Encode the message for URL
     const encodedMessage = encodeURIComponent(message);
-    
-    // Create WhatsApp URL
     const whatsappUrl = `https://wa.me/${cleanNumber}?text=${encodedMessage}`;
     
-    // Open WhatsApp or WhatsApp Web
     try {
       const supported = await Linking.canOpenURL(whatsappUrl);
       
@@ -120,14 +95,12 @@ const TourGuidePage = () => {
     }
   };
 
-  // Helper function to copy to clipboard
   const copyToClipboard = (text) => {
     Clipboard.setString(text);
     Alert.alert('Copied!', 'WhatsApp number copied to clipboard');
   };
 
   const handleBooking = async () => {
-    // Validation - Check all required fields
     if (!tourGuideName) {
       Alert.alert('Error', 'Please enter tour guide name');
       return;
@@ -153,15 +126,12 @@ const TourGuidePage = () => {
       return;
     }
     
-    // Send WhatsApp message
     setLoading(true);
     const whatsappSent = await sendWhatsAppMessage();
     
     if (whatsappSent) {
-      // If WhatsApp sent successfully, save to database
       await saveBookingToDatabase();
     } else {
-      // If WhatsApp failed, ask if user wants to continue with booking
       Alert.alert(
         'WhatsApp Message Failed',
         'Failed to send WhatsApp message. Do you want to continue with the booking?',
@@ -174,7 +144,6 @@ const TourGuidePage = () => {
   };
 
   const saveBookingToDatabase = async () => {
-    // Generate UUID for booking
     const generateUUID = () => {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         const r = Math.random() * 16 | 0;
@@ -192,7 +161,7 @@ const TourGuidePage = () => {
       destination: destination,
       booking_date: `${selectedDate}/${currentMonth + 1}/${currentYear}`,
       group_size: parseInt(groupSize),
-      total_price: totalPrice,
+      total_price: 0,
       special_requests: specialRequests,
       whatsapp_number: whatsappNumber,
       status: 'pending',
@@ -226,7 +195,6 @@ const TourGuidePage = () => {
     setSpecialRequests('');
     setWhatsappNumber('');
     setSelectedDate(new Date().getDate());
-    setTotalPrice(0);
   };
 
   const handleFindBooking = () => {
@@ -287,7 +255,6 @@ const TourGuidePage = () => {
     setSelectedDate(null);
   };
 
-  // Check if all required fields are filled
   const isFormValid = () => {
     return tourGuideName && 
            destination && 
@@ -303,59 +270,24 @@ const TourGuidePage = () => {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {/* Hero Section */}
           <View style={styles.heroSection}>
-            <Text style={styles.heroTitle}>Easy Guide Booking</Text>
+            <Text style={styles.heroTitle}>Your Guide, Your Journey</Text>
             <Text style={styles.heroSubtitle}>
-              Pick your place, set your date, and book instantly
+              Select your destination, choose your date, and connect with a trusted local guide instantly
             </Text>
           </View>
 
-          {/* Tour Guide Name Input */}
+          {/* Your Guide Name Input */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>👤 Tour Guide Name</Text>
+            <Text style={styles.sectionTitle}>Your Guide Name</Text>
             <View style={styles.tourGuideInputContainer}>
               <Ionicons name="person-outline" size={20} color="#007AFF" />
               <TextInput
                 style={styles.tourGuideInput}
-                placeholder="Enter tour guide name (e.g., John Doe)"
+                placeholder="Enter guide name (e.g., John Doe)"
                 value={tourGuideName}
                 onChangeText={setTourGuideName}
               />
             </View>
-          </View>
-
-          {/* Price Calculator Section */}
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>💰 Price Calculator</Text>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Base Price (per day):</Text>
-              <Text style={styles.priceValue}>${BASE_PRICE_PER_DAY}</Text>
-            </View>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Extra person fee:</Text>
-              <Text style={styles.priceValue}>${PRICE_PER_PERSON}/person</Text>
-            </View>
-            <View style={styles.priceDivider} />
-            <View style={styles.priceRow}>
-              <Text style={styles.totalLabel}>Total Price:</Text>
-              <Text style={styles.totalValue}>${totalPrice}</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.priceInfoButton}
-              onPress={() => setShowPriceBreakdown(!showPriceBreakdown)}
-            >
-              <Text style={styles.priceInfoText}>
-                {showPriceBreakdown ? 'Hide' : 'Show'} price breakdown
-              </Text>
-            </TouchableOpacity>
-            {showPriceBreakdown && (
-              <View style={styles.priceBreakdown}>
-                <Text style={styles.breakdownText}>
-                  • Base price: ${BASE_PRICE_PER_DAY}
-                  {groupSize && parseInt(groupSize) > 1 && `\n• Extra ${parseInt(groupSize) - 1} persons: $${(parseInt(groupSize) - 1) * PRICE_PER_PERSON}`}
-                  {groupSize && parseInt(groupSize) > 1 && `\n• Total: $${totalPrice}`}
-                </Text>
-              </View>
-            )}
           </View>
 
           {/* Black Info Card */}
@@ -373,7 +305,7 @@ const TourGuidePage = () => {
 
           {/* Destination Input */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>📍 Where do you want to go?</Text>
+            <Text style={styles.sectionTitle}>Where do you want to go?</Text>
             <View style={styles.destinationInputContainer}>
               <Ionicons name="location-outline" size={20} color="#007AFF" />
               <TextInput
@@ -387,7 +319,7 @@ const TourGuidePage = () => {
 
           {/* Calendar Section */}
           <View style={styles.calendarCard}>
-            <Text style={styles.sectionTitle}>📅 Date Picker</Text>
+            <Text style={styles.sectionTitle}>Date Picker</Text>
             <Text style={styles.calendarSubtitle}>
               Pick your suitable date for booking Tour Guide
             </Text>
@@ -438,7 +370,7 @@ const TourGuidePage = () => {
 
           {/* Group Size */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>👥 Group Size</Text>
+            <Text style={styles.sectionTitle}>Group Size</Text>
             <TextInput
               style={styles.groupSizeInput}
               placeholder="Enter number of people"
@@ -453,7 +385,7 @@ const TourGuidePage = () => {
 
           {/* WhatsApp Number Section */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>📱 Tour Guide WhatsApp Number</Text>
+            <Text style={styles.sectionTitle}>Tour Guide WhatsApp Number</Text>
             <View style={styles.whatsappInputContainer}>
               <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
               <TextInput
@@ -471,7 +403,7 @@ const TourGuidePage = () => {
 
           {/* Special Requests */}
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>📝 Special Requests</Text>
+            <Text style={styles.sectionTitle}>Special Requests</Text>
             <TextInput
               style={[styles.groupSizeInput, styles.textArea]}
               placeholder="Any special requirements? (dietary needs, accessibility, preferred language, etc.)"
@@ -499,12 +431,10 @@ const TourGuidePage = () => {
             </Text>
           </TouchableOpacity>
 
-          {/* Add extra padding at bottom to prevent content being hidden behind bottom nav */}
           <View style={styles.bottomPadding} />
         </ScrollView>
       </SafeAreaView>
       
-      {/* Bottom Navigation */}
       <BottomNav />
     </View>
   );
@@ -522,7 +452,7 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   bottomPadding: {
-    height: 80, // Extra padding to prevent content being hidden behind bottom nav
+    height: 80,
   },
   heroSection: {
     paddingHorizontal: 20,
@@ -530,17 +460,19 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    color: '#333',
+    color: '#1a1a2e',
     marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   heroSubtitle: {
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
     textAlign: 'center',
+    paddingHorizontal: 10,
   },
   card: {
     backgroundColor: '#fff',
@@ -578,54 +510,6 @@ const styles = StyleSheet.create({
     color: '#333',
     marginLeft: 8,
     paddingVertical: 0,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  priceValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-  },
-  priceDivider: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginVertical: 8,
-  },
-  totalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#007AFF',
-  },
-  priceInfoButton: {
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  priceInfoText: {
-    fontSize: 12,
-    color: '#007AFF',
-  },
-  priceBreakdown: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-  },
-  breakdownText: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 18,
   },
   blackInfoCard: {
     backgroundColor: '#000000',
