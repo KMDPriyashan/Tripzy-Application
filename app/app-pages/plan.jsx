@@ -197,7 +197,7 @@ const PlanPage = () => {
           <View style={styles.titleSection}>
             <Text style={styles.mainTitle}>Plan Your Perfect Getaway !</Text>
             <Text style={styles.subtitle}>
-              🌳Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖
+              Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 
             </Text>
           </View>
 
@@ -218,24 +218,41 @@ const PlanPage = () => {
               {calendarDays.map((dateInfo, index) => {
                 const isSelected = isSameDay(dateInfo.date, selectedDate);
                 const isCurrentMonthDay = isCurrentMonth(dateInfo.date);
+                const isToday = dateInfo.isToday;
+                
+                // Determine the style for each day
+                let dayStyle = [styles.calendarDay];
+                let textStyle = [styles.dayText];
+                
+                // Check if today and selected are the same day
+                const isTodayAndSelected = isToday && isSelected;
+                
+                if (isTodayAndSelected) {
+                  // Both today and selected - use selected style (takes priority)
+                  dayStyle.push(styles.selectedDay);
+                  textStyle.push(styles.selectedDayText);
+                } else if (isSelected) {
+                  // Only selected
+                  dayStyle.push(styles.selectedDay);
+                  textStyle.push(styles.selectedDayText);
+                } else if (isToday) {
+                  // Only today
+                  dayStyle.push(styles.todayDay);
+                  textStyle.push(styles.todayText);
+                }
+                
+                if (!isCurrentMonthDay) {
+                  dayStyle.push(styles.otherMonthDay);
+                  textStyle.push(styles.otherMonthText);
+                }
                 
                 return (
                   <TouchableOpacity
                     key={index}
-                    style={[
-                      styles.calendarDay,
-                      isSelected && styles.selectedDay,
-                      dateInfo.isToday && styles.todayDay,
-                      !isCurrentMonthDay && styles.otherMonthDay
-                    ]}
+                    style={dayStyle}
                     onPress={() => handleDatePress(dateInfo)}
                   >
-                    <Text style={[
-                      styles.dayText,
-                      isSelected && styles.selectedDayText,
-                      dateInfo.isToday && !isSelected && styles.todayText,
-                      !isCurrentMonthDay && styles.otherMonthText
-                    ]}>
+                    <Text style={textStyle}>
                       {dateInfo.day}
                     </Text>
                   </TouchableOpacity>
@@ -311,7 +328,7 @@ const PlanPage = () => {
           
           <View style={styles.bottomText}>
             <Text style={styles.endtext}>
-              With every detail in place, this plan ensures a smooth journey filled with memorable experiences. 🔖
+              With every detail in place, this plan ensures a smooth journey filled with memorable experiences. 
             </Text>    
           </View>
 
@@ -444,10 +461,12 @@ const styles = StyleSheet.create({
   },
   selectedDay: {
     backgroundColor: '#007AFF',
+    borderWidth: 0,
   },
   todayDay: {
-    borderColor: '#007AFF',
-    borderWidth: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#1a1a1a', // Black color for today
   },
   otherMonthDay: {
     opacity: 0.4,
@@ -461,7 +480,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   todayText: {
-    color: '#007AFF',
+    color: '#1a1a1a', // Black color for today's text
     fontWeight: '700',
   },
   otherMonthText: {
@@ -487,11 +506,12 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   todayLegend: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#1a1a1a', // Black for today's legend
+    borderWidth: 1,
+    borderColor: '#1a1a1a',
   },
   selectedLegend: {
     backgroundColor: '#007AFF',
-    opacity: 1,
   },
   legendText: {
     fontSize: 12,
