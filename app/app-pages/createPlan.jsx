@@ -44,6 +44,7 @@ const CreatePlan = () => {
   const [loading, setLoading] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [savedPlanData, setSavedPlanData] = useState(null);
+  const [showProvinceDropdown, setShowProvinceDropdown] = useState(false);
   const [selectedPackingItems, setSelectedPackingItems] = useState(() => {
     if (params.savedSelectedPackingItems) {
       try {
@@ -97,6 +98,19 @@ const CreatePlan = () => {
     }
     return null;
   });
+
+  // Province options
+  const provinces = [
+    'Western Province',
+    'Central Province',
+    'Southern Province',
+    'Northern Province',
+    'Eastern Province',
+    'North Western Province',
+    'North Central Province',
+    'Uva Province',
+    'Sabaragamuwa Province'
+  ];
 
   // Save current form state to params before navigating
   const saveFormState = () => {
@@ -451,7 +465,7 @@ const CreatePlan = () => {
           <Text style={styles.pageSubtitle}>
             {isUpdating 
               ? 'Make changes to your travel plan and save updates'
-              : '✏️ Start organizing your dream trip with ease choose destinations, set dates, and customize every detail 🔖'}
+              : ' Start organizing your dream trip with ease choose destinations, set dates, and customize every detail '}
           </Text>
 
           {/* Destination Input */}
@@ -467,10 +481,10 @@ const CreatePlan = () => {
 
           {/* Post Caption Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Post Caption</Text>
+            <Text style={styles.label}>Description</Text>
             <TextInput
               style={styles.input}
-              placeholder="Write a caption for your post as a long ...."
+              placeholder="Write a description for your plan"
               value={postCaption}
               onChangeText={setPostCaption}
             />
@@ -515,15 +529,52 @@ const CreatePlan = () => {
             </View>
           </View>
 
-          {/* Province */}
+          {/* Province Dropdown - Scrollable */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Your Province</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter province of you stay"
-              value={province}
-              onChangeText={setProvince}
-            />
+            <TouchableOpacity 
+              style={styles.dropdownSelector}
+              onPress={() => setShowProvinceDropdown(!showProvinceDropdown)}
+            >
+              <Text style={[styles.dropdownText, !province && styles.placeholderText]}>
+                {province || 'Select your province'}
+              </Text>
+              <Text style={styles.dropdownArrow}>▼</Text>
+            </TouchableOpacity>
+
+            {showProvinceDropdown && (
+              <View style={styles.dropdownListContainer}>
+                <ScrollView 
+                  style={styles.dropdownScrollView}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
+                  {provinces.map((prov, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.dropdownItem,
+                        prov === province && styles.dropdownItemSelected
+                      ]}
+                      onPress={() => {
+                        setProvince(prov);
+                        setShowProvinceDropdown(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        prov === province && styles.dropdownItemTextSelected
+                      ]}>
+                        {prov}
+                      </Text>
+                      {prov === province && (
+                        <Text style={styles.checkmarkIcon}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </View>
 
           {/* Selected Packing Items Indicator */}
@@ -584,9 +635,8 @@ const CreatePlan = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Planning */}
+          {/* Date Selection - Removed "Planning" label */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Planning</Text>
             <View style={styles.planningContainer}>
               {/* Start Date */}
               <View style={styles.dateInputContainer}>
@@ -892,6 +942,64 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     fontSize: 14,
+  },
+  // Dropdown styles - Scrollable
+  dropdownSelector: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#666',
+  },
+  dropdownListContainer: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginTop: 5,
+    backgroundColor: '#fff',
+    maxHeight: 200,
+    overflow: 'hidden',
+  },
+  dropdownScrollView: {
+    maxHeight: 200,
+  },
+  dropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#007AFF',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  dropdownItemTextSelected: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  checkmarkIcon: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   statusContainer: {
     flexDirection: 'row',
