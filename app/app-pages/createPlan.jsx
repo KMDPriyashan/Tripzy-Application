@@ -456,7 +456,7 @@ const CreatePlan = () => {
 
           {/* Destination Input */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}> End Destination</Text>
+            <Text style={styles.label}>Destination</Text>
             <TextInput
               style={styles.input}
               placeholder="Enter destination"
@@ -563,17 +563,26 @@ const CreatePlan = () => {
             </View>
           )}
 
-          {/* Generate Packing Checklist Button */}
-          <TouchableOpacity
-            style={styles.generateButton}
-            onPress={navigateToPackingList}
-          >
-            <Text style={styles.generateButtonText}>
-              {selectedPackingItems.length > 0
-                ? 'Update Packing Checklist'
-                : 'Generate Packing Checklist'}
-            </Text>
-          </TouchableOpacity>
+          {/* Action Buttons Row - Generate Packing Checklist & Estimate Budget */}
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.packingButton]}
+              onPress={navigateToPackingList}
+            >
+              <Text style={styles.actionButtonText}>
+                Generate Packing Checklist
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.budgetButton]}
+              onPress={navigateToBudgetEstimate}
+            >
+              <Text style={styles.actionButtonText}>
+                Estimate Budget
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Planning */}
           <View style={styles.inputGroup}>
@@ -601,17 +610,6 @@ const CreatePlan = () => {
                 />
               </View>
             </View>
-          </View>
-
-          {/* Budget Estimate */}
-          <View style={styles.budgetContainer}>
-            <Text style={styles.label}>Estimate your Budget Plan</Text>
-            <TouchableOpacity
-              style={styles.estimateButton}
-              onPress={navigateToBudgetEstimate}
-            >
-              <Text style={styles.estimateButtonText}>Estimate</Text>
-            </TouchableOpacity>
           </View>
 
           {/* Budget Summary - Shows when budget is calculated */}
@@ -849,17 +847,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 0,
   },
-  generateButton: {
-    backgroundColor: '#34C759',
-    padding: 15,
+  // Action Buttons Row Styles
+  actionButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+    padding: 14,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
   },
-  generateButtonText: {
+  packingButton: {
+    backgroundColor: '#007AFF',
+  },
+  budgetButton: {
+    backgroundColor: '#007AFF',
+  },
+  actionButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
   },
   planningContainer: {
     flexDirection: 'row',
@@ -880,23 +892,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     fontSize: 14,
-  },
-  budgetContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  estimateButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  estimateButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
   },
   statusContainer: {
     flexDirection: 'row',
