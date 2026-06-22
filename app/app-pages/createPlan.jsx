@@ -782,7 +782,7 @@ const CreatePlan = () => {
 
           {/* Collaborates */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Collaborates For Your Trip</Text>
+            <Text style={styles.label}>Collaborates</Text>
             <TextInput
               style={styles.input}
               placeholder="Add collaborators ( nimal perera , kasun deshan , .... )"
@@ -791,7 +791,7 @@ const CreatePlan = () => {
 
           {/* Trip Notes */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Trip Notes</Text>
+            <Text style={styles.label}> Notes</Text>
             <TextInput
               style={[styles.input, styles.notesInput]}
               placeholder="Write your trip notes here..."
