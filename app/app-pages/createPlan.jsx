@@ -912,10 +912,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   packingButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#000000',
   },
   budgetButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#000000',
   },
   actionButtonText: {
     color: '#fff',

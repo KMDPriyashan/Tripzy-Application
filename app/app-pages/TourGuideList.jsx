@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { File } from 'expo-file-system';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -27,24 +26,16 @@ const TourGuideList = () => {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [hasOwnProfile, setHasOwnProfile] = useState(false);
+  const [ownProfileData, setOwnProfileData] = useState(null);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [blockFeatureEnabled, setBlockFeatureEnabled] = useState(true);
   const subscriptionRef = useRef(null);
 
-  // Function to validate and fix image URIs
   const validateImageUri = (uri) => {
     if (!uri) return null;
-    
-    if (uri.startsWith('file://') || uri.startsWith('content://')) {
-      return uri;
-    }
-    
-    if (uri.startsWith('data:image')) {
-      return uri;
-    }
-    
-    if (uri.startsWith('http://') || uri.startsWith('https://')) {
-      return uri;
-    }
-    
+    if (uri.startsWith('file://') || uri.startsWith('content://')) return uri;
+    if (uri.startsWith('data:image')) return uri;
+    if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
     return null;
   };
 
@@ -58,12 +49,44 @@ const TourGuideList = () => {
     };
   }, []);
 
+  const loadBlockedUsersForUser = async (user) => {
+    if (!user?.id) {
+      console.log('No user provided, skipping blocked users load');
+      setBlockedUsers([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('blocked_users')
+        .select('blocked_user_id')
+        .eq('user_id', user.id);
+
+      if (error) {
+        if (error.code === 'PGRST205') {
+          console.log('Blocked users table not found. Block feature disabled.');
+          setBlockFeatureEnabled(false);
+          setBlockedUsers([]);
+          return;
+        }
+        throw error;
+      }
+      setBlockedUsers(data?.map(item => item.blocked_user_id) || []);
+    } catch (error) {
+      console.error('Error loading blocked users:', error);
+      setBlockFeatureEnabled(false);
+      setBlockedUsers([]);
+    }
+  };
+
   const loadCurrentUser = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      
       if (user) {
         await loadProfiles();
+        await loadBlockedUsersForUser(user);
         setupRealtimeSubscription();
       }
     } catch (error) {
@@ -82,51 +105,20 @@ const TourGuideList = () => {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        let needsUpdate = false;
-        const validatedProfiles = data.map(profile => {
-          if (profile.image && profile.image.includes('/tour_guide_images/')) {
-            try {
-              const imageFile = new File(profile.image);
-              if (!imageFile.exists) {
-                needsUpdate = true;
-                return { ...profile, image: null };
-              }
-            } catch (e) {
-              needsUpdate = true;
-              return { ...profile, image: null };
-            }
-          }
-          
-          const validatedImage = validateImageUri(profile.image);
-          if (validatedImage !== profile.image) {
-            needsUpdate = true;
-            return { ...profile, image: validatedImage };
-          }
-          return profile;
-        });
-        
-        if (needsUpdate) {
-          for (const profile of validatedProfiles) {
-            if (profile.id) {
-              await supabase
-                .from('tour_guides')
-                .update({ image: profile.image })
-                .eq('id', profile.id);
-            }
-          }
-        }
-        
-        const profilesWithRatings = validatedProfiles.map(profile => ({
+        const validatedProfiles = data.map(profile => ({
           ...profile,
-          rating: profile.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
-          reviewCount: profile.review_count || Math.floor(Math.random() * (200 - 50) + 50)
+          image: validateImageUri(profile.image)
         }));
-        setProfiles(profilesWithRatings);
-        setFilteredProfiles(profilesWithRatings);
+        
+        setProfiles(validatedProfiles);
+        setFilteredProfiles(validatedProfiles);
 
         if (currentUser) {
-          const userProfile = profilesWithRatings.find(p => p.user_id === currentUser.id);
+          const userProfile = validatedProfiles.find(p => p.user_id === currentUser.id);
           setHasOwnProfile(!!userProfile);
+          if (userProfile) {
+            setOwnProfileData(userProfile);
+          }
         }
       } else {
         setProfiles([]);
@@ -156,13 +148,10 @@ const TourGuideList = () => {
           table: 'tour_guides',
         },
         (payload) => {
-          console.log('Real-time update received:', payload);
           handleRealtimeUpdate(payload);
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+      .subscribe();
 
     subscriptionRef.current = channel;
   };
@@ -172,85 +161,47 @@ const TourGuideList = () => {
 
     switch (eventType) {
       case 'INSERT':
-        const validatedImage = validateImageUri(newRecord.image);
         const newProfile = {
           ...newRecord,
-          image: validatedImage,
-          rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
-          reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
+          image: validateImageUri(newRecord.image)
         };
-
-        setProfiles(prevProfiles => [newProfile, ...prevProfiles]);
-
+        setProfiles(prev => [newProfile, ...prev]);
         if (searchQuery === '') {
           setFilteredProfiles(prev => [newProfile, ...prev]);
-        } else {
-          const matchesSearch = checkProfileMatchesSearch(newProfile, searchQuery);
-          if (matchesSearch) {
-            setFilteredProfiles(prev => [newProfile, ...prev]);
-          }
+        }
+        // Check if this is the current user's profile
+        if (currentUser && newRecord.user_id === currentUser.id) {
+          setHasOwnProfile(true);
+          setOwnProfileData(newProfile);
         }
         break;
 
       case 'UPDATE':
-        const updatedValidatedImage = validateImageUri(newRecord.image);
         const updatedProfile = {
           ...newRecord,
-          image: updatedValidatedImage,
-          rating: newRecord.rating || (Math.random() * (5 - 4) + 4).toFixed(1),
-          reviewCount: newRecord.review_count || Math.floor(Math.random() * (200 - 50) + 50)
+          image: validateImageUri(newRecord.image)
         };
-
-        setProfiles(prevProfiles =>
-          prevProfiles.map(profile =>
-            profile.id === updatedProfile.id ? updatedProfile : profile
-          )
+        setProfiles(prev =>
+          prev.map(p => p.id === updatedProfile.id ? updatedProfile : p)
         );
-
         setFilteredProfiles(prev =>
-          prev.map(profile =>
-            profile.id === updatedProfile.id ? updatedProfile : profile
-          )
+          prev.map(p => p.id === updatedProfile.id ? updatedProfile : p)
         );
+        // Update own profile data if this is the current user's profile
+        if (currentUser && newRecord.user_id === currentUser.id) {
+          setOwnProfileData(updatedProfile);
+        }
         break;
 
       case 'DELETE':
-        if (oldRecord.image && oldRecord.image.includes('/tour_guide_images/')) {
-          try {
-            const imageFile = new File(oldRecord.image);
-            if (imageFile.exists) {
-              imageFile.delete();
-            }
-          } catch (e) {
-            console.log('Image already deleted or not found');
-          }
+        setProfiles(prev => prev.filter(p => p.id !== oldRecord.id));
+        setFilteredProfiles(prev => prev.filter(p => p.id !== oldRecord.id));
+        if (currentUser && oldRecord.user_id === currentUser.id) {
+          setHasOwnProfile(false);
+          setOwnProfileData(null);
         }
-        
-        setProfiles(prevProfiles =>
-          prevProfiles.filter(profile => profile.id !== oldRecord.id)
-        );
-        setFilteredProfiles(prev =>
-          prev.filter(profile => profile.id !== oldRecord.id)
-        );
         break;
     }
-
-    if (currentUser) {
-      const userProfile = profiles.find(p => p.user_id === currentUser.id);
-      setHasOwnProfile(!!userProfile);
-    }
-  };
-
-  const checkProfileMatchesSearch = (profile, query) => {
-    if (!query.trim()) return true;
-    const searchLower = query.toLowerCase();
-    return (
-      profile.full_name?.toLowerCase().includes(searchLower) ||
-      profile.province?.toLowerCase().includes(searchLower) ||
-      profile.travel_mode_tags?.some(tag => tag.toLowerCase().includes(searchLower)) ||
-      profile.languages?.toLowerCase().includes(searchLower) ||
-      profile.description?.toLowerCase().includes(searchLower)
-    );
   };
 
   const handleSearch = (text) => {
@@ -260,7 +211,10 @@ const TourGuideList = () => {
     } else {
       const searchLower = text.toLowerCase();
       const filtered = profiles.filter(profile =>
-        checkProfileMatchesSearch(profile, searchLower)
+        profile.full_name?.toLowerCase().includes(searchLower) ||
+        profile.province?.toLowerCase().includes(searchLower) ||
+        profile.travel_mode_tags?.some(tag => tag.toLowerCase().includes(searchLower)) ||
+        profile.languages?.toLowerCase().includes(searchLower)
       );
       setFilteredProfiles(filtered);
     }
@@ -273,80 +227,44 @@ const TourGuideList = () => {
     });
   };
 
+  const handleEditProfile = (profile) => {
+    // Navigate to TGprofile with profile data for editing
+    router.push({
+      pathname: '/app-pages/TGprofile',
+      params: { 
+        profileId: profile.id,
+        editMode: 'true'
+      }
+    });
+  };
+
   const handleChatPress = (profile) => {
-    // Get WhatsApp number from profile
     const whatsappNumber = profile.whatsapp_number;
-    
     if (!whatsappNumber) {
-      Alert.alert(
-        'WhatsApp Number Not Available',
-        'This tour guide has not provided a WhatsApp number yet.',
-        [{ text: 'OK', style: 'cancel' }]
-      );
+      Alert.alert('WhatsApp Not Available', 'This guide has not provided a WhatsApp number.');
       return;
     }
     
-    // Clean the WhatsApp number (remove spaces, dashes, etc.)
     let cleanNumber = whatsappNumber.replace(/[\s\-\(\)]/g, '');
-    
-    // Remove '+' if present for checking
-    let numberWithoutPlus = cleanNumber.replace('+', '');
-    
-    // Check if number starts with country code (assuming 1-4 digits for country code)
-    // For Sri Lanka (+94), we need to ensure proper formatting
     if (!cleanNumber.startsWith('+')) {
-      // If number starts with 0, convert to country code format
-      if (numberWithoutPlus.startsWith('0')) {
-        // For Sri Lanka: 0712345678 -> +94712345678
-        if (numberWithoutPlus.startsWith('07')) {
-          cleanNumber = '+' + numberWithoutPlus.substring(1);
-        } else {
-          cleanNumber = '+' + numberWithoutPlus;
-        }
-      } else {
-        cleanNumber = '+' + numberWithoutPlus;
-      }
+      cleanNumber = '+' + cleanNumber;
     }
     
-    // Create WhatsApp URL
     const whatsappUrl = `whatsapp://send?phone=${cleanNumber}`;
-    
-    // Try to open WhatsApp
     Linking.canOpenURL(whatsappUrl)
       .then((supported) => {
-        if (supported) {
-          return Linking.openURL(whatsappUrl);
-        } else {
-          // If WhatsApp is not installed, provide alternative options
-          Alert.alert(
-            'WhatsApp Not Installed',
-            'WhatsApp is not installed on your device. Would you like to save the number to your contacts?',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { 
-                text: 'Copy Number', 
-                onPress: () => {
-                  const numberToCopy = whatsappNumber.replace(/[\s\-\(\)]/g, '');
-                  Alert.alert('Copied!', 'Phone number copied to clipboard');
-                }
-              }
-            ]
-          );
-        }
+        if (supported) return Linking.openURL(whatsappUrl);
+        Alert.alert('WhatsApp Not Installed', 'Please install WhatsApp to chat with this guide.');
       })
-      .catch((err) => {
-        console.error('Error opening WhatsApp:', err);
-        Alert.alert('Error', 'Unable to open WhatsApp. Please try again.');
-      });
+      .catch(() => Alert.alert('Error', 'Unable to open WhatsApp.'));
   };
 
   const handleBecomeGuide = () => {
     if (hasOwnProfile) {
-      Alert.alert(
-        'Profile Already Exists',
-        'You already have a tour guide profile. You can only create one profile per account.',
-        [{ text: 'OK', style: 'cancel' }]
-      );
+      // If user already has a profile, go to edit mode
+      if (ownProfileData) {
+        handleEditProfile(ownProfileData);
+      }
       return;
     }
     router.push('/app-pages/TGprofile');
@@ -360,7 +278,7 @@ const TourGuideList = () => {
 
     Alert.alert(
       'Delete Profile',
-      'Are you sure you want to delete your tour guide profile? This action cannot be undone.',
+      'Are you sure you want to delete your tour guide profile? This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -368,28 +286,17 @@ const TourGuideList = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              if (profile.image && profile.image.includes('/tour_guide_images/')) {
-                try {
-                  const imageFile = new File(profile.image);
-                  if (imageFile.exists) {
-                    imageFile.delete();
-                  }
-                } catch (e) {
-                  console.log('Image already deleted or not found');
-                }
-              }
-              
               const { error } = await supabase
                 .from('tour_guides')
                 .delete()
                 .eq('id', profile.id);
 
               if (error) throw error;
-
-              Alert.alert('Success', 'Your profile has been deleted successfully');
+              Alert.alert('Success', 'Your profile has been deleted.');
+              setHasOwnProfile(false);
+              setOwnProfileData(null);
             } catch (error) {
-              console.error('Error deleting profile:', error);
-              Alert.alert('Error', 'Failed to delete profile. Please try again.');
+              Alert.alert('Error', 'Failed to delete profile.');
             }
           }
         }
@@ -397,29 +304,83 @@ const TourGuideList = () => {
     );
   };
 
-  const handleUpdateProfile = (profile) => {
-    if (currentUser && profile.user_id !== currentUser.id) {
-      Alert.alert('Unauthorized', 'You can only update your own profile');
+  const handleBlockUser = async (profile) => {
+    if (!blockFeatureEnabled) {
+      Alert.alert('Feature Unavailable', 'Block feature is currently unavailable. Please try again later.');
       return;
     }
 
-    router.push({
-      pathname: '/app-pages/TGprofile',
-      params: { profileId: profile.id }
-    });
+    if (profile.user_id === currentUser?.id) {
+      Alert.alert('Cannot Block', 'You cannot block your own profile.');
+      return;
+    }
+
+    Alert.alert(
+      'Block User',
+      `Are you sure you want to block ${profile.full_name}? You won't see their profile anymore.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Block',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('blocked_users')
+                .insert([{
+                  user_id: currentUser.id,
+                  blocked_user_id: profile.user_id
+                }]);
+
+              if (error) throw error;
+              setBlockedUsers(prev => [...prev, profile.user_id]);
+              Alert.alert('Blocked', `${profile.full_name} has been blocked.`);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to block user.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleUnblockUser = async (profile) => {
+    if (!blockFeatureEnabled) {
+      Alert.alert('Feature Unavailable', 'Unblock feature is currently unavailable.');
+      return;
+    }
+
+    Alert.alert(
+      'Unblock User',
+      `Do you want to unblock ${profile.full_name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('blocked_users')
+                .delete()
+                .eq('user_id', currentUser.id)
+                .eq('blocked_user_id', profile.user_id);
+
+              if (error) throw error;
+              setBlockedUsers(prev => prev.filter(id => id !== profile.user_id));
+              Alert.alert('Unblocked', `${profile.full_name} has been unblocked.`);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to unblock user.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const GuideAvatar = ({ imageUri, name, style }) => {
     const [imageError, setImageError] = useState(false);
-    const [validUri, setValidUri] = useState(null);
 
-    useEffect(() => {
-      const validated = validateImageUri(imageUri);
-      setValidUri(validated);
-      setImageError(!validated);
-    }, [imageUri]);
-
-    if (imageError || !validUri) {
+    if (imageError || !imageUri) {
       return (
         <View style={[style, styles.avatarPlaceholder]}>
           <Text style={styles.avatarPlaceholderText}>
@@ -431,186 +392,168 @@ const TourGuideList = () => {
 
     return (
       <Image 
-        source={{ uri: validUri }}
+        source={{ uri: imageUri }}
         style={style}
         onError={() => setImageError(true)}
       />
     );
   };
 
-  const GuideCoverImage = ({ imageUri, style }) => {
-    const [imageError, setImageError] = useState(false);
-    const [validUri, setValidUri] = useState(null);
+  const GuideCard = ({ profile }) => {
+    const isOwner = currentUser && profile.user_id === currentUser.id;
+    const isBlocked = blockFeatureEnabled && blockedUsers.includes(profile.user_id);
 
-    useEffect(() => {
-      const validated = validateImageUri(imageUri);
-      setValidUri(validated);
-      setImageError(!validated);
-    }, [imageUri]);
-
-    if (imageError || !validUri) {
+    if (isBlocked) {
       return (
-        <View style={[style, styles.coverPlaceholder]}>
-          <Ionicons name="camera-outline" size={40} color="#ccc" />
+        <View style={styles.blockedCard}>
+          <View style={styles.blockedContent}>
+            <Ionicons name="eye-off-outline" size={40} color="#999" />
+            <Text style={styles.blockedText}>This profile is blocked</Text>
+            <TouchableOpacity
+              style={styles.unblockButton}
+              onPress={() => handleUnblockUser(profile)}
+            >
+              <Text style={styles.unblockButtonText}>Unblock User</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
 
     return (
-      <Image 
-        source={{ uri: validUri }}
-        style={style}
-        resizeMode="cover"
-        onError={() => setImageError(true)}
-      />
-    );
-  };
-
-  const renderStars = (rating) => {
-    const stars = [];
-    const numRating = parseFloat(rating);
-    const fullStars = Math.floor(numRating);
-    const hasHalfStar = numRating % 1 >= 0.5;
-
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(<Ionicons key={`star-${i}`} name="star" size={12} color="#FFD700" />);
-    }
-    if (hasHalfStar) {
-      stars.push(<Ionicons key="half-star" name="star-half" size={12} color="#FFD700" />);
-    }
-    const emptyStars = 5 - stars.length;
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(<Ionicons key={`empty-${i}`} name="star-outline" size={12} color="#FFD700" />);
-    }
-    return stars;
-  };
-
-  const GuideCard = ({ profile }) => {
-    const isOwner = currentUser && profile.user_id === currentUser.id;
-
-    return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.headerLeft}>
-            <GuideAvatar 
-              imageUri={profile.image}
-              name={profile.full_name}
-              style={styles.avatar}
+      <TouchableOpacity 
+        style={styles.card}
+        onPress={() => handleCardPress(profile)}
+        activeOpacity={0.95}
+      >
+        {/* Full Size Cover Image */}
+        <View style={styles.imageContainer}>
+          {profile.image ? (
+            <Image 
+              source={{ uri: profile.image }}
+              style={styles.coverImage}
+              resizeMode="cover"
             />
-            <View style={styles.headerInfo}>
-              <Text style={styles.guideName}>{profile.full_name}</Text>
-              <View style={styles.locationContainer}>
-                <Ionicons name="location-outline" size={12} color="#666" />
-                <Text style={styles.locationText}>{profile.province || 'Location not set'}</Text>
-              </View>
-              {/* Display WhatsApp number if available */}
-              {profile.whatsapp_number && !isOwner && (
-                <View style={styles.whatsappIndicator}>
-                  <Ionicons name="logo-whatsapp" size={10} color="#25D366" />
-                  <Text style={styles.whatsappIndicatorText}>WhatsApp available</Text>
-                </View>
-              )}
+          ) : (
+            <View style={styles.coverPlaceholder}>
+              <Ionicons name="camera-outline" size={50} color="#ccc" />
+            </View>
+          )}
+          
+          {/* Gradient Overlay */}
+          <View style={styles.imageOverlay} />
+          
+          {/* Name and Location Overlay */}
+          <View style={styles.overlayContent}>
+            <Text style={styles.guideNameOverlay}>{profile.full_name}</Text>
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={14} color="#fff" />
+              <Text style={styles.locationTextOverlay}>{profile.province || 'Location not set'}</Text>
             </View>
           </View>
-          <View style={styles.ratingContainer}>
-            <View style={styles.starsRow}>
-              {renderStars(profile.rating || 4.5)}
+
+          {/* Badge */}
+          {isOwner && (
+            <View style={styles.ownerBadge}>
+              <Ionicons name="checkmark-circle" size={14} color="#fff" />
+              <Text style={styles.ownerBadgeText}>Your Profile</Text>
             </View>
-            <Text style={styles.ratingText}>{profile.rating || 4.5}</Text>
-            <Text style={styles.reviewCount}>({profile.reviewCount || 0})</Text>
-          </View>
+          )}
         </View>
 
-        <GuideCoverImage 
-          imageUri={profile.image}
-          style={styles.coverImage}
-        />
-
+        {/* Card Content */}
         <View style={styles.cardContent}>
-          <Text style={styles.guideTitle}>Official Photographer and Travel Guide</Text>
-
-          {profile.experience && (
-            <View style={styles.experienceContainer}>
-              <Ionicons name="briefcase-outline" size={14} color="#007AFF" />
-              <Text style={styles.experienceText}>{profile.experience} of experience</Text>
-            </View>
-          )}
-
-          {profile.languages && (
-            <View style={styles.languagesContainer}>
-              <Ionicons name="language-outline" size={14} color="#666" />
-              <Text style={styles.languagesText}>{profile.languages}</Text>
-            </View>
-          )}
-
-          {profile.description && (
-            <Text style={styles.descriptionPreview} numberOfLines={2}>
-              {profile.description}
-            </Text>
-          )}
-
+          {/* Tags */}
           {profile.travel_mode_tags?.length > 0 && (
             <View style={styles.tagsContainer}>
-              {profile.travel_mode_tags.slice(0, 3).map((tag, index) => (
+              {profile.travel_mode_tags.slice(0, 4).map((tag, index) => (
                 <View key={index} style={styles.tag}>
                   <Text style={styles.tagText}>#{tag}</Text>
                 </View>
               ))}
-              {profile.travel_mode_tags.length > 3 && (
-                <Text style={styles.moreTags}>+{profile.travel_mode_tags.length - 3}</Text>
+              {profile.travel_mode_tags.length > 4 && (
+                <Text style={styles.moreTags}>+{profile.travel_mode_tags.length - 4}</Text>
               )}
             </View>
           )}
-        </View>
 
-        <View style={styles.actionButtons}>
-          {isOwner && (
-            <>
+          {/* Description */}
+          {profile.description && (
+            <Text style={styles.description} numberOfLines={2}>
+              {profile.description}
+            </Text>
+          )}
+
+          {/* Experience & Languages */}
+          <View style={styles.detailsRow}>
+            {profile.experience && (
+              <View style={styles.detailItem}>
+                <Ionicons name="briefcase-outline" size={14} color="#666" />
+                <Text style={styles.detailText}>{profile.experience}</Text>
+              </View>
+            )}
+            {profile.languages && (
+              <View style={styles.detailItem}>
+                <Ionicons name="language-outline" size={14} color="#666" />
+                <Text style={styles.detailText}>{profile.languages}</Text>
+              </View>
+            )}
+            {profile.whatsapp_number && !isOwner && (
+              <View style={styles.detailItem}>
+                <Ionicons name="logo-whatsapp" size={14} color="#25D366" />
+                <Text style={[styles.detailText, { color: '#25D366' }]}>Available</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.viewButton}
+              onPress={() => handleCardPress(profile)}
+            >
+              <Text style={styles.viewButtonText}>View Profile</Text>
+            </TouchableOpacity>
+
+            {isOwner ? (
               <TouchableOpacity
-                style={styles.updateButton}
-                onPress={() => handleUpdateProfile(profile)}
+                style={styles.editButton}
+                onPress={() => handleEditProfile(profile)}
               >
-                <Ionicons name="create-outline" size={16} color="#fff" />
-                <Text style={styles.updateButtonText}>Update</Text>
+                <Ionicons name="create-outline" size={18} color="#fff" />
+                <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
+            ) : (
+              profile.whatsapp_number && (
+                <TouchableOpacity
+                  style={styles.chatButton}
+                  onPress={() => handleChatPress(profile)}
+                >
+                  <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                </TouchableOpacity>
+              )
+            )}
 
+            {isOwner ? (
               <TouchableOpacity
                 style={styles.deleteButton}
                 onPress={() => handleDeleteProfile(profile)}
               >
-                <Ionicons name="trash-outline" size={16} color="#fff" />
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
               </TouchableOpacity>
-            </>
-          )}
-
-          <TouchableOpacity
-            style={[styles.viewButton, !isOwner && styles.fullWidthViewButton]}
-            onPress={() => handleCardPress(profile)}
-          >
-            <Text style={styles.viewButtonText}>View Profile</Text>
-          </TouchableOpacity>
-
-          {!isOwner && (
-            <TouchableOpacity
-              style={[styles.chatButton, !profile.whatsapp_number && styles.chatButtonDisabled]}
-              onPress={() => handleChatPress(profile)}
-              disabled={!profile.whatsapp_number}
-            >
-              <Ionicons name="logo-whatsapp" size={18} color={profile.whatsapp_number ? "#25D366" : "#ccc"} />
-              <Text style={[styles.chatButtonText, !profile.whatsapp_number && styles.chatButtonTextDisabled]}>
-                Chat
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {isOwner && (
-          <View style={styles.ownerBadge}>
-            <Text style={styles.ownerBadgeText}>Your Profile</Text>
+            ) : (
+              blockFeatureEnabled && (
+                <TouchableOpacity
+                  style={styles.blockButton}
+                  onPress={() => handleBlockUser(profile)}
+                >
+                  <Ionicons name="ban-outline" size={18} color="#999" />
+                </TouchableOpacity>
+              )
+            )}
           </View>
-        )}
-      </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -619,28 +562,14 @@ const TourGuideList = () => {
       <Ionicons name="people-outline" size={80} color="#ccc" />
       <Text style={styles.emptyTitle}>No Tour Guides Yet</Text>
       <Text style={styles.emptyText}>
-        Be the first to create a tour guide profile and share your expertise with travelers!
+        Be the first to create a tour guide profile and share your expertise!
       </Text>
-      <TouchableOpacity
-        style={styles.createButton}
-        onPress={handleBecomeGuide}
-      >
+      <TouchableOpacity style={styles.createButton} onPress={handleBecomeGuide}>
         <Ionicons name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.createButtonText}>Become a Tour Guide</Text>
       </TouchableOpacity>
     </View>
   );
-
-  const SearchResultsCount = () => {
-    if (searchQuery.length === 0) return null;
-    return (
-      <View style={styles.resultsCountContainer}>
-        <Text style={styles.resultsCountText}>
-          Found {filteredProfiles.length} {filteredProfiles.length === 1 ? 'result' : 'results'} for "{searchQuery}"
-        </Text>
-      </View>
-    );
-  };
 
   if (loading) {
     return (
@@ -656,9 +585,7 @@ const TourGuideList = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.heroSection}>
         <Text style={styles.heroTitle}>Your Guided Journey Awaits</Text>
-        <Text style={styles.heroSubtitle}>
-          Expert-led tours, unforgettable experiences.
-        </Text>
+        <Text style={styles.heroSubtitle}>Expert-led tours, unforgettable experiences.</Text>
       </View>
 
       <View style={styles.searchContainer}>
@@ -679,20 +606,31 @@ const TourGuideList = () => {
         </View>
       </View>
 
-      <SearchResultsCount />
+      {/* Show Become a Tour Guide button only if user doesn't have a profile */}
+      {!hasOwnProfile && (
+        <View style={styles.becomeButtonContainer}>
+          <TouchableOpacity
+            style={styles.becomeButton}
+            onPress={handleBecomeGuide}
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#fff" />
+            <Text style={styles.becomeButtonText}>Become a Tour Guide</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      <View style={styles.becomeButtonContainer}>
-        <TouchableOpacity
-          style={[styles.becomeButton, hasOwnProfile && styles.becomeButtonDisabled]}
-          onPress={handleBecomeGuide}
-          disabled={hasOwnProfile}
-        >
-          <Ionicons name="add-circle-outline" size={20} color="#fff" />
-          <Text style={styles.becomeButtonText}>
-            {hasOwnProfile ? 'Profile Already Created' : 'Become a Tour Guide'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* If user has a profile, show an Edit Profile button instead */}
+      {hasOwnProfile && ownProfileData && (
+        <View style={styles.becomeButtonContainer}>
+          <TouchableOpacity
+            style={styles.becomeButton}
+            onPress={() => handleEditProfile(ownProfileData)}
+          >
+            <Ionicons name="create-outline" size={20} color="#fff" />
+            <Text style={styles.becomeButtonText}>Edit Your Profile</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <FlatList
         data={filteredProfiles}
@@ -708,10 +646,7 @@ const TourGuideList = () => {
               <Text style={styles.noResultsText}>
                 We couldn't find any tour guides matching "{searchQuery}"
               </Text>
-              <TouchableOpacity
-                style={styles.clearSearchButton}
-                onPress={() => handleSearch('')}
-              >
+              <TouchableOpacity style={styles.clearSearchButton} onPress={() => handleSearch('')}>
                 <Text style={styles.clearSearchButtonText}>Clear Search</Text>
               </TouchableOpacity>
             </View>
@@ -727,84 +662,65 @@ const TourGuideList = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f7fa',
   },
   heroSection: {
     paddingHorizontal: 20,
-    paddingTop: 70,
+    paddingTop: 60,
     paddingBottom: 16,
     backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   heroTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#333',
-    marginBottom: 6,
+    color: '#1a1a2e',
+    marginBottom: 4,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   heroSubtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#888',
     textAlign: 'center',
-    lineHeight: 20,      
   },
   searchContainer: {
     paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    backgroundColor: '#f5f7fa',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: '#e8ecf0',
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    marginLeft: 8,
+    fontSize: 15,
+    marginLeft: 10,
     color: '#333',
     paddingVertical: 0,
   },
-  resultsCountContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  resultsCountText: {
-    fontSize: 13,
-    color: '#666',
-    fontStyle: 'italic',
-  },
   becomeButtonContainer: {
     paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
   },
   becomeButton: {
     flexDirection: 'row',
-    backgroundColor: '#000000',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  becomeButtonDisabled: {
-    backgroundColor: '#666',
-    opacity: 0.6,
+    gap: 10,
   },
   becomeButtonText: {
     color: '#fff',
@@ -817,35 +733,194 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 20,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: '#f0f2f5',
+  },
+  imageContainer: {
+    width: '100%',
+    height: 260,
     position: 'relative',
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  coverImage: {
+    width: '100%',
+    height: '100%',
+  },
+  coverPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e8ecf0',
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '60%',
+    backgroundColor: 'transparent',
+    backgroundImage: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
+  },
+  overlayContent: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+  },
+  guideNameOverlay: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 4,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationTextOverlay: {
+    fontSize: 14,
+    color: '#fff',
+    marginLeft: 6,
+    opacity: 0.9,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  ownerBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  ownerBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cardContent: {
     padding: 16,
-    paddingBottom: 12,
+    paddingTop: 14,
   },
-  headerLeft: {
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+  },
+  tag: {
+    backgroundColor: '#f0f7ff',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 14,
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  tagText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  moreTags: {
+    fontSize: 11,
+    color: '#999',
+    alignSelf: 'center',
+    marginLeft: 4,
+  },
+  description: {
+    fontSize: 13,
+    color: '#555',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+    gap: 12,
+  },
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    gap: 4,
   },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#f0f0f0',
+  detailText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f2f5',
+    paddingTop: 12,
+  },
+  viewButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  viewButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 4,
+  },
+  editButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  chatButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#f0f7f0',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#fff0f0',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blockButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarPlaceholder: {
     backgroundColor: '#007AFF',
@@ -857,212 +932,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
-  headerInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  guideName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 2,
-  },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  locationText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 4,
-  },
-  whatsappIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  whatsappIndicatorText: {
-    fontSize: 10,
-    color: '#25D366',
-    marginLeft: 4,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  blockedCard: {
+    backgroundColor: '#fff',
     borderRadius: 20,
+    marginBottom: 20,
+    padding: 30,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f0f2f5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 3,
   },
-  starsRow: {
-    flexDirection: 'row',
-    marginRight: 4,
+  blockedContent: {
+    alignItems: 'center',
+    gap: 12,
   },
-  ratingText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFD700',
-    marginLeft: 2,
-  },
-  reviewCount: {
-    fontSize: 10,
+  blockedText: {
+    fontSize: 16,
     color: '#999',
-    marginLeft: 2,
-  },
-  coverImage: {
-    width: '100%',
-    height: 220,
-    backgroundColor: '#f5f5f5',
-  },
-  coverPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  cardContent: {
-    padding: 16,
-    paddingTop: 12,
-  },
-  guideTitle: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 8,
-  },
-  experienceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  experienceText: {
-    fontSize: 13,
-    color: '#007AFF',
-    marginLeft: 6,
-  },
-  languagesContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  languagesText: {
-    fontSize: 13,
-    color: '#666',
-    marginLeft: 6,
-  },
-  descriptionPreview: {
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 4,
-  },
-  tag: {
-    backgroundColor: '#f0f8ff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  tagText: {
-    fontSize: 11,
-    color: '#007AFF',
-  },
-  moreTags: {
-    fontSize: 11,
-    color: '#999',
-    marginLeft: 4,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    padding: 16,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-    gap: 8,
-  },
-  updateButton: {
-    flex: 1,
-    backgroundColor: '#34C759',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 4,
-  },
-  updateButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    flex: 1,
-    backgroundColor: '#FF6B6B',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 4,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  viewButton: {
-    flex: 2,
-    backgroundColor: '#007AFF',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  fullWidthViewButton: {
-    flex: 3,
-  },
-  viewButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  chatButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 6,
-  },
-  chatButtonDisabled: {
-    backgroundColor: '#f5f5f5',
-    opacity: 0.6,
-  },
-  chatButtonText: {
-    color: '#25D366',
-    fontSize: 14,
     fontWeight: '500',
   },
-  chatButtonTextDisabled: {
-    color: '#ccc',
-  },
-  ownerBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
+  unblockButton: {
     backgroundColor: '#007AFF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 12,
   },
-  ownerBadgeText: {
+  unblockButtonText: {
     color: '#fff',
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '600',
   },
   emptyContainer: {
@@ -1088,16 +989,16 @@ const styles = StyleSheet.create({
   createButton: {
     flexDirection: 'row',
     backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   createButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   noResultsContainer: {
     alignItems: 'center',
