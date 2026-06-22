@@ -803,7 +803,7 @@ const CreatePlan = () => {
           </View>
           <Text style={styles.endtext}>Get all the correct information, verify it, create your plan, praise it, and create a new plan ! </Text>
 
-          {/* Complete/Update Plan Button */}
+          {/* Complete/Update Plan Button - Now Blue */}
           <TouchableOpacity
             style={[styles.completeButton, loading && styles.completeButtonDisabled]}
             onPress={savePlan}
@@ -1029,7 +1029,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   completeButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#007AFF', // Changed from '#FF6B6B' to '#007AFF' (Blue)
     padding: 18,
     borderRadius: 8,
     alignItems: 'center',
