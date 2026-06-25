@@ -1166,7 +1166,81 @@ const feedPage = () => {
       );
     }
 
-    // ─── REGULAR POSTS (including FEELING posts) ──────────
+    // ─── FEELING POSTS (Enhanced Design) ──────────────────
+    if (isFeelingPost && item.feeling) {
+      return (
+        <View style={[s.feedItem, s.feelingPostCard]}>
+          {/* Post Header */}
+          <View style={s.postHeader}>
+            <Image source={{ uri: item.avatar }} style={s.avatar} />
+            <View style={s.postHeaderInfo}>
+              <Text style={s.postName}>{item.name}</Text>
+              <Text style={s.postUsername}>@{item.username}</Text>
+              <View style={s.locationTimeRow}>
+                <Text style={s.postLocation}>📍 {item.location}</Text>
+                <Text style={s.postTime}>
+                  {" "}
+                  · {formatDateTime(item.timestamp)}
+                </Text>
+              </View>
+            </View>
+            <View style={s.headerActions}>
+              {isCurrentUserPost && (
+                <TouchableOpacity
+                  style={s.fbDeleteBtn}
+                  onPress={() => handleDeletePost(item.id)}
+                >
+                  <Ionicons name="trash-outline" size={15} color="#ff4444" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={s.fbMoreBtn}
+                onPress={() => openOptionsMenu(item)}
+              >
+                <Ionicons name="ellipsis-horizontal" size={16} color="#65676b" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Feeling Content - Enhanced Design */}
+          <View style={s.feelingContentContainer}>
+            <View style={[s.feelingMainCard, { backgroundColor: item.feeling.bgColor || "#FFF9C4" }]}>
+              <View style={s.feelingCardContent}>
+                <Text style={s.feelingCardEmoji}>{item.feeling.emoji}</Text>
+                <View style={s.feelingCardTextContainer}>
+                  <Text style={s.feelingCardTitle}>
+                    Feeling {item.feeling.name}
+                  </Text>
+                  {item.feeling.subtitle && (
+                    <Text style={s.feelingCardSubtitle}>{item.feeling.subtitle}</Text>
+                  )}
+                  <View style={s.feelingCardCategory}>
+                    <Text style={s.feelingCardCategoryText}>
+                      {item.feeling.category || "Misc"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+            
+            {/* Feeling Caption */}
+            {item.caption && (
+              <Text style={s.feelingCaption}>{item.caption}</Text>
+            )}
+            
+            {/* Feeling Image (if any) */}
+            {item.image && (
+              <Image source={{ uri: item.image }} style={s.postImage} />
+            )}
+          </View>
+
+          {renderStatsBar(item, isLiked)}
+          {renderActionBar(item, isLiked, isCurrentUserPost)}
+        </View>
+      );
+    }
+
+    // ─── REGULAR POSTS ──────────────────────────────────────
     return (
       <View style={s.feedItem}>
         {/* Post Header */}
@@ -1227,35 +1301,11 @@ const feedPage = () => {
           </View>
         )}
 
-        {/* ─── FEELING BADGE ──────────────────────────────── */}
-        {isFeelingPost && item.feeling && (
-          <View style={s.feelingContainer}>
-            <View
-              style={[
-                s.feelingBadge,
-                { backgroundColor: item.feeling.bgColor || "#FFF9C4" },
-              ]}
-            >
-              <Text style={s.feelingBadgeEmoji}>{item.feeling.emoji}</Text>
-              <Text style={s.feelingBadgeText}>
-                Feeling {item.feeling.name}
-                {item.feeling.subtitle && ` - ${item.feeling.subtitle}`}
-              </Text>
-            </View>
-            
-            {/* If feeling post has an image too */}
-            {item.image && (
-              <Image source={{ uri: item.image }} style={s.postImage} />
-            )}
-          </View>
-        )}
-
-        {/* ─── REGULAR IMAGE ────────────────────────────────── */}
-        {!isFeelingPost && item.image && (
+        {/* Regular Image */}
+        {item.image && (
           <Image source={{ uri: item.image }} style={s.postImage} />
         )}
 
-        {/* Stats & Actions */}
         {renderStatsBar(item, isLiked)}
         {renderActionBar(item, isLiked, isCurrentUserPost)}
       </View>
@@ -2287,6 +2337,88 @@ const s = StyleSheet.create({
     borderLeftColor: "#28a745",
   },
 
+  // ─── FEELING POST STYLES ──────────────────────────────
+  feelingPostCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF6B6B",
+    backgroundColor: "#fff",
+    marginBottom: 8,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+
+  feelingContentContainer: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+
+  feelingMainCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+
+  feelingCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+
+  feelingCardEmoji: {
+    fontSize: 48,
+    lineHeight: 52,
+  },
+
+  feelingCardTextContainer: {
+    flex: 1,
+  },
+
+  feelingCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1c1e21",
+    marginBottom: 2,
+  },
+
+  feelingCardSubtitle: {
+    fontSize: 14,
+    color: "#65676b",
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+
+  feelingCardCategory: {
+    backgroundColor: "rgba(0,0,0,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+  },
+
+  feelingCardCategoryText: {
+    fontSize: 10,
+    color: "#65676b",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  feelingCaption: {
+    fontSize: 14,
+    color: "#1c1e21",
+    marginTop: 10,
+    marginBottom: 4,
+    lineHeight: 20,
+    paddingHorizontal: 4,
+  },
+
   postHeader: { flexDirection: "row", padding: 12, alignItems: "center" },
   avatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
   postHeaderInfo: { flex: 1 },
@@ -2343,31 +2475,6 @@ const s = StyleSheet.create({
   },
   sharedPostLabel: { fontSize: 12, color: "#1877f2", marginBottom: 4 },
   sharedPostCaption: { fontSize: 13, color: "#65676b" },
-
-  // ─── FEELING STYLES ────────────────────────────────────
-  feelingContainer: {
-    marginVertical: 4,
-    paddingHorizontal: 12,
-  },
-  feelingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    marginBottom: 8,
-  },
-  feelingBadgeEmoji: { 
-    fontSize: 24, 
-    marginRight: 10,
-  },
-  feelingBadgeText: { 
-    fontSize: 15, 
-    color: "#1c1e21", 
-    fontWeight: "500",
-    flex: 1,
-  },
 
   fbStatsBar: {
     flexDirection: "row",
