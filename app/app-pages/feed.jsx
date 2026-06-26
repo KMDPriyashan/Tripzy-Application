@@ -1,3 +1,4 @@
+// app-pages/feed.jsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -10,6 +11,7 @@ import {
   Image,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -43,6 +45,7 @@ const feedPage = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedPostForComment, setSelectedPostForComment] = useState(null);
@@ -243,30 +246,133 @@ const feedPage = () => {
     }
   };
 
+  // ─── Get user by ID ──────────────────────────────────────
+  const getUserById = (userId) => {
+    return allUsers.find((u) => u.id === userId);
+  };
+
   // ─── Load posts from ALL users ───────────────────────────
   const loadAllPosts = async () => {
     try {
       const saved = await AsyncStorage.getItem("allPosts");
+      console.log("📦 Raw allPosts data:", saved ? "Found" : "Not found");
+      
       if (saved) {
         const posts = JSON.parse(saved);
+        console.log("✅ Loaded posts count:", posts.length);
+        
+        // ✅ Enrich posts with user data from allUsers
+        const enrichedPosts = posts.map(post => {
+          const user = allUsers.find(u => u.id === post.userId);
+          if (user) {
+            return {
+              ...post,
+              name: user.name || post.name || "User",
+              username: user.username || post.username || "user",
+              avatar: user.avatar || post.avatar || defaultAvatar,
+            };
+          }
+          return post;
+        });
+        
         // Sort by timestamp (newest first)
-        posts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setFeedData(posts);
-        return posts;
+        enrichedPosts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setFeedData(enrichedPosts);
+        return enrichedPosts;
+      } else {
+        // ✅ If no posts exist, create demo posts
+        console.log("📝 No posts found, creating demo posts...");
+        const demoPosts = [
+          {
+            id: 1,
+            userId: "user_1",
+            name: "Sarah Johnson",
+            username: "sarahj",
+            avatar: "https://randomuser.me/api/portraits/women/1.jpg",
+            location: "Bali, Indonesia",
+            timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800",
+            caption: "Paradise found! The beaches of Bali are absolutely breathtaking. 🌴☀️",
+            hashtags: ["#TravelDiaries", "#BeachLife"],
+            likes: 1245,
+            comments: [],
+            shares: 34,
+            type: "post",
+          },
+          {
+            id: 2,
+            userId: "user_2",
+            name: "Mike Chen",
+            username: "mikechen",
+            avatar: "https://randomuser.me/api/portraits/men/2.jpg",
+            location: "Swiss Alps, Switzerland",
+            timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=800",
+            caption: "The view from the top of Jungfraujoch is unforgettable! ❄️🏔️",
+            hashtags: ["#MountainViews", "#Adventure"],
+            likes: 3421,
+            comments: [],
+            shares: 89,
+            type: "post",
+          },
+          {
+            id: 3,
+            userId: "user_3",
+            name: "Emma Rodriguez",
+            username: "emmarod",
+            avatar: "https://randomuser.me/api/portraits/women/3.jpg",
+            location: "Kyoto, Japan",
+            timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800",
+            caption: "Cherry blossom season in Kyoto is magical! 🌸✨",
+            hashtags: ["#CherryBlossom", "#JapanTravel"],
+            likes: 2891,
+            comments: [],
+            shares: 67,
+            type: "post",
+          },
+          {
+            id: 4,
+            userId: "user_4",
+            name: "David Kim",
+            username: "davidk",
+            avatar: "https://randomuser.me/api/portraits/men/4.jpg",
+            location: "Santorini, Greece",
+            timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1613395877344-13d4a8e0d49e?w=800",
+            caption: "Santorini sunsets are everything they're cracked up to be! 🇬🇷",
+            hashtags: ["#Santorini", "#GreekIslands"],
+            likes: 4567,
+            comments: [],
+            shares: 123,
+            type: "post",
+          },
+          {
+            id: 5,
+            userId: "user_5",
+            name: "Lisa Thompson",
+            username: "lisat",
+            avatar: "https://randomuser.me/api/portraits/women/5.jpg",
+            location: "Machu Picchu, Peru",
+            timestamp: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1526392060635-9d6019884377?w=800",
+            caption: "Ancient wonders and new adventures! 🏔️",
+            hashtags: ["#MachuPicchu", "#Wanderlust"],
+            likes: 1876,
+            comments: [],
+            shares: 45,
+            type: "post",
+          },
+        ];
+        
+        await AsyncStorage.setItem("allPosts", JSON.stringify(demoPosts));
+        console.log("✅ Demo posts saved:", demoPosts.length);
+        setFeedData(demoPosts);
+        return demoPosts;
       }
-      return [];
     } catch (e) {
-      console.log(e);
+      console.log("❌ Error loading posts:", e);
       return [];
-    }
-  };
-
-  // ─── Save posts to global storage ────────────────────────
-  const saveAllPosts = async (posts) => {
-    try {
-      await AsyncStorage.setItem("allPosts", JSON.stringify(posts));
-    } catch (e) {
-      console.log(e);
     }
   };
 
@@ -278,13 +384,7 @@ const feedPage = () => {
         const allPosts = JSON.parse(saved);
         const userPosts = allPosts
           .filter((p) => p.userId === userId)
-          .filter(
-            (p) =>
-              p.image &&
-              p.type !== "feeling" &&
-              !p.feeling &&
-              p.type !== "enrollment"
-          )
+          .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
           .slice(0, 5);
         setCurrentUserPosts(userPosts);
         return userPosts;
@@ -296,18 +396,37 @@ const feedPage = () => {
     }
   };
 
-  // ─── Get user details by ID ──────────────────────────────
-  const getUserById = (userId) => {
-    return allUsers.find((u) => u.id === userId);
-  };
-
   // ─── Load all data ──────────────────────────────────────
   const loadAllData = async () => {
-    await loadUserData();
-    const users = await loadAllUsers();
-    await loadAllPosts();
-    if (currentUser.id) {
-      await loadCurrentUserPosts(currentUser.id);
+    setIsLoading(true);
+    try {
+      console.log("🔄 Loading all data...");
+      
+      // Load user data
+      await loadUserData();
+      console.log("✅ User data loaded");
+      
+      // Load all registered users
+      const users = await loadAllUsers();
+      console.log("✅ Users loaded:", users.length);
+      
+      // Load all posts (will use allUsers for enrichment)
+      const posts = await loadAllPosts();
+      console.log("✅ Posts loaded:", posts.length);
+      
+      // Update current user stories
+      if (currentUser.id && posts.length > 0) {
+        const userPosts = posts
+          .filter((p) => p.userId === currentUser.id)
+          .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+          .slice(0, 5);
+        setCurrentUserPosts(userPosts);
+        console.log("✅ Current user stories:", userPosts.length);
+      }
+    } catch (e) {
+      console.log("❌ Error loading data:", e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -323,6 +442,7 @@ const feedPage = () => {
 
   useFocusEffect(
     useCallback(() => {
+      console.log("🔄 Feed focused - reloading...");
       loadAllData();
       loadEnrolledEvents();
       loadUserCreatedEvents();
@@ -340,8 +460,6 @@ const feedPage = () => {
       }
     } catch (e) {
       console.log(e);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -361,24 +479,34 @@ const feedPage = () => {
         avatar: currentUser.avatar,
         location: selectedLocation || currentUser.location,
         timestamp: new Date().toISOString(),
-        image:
-          selectedImage ||
-          "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
+        image: selectedImage || "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
         caption: postText.trim() || "Shared a photo",
         hashtags: postHashtags,
         likes: 0,
         comments: [],
         shares: 0,
+        type: "post",
       };
 
-      // Add to feed
-      const updatedFeed = [newPost, ...feedData];
-      setFeedData(updatedFeed);
-      await saveAllPosts(updatedFeed);
-
-      // Update current user's stories
-      const updatedUserPosts = [newPost, ...currentUserPosts];
-      setCurrentUserPosts(updatedUserPosts);
+      // ✅ Get existing posts from storage
+      const existingPosts = await AsyncStorage.getItem("allPosts");
+      let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+      
+      // ✅ Add new post to the beginning
+      allPosts = [newPost, ...allPosts];
+      
+      // ✅ Save back to storage
+      await AsyncStorage.setItem("allPosts", JSON.stringify(allPosts));
+      
+      // ✅ Update state
+      setFeedData(allPosts);
+      
+      // ✅ Update current user's stories
+      const userPosts = allPosts
+        .filter((p) => p.userId === currentUser.id)
+        .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+        .slice(0, 5);
+      setCurrentUserPosts(userPosts);
 
       // Reset form
       setPostText("");
@@ -388,6 +516,7 @@ const feedPage = () => {
       setModalVisible(false);
       Alert.alert("Success", "Your travel story has been shared!");
     } catch (e) {
+      console.log(e);
       Alert.alert("Error", "Failed to create post");
     } finally {
       setIsCreating(false);
@@ -451,18 +580,23 @@ const feedPage = () => {
         style: "destructive",
         onPress: async () => {
           try {
-            const updatedFeed = feedData.filter((p) => p.id !== postId);
+            const existingPosts = await AsyncStorage.getItem("allPosts");
+            let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+            const updatedFeed = allPosts.filter((p) => p.id !== postId);
+            
+            await AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
             setFeedData(updatedFeed);
-            await saveAllPosts(updatedFeed);
 
             // Update current user's stories
-            const updatedUserPosts = currentUserPosts.filter(
-              (p) => p.id !== postId
-            );
-            setCurrentUserPosts(updatedUserPosts);
+            const userPosts = updatedFeed
+              .filter((p) => p.userId === currentUser.id)
+              .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+              .slice(0, 5);
+            setCurrentUserPosts(userPosts);
 
             Alert.alert("Success", "Post deleted");
           } catch (e) {
+            console.log(e);
             Alert.alert("Error", "Failed to delete post");
           }
         },
@@ -484,7 +618,7 @@ const feedPage = () => {
         p.id === id ? { ...p, likes: p.likes - 1 } : p
       );
       setFeedData(updatedFeed);
-      saveAllPosts(updatedFeed);
+      AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
 
       if (isCurrentUserPost) {
         const updated = currentUserPosts.map((p) =>
@@ -500,7 +634,7 @@ const feedPage = () => {
         p.id === id ? { ...p, likes: p.likes + 1 } : p
       );
       setFeedData(updatedFeed);
-      saveAllPosts(updatedFeed);
+      AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
 
       if (isCurrentUserPost) {
         const updated = currentUserPosts.map((p) =>
@@ -522,7 +656,7 @@ const feedPage = () => {
         p.id === postId ? { ...p, likes: p.likes + 1 } : p
       );
       setFeedData(updatedFeed);
-      saveAllPosts(updatedFeed);
+      AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
 
       if (isCurrentUserPost) {
         const updated = currentUserPosts.map((p) =>
@@ -555,7 +689,7 @@ const feedPage = () => {
         : p
     );
     setFeedData(updatedFeed);
-    await saveAllPosts(updatedFeed);
+    await AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
 
     if (selectedPostForComment.userId === currentUser.id) {
       const updated = currentUserPosts.map((p) =>
@@ -596,12 +730,18 @@ const feedPage = () => {
       type: "share",
     };
 
-    const updatedFeed = [sharePost, ...feedData];
-    setFeedData(updatedFeed);
-    await saveAllPosts(updatedFeed);
+    const existingPosts = await AsyncStorage.getItem("allPosts");
+    let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+    allPosts = [sharePost, ...allPosts];
+    
+    await AsyncStorage.setItem("allPosts", JSON.stringify(allPosts));
+    setFeedData(allPosts);
 
-    const updatedUserPosts = [sharePost, ...currentUserPosts];
-    setCurrentUserPosts(updatedUserPosts);
+    const userPosts = allPosts
+      .filter((p) => p.userId === currentUser.id)
+      .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+      .slice(0, 5);
+    setCurrentUserPosts(userPosts);
 
     setShareModalVisible(false);
     setSelectedPostForShare(null);
@@ -751,12 +891,18 @@ const feedPage = () => {
         enrollmentEvent: eventTitle,
       };
 
-      const updatedFeed = [enrollmentPost, ...feedData];
-      setFeedData(updatedFeed);
-      await saveAllPosts(updatedFeed);
+      const existingPosts = await AsyncStorage.getItem("allPosts");
+      let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+      allPosts = [enrollmentPost, ...allPosts];
+      
+      await AsyncStorage.setItem("allPosts", JSON.stringify(allPosts));
+      setFeedData(allPosts);
 
-      const updatedUserPosts = [enrollmentPost, ...currentUserPosts];
-      setCurrentUserPosts(updatedUserPosts);
+      const userPosts = allPosts
+        .filter((p) => p.userId === currentUser.id)
+        .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+        .slice(0, 5);
+      setCurrentUserPosts(userPosts);
     } catch (e) {
       console.log(e);
     }
@@ -928,6 +1074,12 @@ const feedPage = () => {
     setOptionsModalVisible(false);
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAllData();
+    setRefreshing(false);
+  };
+
   // ─── Render helpers ────────────────────────────────────
   const renderActionBar = (item, isLiked, isCurrentUserPost) => {
     const reaction = userReactions[item.id];
@@ -999,7 +1151,7 @@ const feedPage = () => {
     );
   };
 
-  const renderStatsBar = (item, isLiked) => {
+  const renderStatsBar = (item) => {
     const reaction = userReactions[item.id];
     const reactionData = REACTIONS.find((r) => r.type === reaction);
     const commentCount = item.comments?.length || 0;
@@ -1160,17 +1312,16 @@ const feedPage = () => {
             </View>
           </View>
 
-          {renderStatsBar(item, isLiked)}
+          {renderStatsBar(item)}
           {renderActionBar(item, isLiked, isCurrentUserPost)}
         </View>
       );
     }
 
-    // ─── FEELING POSTS (Enhanced Design) ──────────────────
+    // ─── FEELING POSTS ─────────────────────────────────────
     if (isFeelingPost && item.feeling) {
       return (
         <View style={[s.feedItem, s.feelingPostCard]}>
-          {/* Post Header */}
           <View style={s.postHeader}>
             <Image source={{ uri: item.avatar }} style={s.avatar} />
             <View style={s.postHeaderInfo}>
@@ -1202,7 +1353,6 @@ const feedPage = () => {
             </View>
           </View>
 
-          {/* Feeling Content - Enhanced Design */}
           <View style={s.feelingContentContainer}>
             <View style={[s.feelingMainCard, { backgroundColor: item.feeling.bgColor || "#FFF9C4" }]}>
               <View style={s.feelingCardContent}>
@@ -1223,18 +1373,16 @@ const feedPage = () => {
               </View>
             </View>
             
-            {/* Feeling Caption */}
             {item.caption && (
               <Text style={s.feelingCaption}>{item.caption}</Text>
             )}
             
-            {/* Feeling Image (if any) */}
             {item.image && (
               <Image source={{ uri: item.image }} style={s.postImage} />
             )}
           </View>
 
-          {renderStatsBar(item, isLiked)}
+          {renderStatsBar(item)}
           {renderActionBar(item, isLiked, isCurrentUserPost)}
         </View>
       );
@@ -1243,7 +1391,6 @@ const feedPage = () => {
     // ─── REGULAR POSTS ──────────────────────────────────────
     return (
       <View style={s.feedItem}>
-        {/* Post Header */}
         <View style={s.postHeader}>
           <Image source={{ uri: item.avatar }} style={s.avatar} />
           <View style={s.postHeaderInfo}>
@@ -1275,10 +1422,8 @@ const feedPage = () => {
           </View>
         </View>
 
-        {/* Caption */}
         <Text style={s.caption}>{item.caption}</Text>
 
-        {/* Shared Post */}
         {isSharePost && item.originalPost && (
           <View style={s.sharedPostContainer}>
             <Text style={s.sharedPostLabel}>
@@ -1290,7 +1435,6 @@ const feedPage = () => {
           </View>
         )}
 
-        {/* Hashtags */}
         {item.hashtags && item.hashtags.length > 0 && (
           <View style={s.hashtagsContainer}>
             {item.hashtags.map((tag, i) => (
@@ -1301,12 +1445,11 @@ const feedPage = () => {
           </View>
         )}
 
-        {/* Regular Image */}
         {item.image && (
           <Image source={{ uri: item.image }} style={s.postImage} />
         )}
 
-        {renderStatsBar(item, isLiked)}
+        {renderStatsBar(item)}
         {renderActionBar(item, isLiked, isCurrentUserPost)}
       </View>
     );
@@ -1992,6 +2135,9 @@ const feedPage = () => {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderFeedItem}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListHeaderComponent={
           <>
             {/* Create Post Card */}
@@ -2337,7 +2483,6 @@ const s = StyleSheet.create({
     borderLeftColor: "#28a745",
   },
 
-  // ─── FEELING POST STYLES ──────────────────────────────
   feelingPostCard: {
     borderLeftWidth: 4,
     borderLeftColor: "#FF6B6B",
