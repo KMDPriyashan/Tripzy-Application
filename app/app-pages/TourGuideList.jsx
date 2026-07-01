@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   FlatList,
@@ -88,9 +89,12 @@ const TourGuideList = () => {
         await loadProfiles();
         await loadBlockedUsersForUser(user);
         setupRealtimeSubscription();
+      } else {
+        await loadProfiles();
       }
     } catch (error) {
       console.error('Error loading user:', error);
+      await loadProfiles();
     }
   };
 
@@ -123,6 +127,8 @@ const TourGuideList = () => {
       } else {
         setProfiles([]);
         setFilteredProfiles([]);
+        setHasOwnProfile(false);
+        setOwnProfileData(null);
       }
     } catch (error) {
       console.error('Error loading profiles:', error);
@@ -169,7 +175,6 @@ const TourGuideList = () => {
         if (searchQuery === '') {
           setFilteredProfiles(prev => [newProfile, ...prev]);
         }
-        // Check if this is the current user's profile
         if (currentUser && newRecord.user_id === currentUser.id) {
           setHasOwnProfile(true);
           setOwnProfileData(newProfile);
@@ -187,7 +192,6 @@ const TourGuideList = () => {
         setFilteredProfiles(prev =>
           prev.map(p => p.id === updatedProfile.id ? updatedProfile : p)
         );
-        // Update own profile data if this is the current user's profile
         if (currentUser && newRecord.user_id === currentUser.id) {
           setOwnProfileData(updatedProfile);
         }
@@ -220,15 +224,20 @@ const TourGuideList = () => {
     }
   };
 
+  // ─── FIXED: Navigate to TourGuideCard ──────────────────
   const handleCardPress = (profile) => {
+    console.log('Navigating to profile:', profile.id);
     router.push({
       pathname: '/app-pages/TourGuideCard',
-      params: { profileId: profile.id }
+      params: { 
+        profileId: profile.id,
+        // Pass the entire profile data to avoid extra API call
+        profileData: JSON.stringify(profile)
+      }
     });
   };
 
   const handleEditProfile = (profile) => {
-    // Navigate to TGprofile with profile data for editing
     router.push({
       pathname: '/app-pages/TGprofile',
       params: { 
@@ -261,7 +270,6 @@ const TourGuideList = () => {
 
   const handleBecomeGuide = () => {
     if (hasOwnProfile) {
-      // If user already has a profile, go to edit mode
       if (ownProfileData) {
         handleEditProfile(ownProfileData);
       }
@@ -295,6 +303,7 @@ const TourGuideList = () => {
               Alert.alert('Success', 'Your profile has been deleted.');
               setHasOwnProfile(false);
               setOwnProfileData(null);
+              await loadProfiles();
             } catch (error) {
               Alert.alert('Error', 'Failed to delete profile.');
             }
@@ -575,6 +584,7 @@ const TourGuideList = () => {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
           <Text style={styles.loadingText}>Loading tour guides...</Text>
         </View>
       </SafeAreaView>

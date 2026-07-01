@@ -1,3 +1,4 @@
+// app-pages/feed.jsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -10,6 +11,7 @@ import {
   Image,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,7 +33,7 @@ const REACTIONS = [
 const feedPage = () => {
   const router = useRouter();
   const [likedPosts, setLikedPosts] = useState([]);
-  const [userReactions, setUserReactions] = useState({}); // { postId: reactionType }
+  const [userReactions, setUserReactions] = useState({});
   const [reactionModal, setReactionModal] = useState({
     visible: false,
     postId: null,
@@ -43,6 +45,7 @@ const feedPage = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [selectedPostForComment, setSelectedPostForComment] = useState(null);
@@ -218,343 +221,213 @@ const feedPage = () => {
     website: "www.example.com",
   });
 
-  const [feedData, setFeedData] = useState([
-    {
-      id: 1,
-      userId: 1,
-      name: "Sarah Johnson",
-      username: "sarahj",
-      avatar: "https://randomuser.me/api/portraits/women/1.jpg",
-      location: "Bali, Indonesia",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      image:
-        "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800",
-      caption:
-        "Paradise found! The beaches of Bali are absolutely breathtaking. 🌴☀️",
-      hashtags: ["#TravelDiaries", "#BeachLife"],
-      likes: 1245,
-      comments: [
-        {
-          id: 1,
-          userId: 10,
-          userName: "Traveler Joe",
-          text: "Amazing view!",
-          timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-        },
-      ],
-      shares: 34,
-    },
-    {
-      id: 2,
-      userId: 2,
-      name: "Mike Chen",
-      username: "mikechen",
-      avatar: "https://randomuser.me/api/portraits/men/2.jpg",
-      location: "Swiss Alps, Switzerland",
-      timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-      image:
-        "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=800",
-      caption: "The view from the top of Jungfraujoch is unforgettable! ❄️🏔️",
-      hashtags: ["#MountainViews", "#Adventure"],
-      likes: 3421,
-      comments: [],
-      shares: 89,
-    },
-    {
-      id: 3,
-      userId: 3,
-      name: "Emma Rodriguez",
-      username: "emmarod",
-      avatar: "https://randomuser.me/api/portraits/women/3.jpg",
-      location: "Kyoto, Japan",
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-      image:
-        "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800",
-      caption: "Cherry blossom season in Kyoto is magical! 🌸✨",
-      hashtags: ["#CherryBlossom", "#JapanTravel"],
-      likes: 2891,
-      comments: [],
-      shares: 67,
-    },
-    {
-      id: 4,
-      userId: 4,
-      name: "David Kim",
-      username: "davidk",
-      avatar: "https://randomuser.me/api/portraits/men/4.jpg",
-      location: "Santorini, Greece",
-      timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-      image:
-        "https://images.unsplash.com/photo-1613395877344-13d4a8e0d49e?w=800",
-      caption: "Santorini sunsets are everything they're cracked up to be! 🇬🇷",
-      hashtags: ["#Santorini", "#GreekIslands"],
-      likes: 4567,
-      comments: [],
-      shares: 123,
-    },
-    {
-      id: 5,
-      userId: 5,
-      name: "Lisa Thompson",
-      username: "lisat",
-      avatar: "https://randomuser.me/api/portraits/women/5.jpg",
-      location: "Machu Picchu, Peru",
-      timestamp: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
-      image:
-        "https://images.unsplash.com/photo-1526392060635-9d6019884377?w=800",
-      caption: "Ancient wonders and new adventures! 🏔️",
-      hashtags: ["#MachuPicchu", "#Wanderlust"],
-      likes: 1876,
-      comments: [],
-      shares: 45,
-    },
-  ]);
+  // ─── All registered users ───────────────────────────────
+  const [allUsers, setAllUsers] = useState([]);
 
+  // ─── Feed posts from ALL users ──────────────────────────
+  const [feedData, setFeedData] = useState([]);
+
+  // ─── Current user's posts (for stories) ─────────────────
   const [currentUserPosts, setCurrentUserPosts] = useState([]);
 
-  useEffect(() => {
-    loadEnrolledEvents();
-    loadUserCreatedEvents();
-    loadTravelEvents();
-  }, []);
-
-  const loadTravelEvents = async () => {
+  // ─── Load all registered users ───────────────────────────
+  const loadAllUsers = async () => {
     try {
-      const saved = await AsyncStorage.getItem("travelEvents");
-      if (saved) setTravelEvents(JSON.parse(saved));
+      const saved = await AsyncStorage.getItem("registeredUsers");
+      if (saved) {
+        const users = JSON.parse(saved);
+        setAllUsers(users);
+        return users;
+      }
+      return [];
     } catch (e) {
       console.log(e);
-    }
-  };
-  const saveTravelEvents = async (events) => {
-    try {
-      await AsyncStorage.setItem("travelEvents", JSON.stringify(events));
-    } catch (e) {
-      console.log(e);
-    }
-  };
-  const loadEnrolledEvents = async () => {
-    try {
-      const saved = await AsyncStorage.getItem("enrolledEvents");
-      if (saved) setEnrolledEvents(JSON.parse(saved));
-    } catch (e) {
-      console.log(e);
-    }
-  };
-  const saveEnrolledEvents = async (events) => {
-    try {
-      await AsyncStorage.setItem("enrolledEvents", JSON.stringify(events));
-    } catch (e) {
-      console.log(e);
-    }
-  };
-  const loadUserCreatedEvents = async () => {
-    try {
-      const saved = await AsyncStorage.getItem("userCreatedEvents");
-      if (saved) setUserCreatedEvents(JSON.parse(saved));
-    } catch (e) {
-      console.log(e);
-    }
-  };
-  const saveUserCreatedEvents = async (events) => {
-    try {
-      await AsyncStorage.setItem("userCreatedEvents", JSON.stringify(events));
-    } catch (e) {
-      console.log(e);
+      return [];
     }
   };
 
-  const pickEventImage = async () => {
+  // ─── Get user by ID ──────────────────────────────────────
+  const getUserById = (userId) => {
+    return allUsers.find((u) => u.id === userId);
+  };
+
+  // ─── Load posts from ALL users ───────────────────────────
+  const loadAllPosts = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [16, 9],
-        quality: 1,
-      });
-      if (!result.canceled)
-        setNewEvent({ ...newEvent, eventImage: result.assets[0].uri });
-    } catch (e) {
-      Alert.alert("Error", "Failed to pick image");
-    }
-  };
-
-  const handleDeleteEvent = (eventId) => {
-    Alert.alert("Delete Event", "Are you sure you want to delete this event?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          const updatedEvents = travelEvents.filter((e) => e.id !== eventId);
-          setTravelEvents(updatedEvents);
-          await saveTravelEvents(updatedEvents);
-          const updatedUserEvents = userCreatedEvents.filter(
-            (e) => e.id !== eventId,
-          );
-          setUserCreatedEvents(updatedUserEvents);
-          await saveUserCreatedEvents(updatedUserEvents);
-          const updatedEnrolled = enrolledEvents.filter(
-            (e) => e.id !== eventId,
-          );
-          setEnrolledEvents(updatedEnrolled);
-          await saveEnrolledEvents(updatedEnrolled);
-          Alert.alert("Success", "Event deleted successfully");
-        },
-      },
-    ]);
-  };
-
-  const handleDeleteEnrollment = (eventId) => {
-    Alert.alert(
-      "Cancel Enrollment",
-      "Are you sure you want to cancel your enrollment?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Cancel Enrollment",
-          style: "destructive",
-          onPress: async () => {
-            const updatedEnrolled = enrolledEvents.filter(
-              (e) => e.id !== eventId,
-            );
-            setEnrolledEvents(updatedEnrolled);
-            await saveEnrolledEvents(updatedEnrolled);
-            const updatedEvents = travelEvents.map((e) =>
-              e.id === eventId
-                ? { ...e, enrolled: Math.max(0, e.enrolled - 1) }
-                : e,
-            );
-            setTravelEvents(updatedEvents);
-            await saveTravelEvents(updatedEvents);
-            Alert.alert("Success", "Enrollment cancelled");
+      const saved = await AsyncStorage.getItem("allPosts");
+      console.log("📦 Raw allPosts data:", saved ? "Found" : "Not found");
+      
+      if (saved) {
+        const posts = JSON.parse(saved);
+        console.log("✅ Loaded posts count:", posts.length);
+        
+        // ✅ Enrich posts with user data from allUsers
+        const enrichedPosts = posts.map(post => {
+          const user = allUsers.find(u => u.id === post.userId);
+          if (user) {
+            return {
+              ...post,
+              name: user.name || post.name || "User",
+              username: user.username || post.username || "user",
+              avatar: user.avatar || post.avatar || defaultAvatar,
+            };
+          }
+          return post;
+        });
+        
+        // Sort by timestamp (newest first)
+        enrichedPosts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        setFeedData(enrichedPosts);
+        return enrichedPosts;
+      } else {
+        // ✅ If no posts exist, create demo posts
+        console.log("📝 No posts found, creating demo posts...");
+        const demoPosts = [
+          {
+            id: 1,
+            userId: "user_1",
+            name: "Sarah Johnson",
+            username: "sarahj",
+            avatar: "https://randomuser.me/api/portraits/women/1.jpg",
+            location: "Bali, Indonesia",
+            timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=800",
+            caption: "Paradise found! The beaches of Bali are absolutely breathtaking. 🌴☀️",
+            hashtags: ["#TravelDiaries", "#BeachLife"],
+            likes: 1245,
+            comments: [],
+            shares: 34,
+            type: "post",
           },
-        },
-      ],
-    );
+          {
+            id: 2,
+            userId: "user_2",
+            name: "Mike Chen",
+            username: "mikechen",
+            avatar: "https://randomuser.me/api/portraits/men/2.jpg",
+            location: "Swiss Alps, Switzerland",
+            timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=800",
+            caption: "The view from the top of Jungfraujoch is unforgettable! ❄️🏔️",
+            hashtags: ["#MountainViews", "#Adventure"],
+            likes: 3421,
+            comments: [],
+            shares: 89,
+            type: "post",
+          },
+          {
+            id: 3,
+            userId: "user_3",
+            name: "Emma Rodriguez",
+            username: "emmarod",
+            avatar: "https://randomuser.me/api/portraits/women/3.jpg",
+            location: "Kyoto, Japan",
+            timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=800",
+            caption: "Cherry blossom season in Kyoto is magical! 🌸✨",
+            hashtags: ["#CherryBlossom", "#JapanTravel"],
+            likes: 2891,
+            comments: [],
+            shares: 67,
+            type: "post",
+          },
+          {
+            id: 4,
+            userId: "user_4",
+            name: "David Kim",
+            username: "davidk",
+            avatar: "https://randomuser.me/api/portraits/men/4.jpg",
+            location: "Santorini, Greece",
+            timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1613395877344-13d4a8e0d49e?w=800",
+            caption: "Santorini sunsets are everything they're cracked up to be! 🇬🇷",
+            hashtags: ["#Santorini", "#GreekIslands"],
+            likes: 4567,
+            comments: [],
+            shares: 123,
+            type: "post",
+          },
+          {
+            id: 5,
+            userId: "user_5",
+            name: "Lisa Thompson",
+            username: "lisat",
+            avatar: "https://randomuser.me/api/portraits/women/5.jpg",
+            location: "Machu Picchu, Peru",
+            timestamp: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+            image: "https://images.unsplash.com/photo-1526392060635-9d6019884377?w=800",
+            caption: "Ancient wonders and new adventures! 🏔️",
+            hashtags: ["#MachuPicchu", "#Wanderlust"],
+            likes: 1876,
+            comments: [],
+            shares: 45,
+            type: "post",
+          },
+        ];
+        
+        await AsyncStorage.setItem("allPosts", JSON.stringify(demoPosts));
+        console.log("✅ Demo posts saved:", demoPosts.length);
+        setFeedData(demoPosts);
+        return demoPosts;
+      }
+    } catch (e) {
+      console.log("❌ Error loading posts:", e);
+      return [];
+    }
   };
 
-  const shareEnrollmentPost = async (eventTitle) => {
+  // ─── Load current user's posts for stories ──────────────
+  const loadCurrentUserPosts = async (userId) => {
     try {
-      const enrollmentPost = {
-        id: Date.now(),
-        userId: "current",
-        name: currentUser.name,
-        username: currentUser.username,
-        avatar: currentUser.avatar,
-        location: currentUser.location,
-        timestamp: new Date().toISOString(),
-        image: null,
-        caption: `🎉 I just enrolled in "${eventTitle}"! ✈️\n\nCan't wait for this amazing travel experience! 🌍\n\n#TravelEnrollment #Excited #Tripzy`,
-        hashtags: ["#TravelEnrollment", "#Excited", "#Tripzy"],
-        likes: 0,
-        comments: [],
-        shares: 0,
-        type: "enrollment",
-        enrollmentEvent: eventTitle,
-      };
-      const updatedFeed = [enrollmentPost, ...feedData];
-      setFeedData(updatedFeed);
-      await saveFeedPosts(updatedFeed);
-      const existingPosts = await AsyncStorage.getItem("userPosts");
-      let allUserPosts = existingPosts ? JSON.parse(existingPosts) : [];
-      allUserPosts = [enrollmentPost, ...allUserPosts];
-      await saveUserPosts(allUserPosts);
+      const saved = await AsyncStorage.getItem("allPosts");
+      if (saved) {
+        const allPosts = JSON.parse(saved);
+        const userPosts = allPosts
+          .filter((p) => p.userId === userId)
+          .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+          .slice(0, 5);
+        setCurrentUserPosts(userPosts);
+        return userPosts;
+      }
+      return [];
     } catch (e) {
       console.log(e);
+      return [];
     }
   };
 
-  const handleEnrollEvent = async (event) => {
-    if (enrolledEvents.some((e) => e.id === event.id)) {
-      Alert.alert(
-        "Already Enrolled",
-        "You have already enrolled in this event!",
-      );
-      return;
+  // ─── Load all data ──────────────────────────────────────
+  const loadAllData = async () => {
+    setIsLoading(true);
+    try {
+      console.log("🔄 Loading all data...");
+      
+      // Load user data
+      await loadUserData();
+      console.log("✅ User data loaded");
+      
+      // Load all registered users
+      const users = await loadAllUsers();
+      console.log("✅ Users loaded:", users.length);
+      
+      // Load all posts (will use allUsers for enrichment)
+      const posts = await loadAllPosts();
+      console.log("✅ Posts loaded:", posts.length);
+      
+      // Update current user stories
+      if (currentUser.id && posts.length > 0) {
+        const userPosts = posts
+          .filter((p) => p.userId === currentUser.id)
+          .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+          .slice(0, 5);
+        setCurrentUserPosts(userPosts);
+        console.log("✅ Current user stories:", userPosts.length);
+      }
+    } catch (e) {
+      console.log("❌ Error loading data:", e);
+    } finally {
+      setIsLoading(false);
     }
-    if (event.enrolled >= event.spots) {
-      Alert.alert(
-        "Event Full",
-        "Sorry, this event has reached maximum capacity.",
-      );
-      return;
-    }
-    Alert.alert(
-      "Confirm Enrollment",
-      `Would you like to enroll in "${event.title}"?\n\nSpots remaining: ${event.spots - event.enrolled}\nPrice: ${event.price}`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Enroll",
-          onPress: async () => {
-            const updatedEnrolled = [
-              ...enrolledEvents,
-              { ...event, enrollmentDate: new Date().toISOString() },
-            ];
-            setEnrolledEvents(updatedEnrolled);
-            await saveEnrolledEvents(updatedEnrolled);
-            const updatedEvents = travelEvents.map((e) =>
-              e.id === event.id ? { ...e, enrolled: e.enrolled + 1 } : e,
-            );
-            setTravelEvents(updatedEvents);
-            await saveTravelEvents(updatedEvents);
-            await shareEnrollmentPost(event.title);
-            Alert.alert(
-              "Success",
-              `Enrolled in ${event.title}! Shared to your feed.`,
-            );
-          },
-        },
-      ],
-    );
-  };
-
-  const handleCreateEvent = async () => {
-    if (
-      !newEvent.title.trim() ||
-      !newEvent.date.trim() ||
-      !newEvent.location.trim() ||
-      !newEvent.description.trim()
-    ) {
-      Alert.alert("Error", "Please fill in all required fields");
-      return;
-    }
-    const createdEvent = {
-      id: Date.now(),
-      title: newEvent.title,
-      date: newEvent.date,
-      location: newEvent.location,
-      description: newEvent.description,
-      spots: parseInt(newEvent.spots) || 50,
-      enrolled: 0,
-      price: newEvent.price,
-      category: newEvent.category,
-      image:
-        newEvent.eventImage ||
-        "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
-      isUserCreated: true,
-      createdBy: currentUser.name,
-      createdByUsername: currentUser.username,
-    };
-    const updatedEvents = [...travelEvents, createdEvent];
-    setTravelEvents(updatedEvents);
-    await saveTravelEvents(updatedEvents);
-    const updatedUserEvents = [...userCreatedEvents, createdEvent];
-    setUserCreatedEvents(updatedUserEvents);
-    await saveUserCreatedEvents(updatedUserEvents);
-    setNewEvent({
-      title: "",
-      date: "",
-      location: "",
-      description: "",
-      price: "Free",
-      category: "Workshop",
-      spots: 50,
-      eventImage: null,
-    });
-    setShowCreateEventModal(false);
-    Alert.alert("Success", "Event created successfully!");
   };
 
   useEffect(() => {
@@ -569,285 +442,85 @@ const feedPage = () => {
 
   useFocusEffect(
     useCallback(() => {
+      console.log("🔄 Feed focused - reloading...");
       loadAllData();
-      syncDeletedPosts();
       loadEnrolledEvents();
       loadUserCreatedEvents();
       loadTravelEvents();
       return () => {};
-    }, []),
+    }, [])
   );
-
-  const loadAllData = async () => {
-    await loadUserData();
-    await loadUserPosts();
-    await loadFeedPosts();
-  };
 
   const loadUserData = async () => {
     try {
       const saved = await AsyncStorage.getItem("currentUser");
-      if (saved) setCurrentUser(JSON.parse(saved));
-    } catch (e) {
-      console.log(e);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadUserPosts = async () => {
-    try {
-      const savedPosts = await AsyncStorage.getItem("userPosts");
-      if (savedPosts) {
-        const allPosts = JSON.parse(savedPosts);
-        const savedUser = await AsyncStorage.getItem("currentUser");
-        const cu = savedUser ? JSON.parse(savedUser) : currentUser;
-        const updated = allPosts.map((p) => ({
-          ...p,
-          name: cu.name,
-          username: cu.username,
-          avatar: cu.avatar,
-          location: p.location || cu.location,
-        }));
-        const stories = updated
-          .filter(
-            (p) =>
-              p.image &&
-              p.type !== "feeling" &&
-              !p.feeling &&
-              p.type !== "enrollment",
-          )
-          .slice(0, 5);
-        setCurrentUserPosts(stories);
-      } else {
-        const defaultPosts = [
-          {
-            id: 101,
-            userId: "current",
-            name: currentUser.name,
-            username: currentUser.username,
-            avatar: currentUser.avatar,
-            location: "Paris, France",
-            timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-            image:
-              "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800",
-            caption: "The Eiffel Tower at night is absolutely magical! 🗼✨",
-            hashtags: ["#Paris", "#EiffelTower"],
-            likes: 234,
-            comments: [],
-            shares: 12,
-          },
-          {
-            id: 102,
-            userId: "current",
-            name: currentUser.name,
-            username: currentUser.username,
-            avatar: currentUser.avatar,
-            location: "Rome, Italy",
-            timestamp: new Date(
-              Date.now() - 3 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-            image:
-              "https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800",
-            caption: "Exploring the ancient Colosseum! 🏛️",
-            hashtags: ["#Rome", "#Colosseum"],
-            likes: 567,
-            comments: [],
-            shares: 34,
-          },
-          {
-            id: 103,
-            userId: "current",
-            name: currentUser.name,
-            username: currentUser.username,
-            avatar: currentUser.avatar,
-            location: "Barcelona, Spain",
-            timestamp: new Date(
-              Date.now() - 5 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-            image:
-              "https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800",
-            caption: "Beautiful architecture in Barcelona! 🏰",
-            hashtags: ["#Barcelona"],
-            likes: 432,
-            comments: [],
-            shares: 23,
-          },
-          {
-            id: 104,
-            userId: "current",
-            name: currentUser.name,
-            username: currentUser.username,
-            avatar: currentUser.avatar,
-            location: "Amsterdam, Netherlands",
-            timestamp: new Date(
-              Date.now() - 7 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-            image:
-              "https://images.unsplash.com/photo-1534351590666-13e3e96b5017?w=800",
-            caption: "Canal cruises are the best! 🚤",
-            hashtags: ["#Amsterdam"],
-            likes: 345,
-            comments: [],
-            shares: 18,
-          },
-          {
-            id: 105,
-            userId: "current",
-            name: currentUser.name,
-            username: currentUser.username,
-            avatar: currentUser.avatar,
-            location: "London, UK",
-            timestamp: new Date(
-              Date.now() - 14 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-            image:
-              "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=800",
-            caption: "Big Ben is stunning! 🇬🇧",
-            hashtags: ["#London"],
-            likes: 678,
-            comments: [],
-            shares: 45,
-          },
-        ];
-        setCurrentUserPosts(defaultPosts);
-        await AsyncStorage.setItem("userPosts", JSON.stringify(defaultPosts));
-      }
-    } catch (e) {
-      console.log(e);
-    }
-  };
-
-  const loadFeedPosts = async () => {
-    try {
-      const saved = await AsyncStorage.getItem("feedPosts");
       if (saved) {
-        const parsed = JSON.parse(saved);
-        const cu = await AsyncStorage.getItem("currentUser");
-        const cuObj = cu ? JSON.parse(cu) : currentUser;
-        const updated = parsed.map((p) =>
-          p.userId === "current"
-            ? {
-                ...p,
-                name: cuObj.name,
-                username: cuObj.username,
-                avatar: cuObj.avatar,
-                location: p.location || cuObj.location,
-              }
-            : p,
-        );
-        setFeedData(updated);
+        const user = JSON.parse(saved);
+        setCurrentUser(user);
       }
     } catch (e) {
       console.log(e);
     }
   };
 
-  const saveFeedPosts = async (posts) => {
-    try {
-      await AsyncStorage.setItem("feedPosts", JSON.stringify(posts));
-    } catch (e) {
-      console.log(e);
+  // ─── Handle creating a post ──────────────────────────────
+  const handleCreatePost = async () => {
+    if (!postText.trim() && !selectedImage) {
+      Alert.alert("Error", "Please add a caption or image");
+      return;
     }
-  };
-
-  const saveUserPosts = async (posts) => {
+    setIsCreating(true);
     try {
-      await AsyncStorage.setItem("userPosts", JSON.stringify(posts));
-      const updated = posts.map((p) => ({
-        ...p,
+      const newPost = {
+        id: Date.now(),
+        userId: currentUser.id,
         name: currentUser.name,
         username: currentUser.username,
         avatar: currentUser.avatar,
-      }));
-      const stories = updated
-        .filter(
-          (p) =>
-            p.image &&
-            p.type !== "feeling" &&
-            !p.feeling &&
-            p.type !== "enrollment",
-        )
+        location: selectedLocation || currentUser.location,
+        timestamp: new Date().toISOString(),
+        image: selectedImage || "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
+        caption: postText.trim() || "Shared a photo",
+        hashtags: postHashtags,
+        likes: 0,
+        comments: [],
+        shares: 0,
+        type: "post",
+      };
+
+      // ✅ Get existing posts from storage
+      const existingPosts = await AsyncStorage.getItem("allPosts");
+      let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+      
+      // ✅ Add new post to the beginning
+      allPosts = [newPost, ...allPosts];
+      
+      // ✅ Save back to storage
+      await AsyncStorage.setItem("allPosts", JSON.stringify(allPosts));
+      
+      // ✅ Update state
+      setFeedData(allPosts);
+      
+      // ✅ Update current user's stories
+      const userPosts = allPosts
+        .filter((p) => p.userId === currentUser.id)
+        .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
         .slice(0, 5);
-      setCurrentUserPosts(stories);
+      setCurrentUserPosts(userPosts);
+
+      // Reset form
+      setPostText("");
+      setSelectedImage(null);
+      setSelectedLocation("");
+      setPostHashtags([]);
+      setModalVisible(false);
+      Alert.alert("Success", "Your travel story has been shared!");
     } catch (e) {
       console.log(e);
+      Alert.alert("Error", "Failed to create post");
+    } finally {
+      setIsCreating(false);
     }
-  };
-
-  const handleAddComment = async () => {
-    if (!commentText.trim() || !selectedPostForComment) return;
-    const newComment = {
-      id: Date.now(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      text: commentText.trim(),
-      timestamp: new Date().toISOString(),
-    };
-    const updatedFeed = feedData.map((p) =>
-      p.id === selectedPostForComment.id
-        ? { ...p, comments: [...(p.comments || []), newComment] }
-        : p,
-    );
-    setFeedData(updatedFeed);
-    await saveFeedPosts(updatedFeed);
-    if (selectedPostForComment.userId === "current") {
-      const updatedUser = currentUserPosts.map((p) =>
-        p.id === selectedPostForComment.id
-          ? { ...p, comments: [...(p.comments || []), newComment] }
-          : p,
-      );
-      setCurrentUserPosts(updatedUser);
-      const all = await AsyncStorage.getItem("userPosts");
-      if (all) {
-        const parsed = JSON.parse(all);
-        const updated = parsed.map((p) =>
-          p.id === selectedPostForComment.id
-            ? { ...p, comments: [...(p.comments || []), newComment] }
-            : p,
-        );
-        await AsyncStorage.setItem("userPosts", JSON.stringify(updated));
-      }
-    }
-    setCommentText("");
-    setCommentModalVisible(false);
-    setSelectedPostForComment(null);
-    Alert.alert("Success", "Comment added!");
-  };
-
-  const handleSharePost = async () => {
-    if (!selectedPostForShare) return;
-    const sharePost = {
-      id: Date.now(),
-      userId: "current",
-      name: currentUser.name,
-      username: currentUser.username,
-      avatar: currentUser.avatar,
-      location: currentUser.location,
-      timestamp: new Date().toISOString(),
-      image: selectedPostForShare.image,
-      caption: shareMessage || `Shared: ${selectedPostForShare.caption}`,
-      originalPost: {
-        id: selectedPostForShare.id,
-        name: selectedPostForShare.name,
-        caption: selectedPostForShare.caption,
-      },
-      likes: 0,
-      comments: [],
-      shares: 0,
-      type: "share",
-    };
-    const updatedFeed = [sharePost, ...feedData];
-    setFeedData(updatedFeed);
-    await saveFeedPosts(updatedFeed);
-    const existing = await AsyncStorage.getItem("userPosts");
-    let all = existing ? JSON.parse(existing) : [];
-    all = [sharePost, ...all];
-    await saveUserPosts(all);
-    setShareModalVisible(false);
-    setSelectedPostForShare(null);
-    setShareMessage("");
-    Alert.alert("Success", "Post shared!");
   };
 
   const pickImage = async () => {
@@ -898,6 +571,7 @@ const feedPage = () => {
     } else Alert.alert("Error", "Please enter a location");
   };
 
+  // ─── Handle delete post ──────────────────────────────────
   const handleDeletePost = async (postId) => {
     Alert.alert("Delete Post", "Are you sure you want to delete this post?", [
       { text: "Cancel", style: "cancel" },
@@ -906,27 +580,23 @@ const feedPage = () => {
         style: "destructive",
         onPress: async () => {
           try {
-            const updatedFeed = feedData.filter((p) => p.id !== postId);
+            const existingPosts = await AsyncStorage.getItem("allPosts");
+            let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+            const updatedFeed = allPosts.filter((p) => p.id !== postId);
+            
+            await AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
             setFeedData(updatedFeed);
-            await saveFeedPosts(updatedFeed);
-            const data = await AsyncStorage.getItem("userPosts");
-            if (data) {
-              const parsed = JSON.parse(data);
-              const updated = parsed.filter((p) => p.id !== postId);
-              await AsyncStorage.setItem("userPosts", JSON.stringify(updated));
-              const stories = updated
-                .filter(
-                  (p) =>
-                    p.image &&
-                    p.type !== "feeling" &&
-                    !p.feeling &&
-                    p.type !== "enrollment",
-                )
-                .slice(0, 5);
-              setCurrentUserPosts(stories);
-            }
+
+            // Update current user's stories
+            const userPosts = updatedFeed
+              .filter((p) => p.userId === currentUser.id)
+              .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+              .slice(0, 5);
+            setCurrentUserPosts(userPosts);
+
             Alert.alert("Success", "Post deleted");
           } catch (e) {
+            console.log(e);
             Alert.alert("Error", "Failed to delete post");
           }
         },
@@ -934,7 +604,7 @@ const feedPage = () => {
     ]);
   };
 
-  // ── Updated handleLike: tracks reactions, fixes count ─────────────────
+  // ─── Handle like ──────────────────────────────────────────
   const handleLike = (id, isCurrentUserPost = false) => {
     if (likedPosts.includes(id)) {
       setLikedPosts(likedPosts.filter((pid) => pid !== id));
@@ -943,95 +613,56 @@ const feedPage = () => {
         delete u[id];
         return u;
       });
+
+      const updatedFeed = feedData.map((p) =>
+        p.id === id ? { ...p, likes: p.likes - 1 } : p
+      );
+      setFeedData(updatedFeed);
+      AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
+
       if (isCurrentUserPost) {
         const updated = currentUserPosts.map((p) =>
-          p.id === id ? { ...p, likes: p.likes - 1 } : p,
+          p.id === id ? { ...p, likes: p.likes - 1 } : p
         );
         setCurrentUserPosts(updated);
-        (async () => {
-          const all = await AsyncStorage.getItem("userPosts");
-          if (all) {
-            const parsed = JSON.parse(all);
-            await AsyncStorage.setItem(
-              "userPosts",
-              JSON.stringify(
-                parsed.map((p) =>
-                  p.id === id ? { ...p, likes: p.likes - 1 } : p,
-                ),
-              ),
-            );
-          }
-        })();
-      } else {
-        const updated = feedData.map((p) =>
-          p.id === id ? { ...p, likes: p.likes - 1 } : p,
-        );
-        setFeedData(updated);
-        saveFeedPosts(updated);
       }
     } else {
       setLikedPosts([...likedPosts, id]);
       setUserReactions((prev) => ({ ...prev, [id]: "like" }));
+
+      const updatedFeed = feedData.map((p) =>
+        p.id === id ? { ...p, likes: p.likes + 1 } : p
+      );
+      setFeedData(updatedFeed);
+      AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
+
       if (isCurrentUserPost) {
         const updated = currentUserPosts.map((p) =>
-          p.id === id ? { ...p, likes: p.likes + 1 } : p,
+          p.id === id ? { ...p, likes: p.likes + 1 } : p
         );
         setCurrentUserPosts(updated);
-        (async () => {
-          const all = await AsyncStorage.getItem("userPosts");
-          if (all) {
-            const parsed = JSON.parse(all);
-            await AsyncStorage.setItem(
-              "userPosts",
-              JSON.stringify(
-                parsed.map((p) =>
-                  p.id === id ? { ...p, likes: p.likes + 1 } : p,
-                ),
-              ),
-            );
-          }
-        })();
-      } else {
-        const updated = feedData.map((p) =>
-          p.id === id ? { ...p, likes: p.likes + 1 } : p,
-        );
-        setFeedData(updated);
-        saveFeedPosts(updated);
       }
     }
   };
 
-  // ── Reaction picker handler ────────────────────────────────────────────
+  // ─── Reaction picker handler ─────────────────────────────
   const handleReaction = (postId, reaction, isCurrentUserPost) => {
     const wasLiked = likedPosts.includes(postId);
     setUserReactions((prev) => ({ ...prev, [postId]: reaction.type }));
     if (!wasLiked) {
       setLikedPosts((prev) => [...prev, postId]);
+
+      const updatedFeed = feedData.map((p) =>
+        p.id === postId ? { ...p, likes: p.likes + 1 } : p
+      );
+      setFeedData(updatedFeed);
+      AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
+
       if (isCurrentUserPost) {
         const updated = currentUserPosts.map((p) =>
-          p.id === postId ? { ...p, likes: p.likes + 1 } : p,
+          p.id === postId ? { ...p, likes: p.likes + 1 } : p
         );
         setCurrentUserPosts(updated);
-        (async () => {
-          const all = await AsyncStorage.getItem("userPosts");
-          if (all) {
-            const parsed = JSON.parse(all);
-            await AsyncStorage.setItem(
-              "userPosts",
-              JSON.stringify(
-                parsed.map((p) =>
-                  p.id === postId ? { ...p, likes: p.likes + 1 } : p,
-                ),
-              ),
-            );
-          }
-        })();
-      } else {
-        const updated = feedData.map((p) =>
-          p.id === postId ? { ...p, likes: p.likes + 1 } : p,
-        );
-        setFeedData(updated);
-        saveFeedPosts(updated);
       }
     }
     setReactionModal({
@@ -1041,69 +672,336 @@ const feedPage = () => {
     });
   };
 
-  const handleCreatePost = async () => {
-    if (!postText.trim() && !selectedImage) {
-      Alert.alert("Error", "Please add a caption or image");
-      return;
+  // ─── Handle add comment ──────────────────────────────────
+  const handleAddComment = async () => {
+    if (!commentText.trim() || !selectedPostForComment) return;
+    const newComment = {
+      id: Date.now(),
+      userId: currentUser.id,
+      userName: currentUser.name,
+      text: commentText.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    const updatedFeed = feedData.map((p) =>
+      p.id === selectedPostForComment.id
+        ? { ...p, comments: [...(p.comments || []), newComment] }
+        : p
+    );
+    setFeedData(updatedFeed);
+    await AsyncStorage.setItem("allPosts", JSON.stringify(updatedFeed));
+
+    if (selectedPostForComment.userId === currentUser.id) {
+      const updated = currentUserPosts.map((p) =>
+        p.id === selectedPostForComment.id
+          ? { ...p, comments: [...(p.comments || []), newComment] }
+          : p
+      );
+      setCurrentUserPosts(updated);
     }
-    setIsCreating(true);
-    try {
-      const newPost = {
-        id: Date.now(),
-        userId: "current",
-        name: currentUser.name,
-        username: currentUser.username,
-        avatar: currentUser.avatar,
-        location: selectedLocation || currentUser.location,
-        timestamp: new Date().toISOString(),
-        image:
-          selectedImage ||
-          "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
-        caption: postText.trim() || "Shared a photo",
-        hashtags: postHashtags,
-        likes: 0,
-        comments: [],
-        shares: 0,
-      };
-      const updatedFeed = [newPost, ...feedData];
-      setFeedData(updatedFeed);
-      await saveFeedPosts(updatedFeed);
-      const existing = await AsyncStorage.getItem("userPosts");
-      let all = existing ? JSON.parse(existing) : [];
-      all = [newPost, ...all];
-      await saveUserPosts(all);
-      setPostText("");
-      setSelectedImage(null);
-      setSelectedLocation("");
-      setPostHashtags([]);
-      setModalVisible(false);
-      Alert.alert("Success", "Your travel story has been shared!");
-    } catch (e) {
-      Alert.alert("Error", "Failed to create post");
-    } finally {
-      setIsCreating(false);
-    }
+
+    setCommentText("");
+    setCommentModalVisible(false);
+    setSelectedPostForComment(null);
+    Alert.alert("Success", "Comment added!");
   };
 
-  const navigateToProfile = () => router.push("/app-pages/feedProfile");
-  const navigateToFeeling = () => router.push("/app-pages/feedFeeling");
+  // ─── Handle share post ────────────────────────────────────
+  const handleSharePost = async () => {
+    if (!selectedPostForShare) return;
+    const sharePost = {
+      id: Date.now(),
+      userId: currentUser.id,
+      name: currentUser.name,
+      username: currentUser.username,
+      avatar: currentUser.avatar,
+      location: currentUser.location,
+      timestamp: new Date().toISOString(),
+      image: selectedPostForShare.image,
+      caption: shareMessage || `Shared: ${selectedPostForShare.caption}`,
+      originalPost: {
+        id: selectedPostForShare.id,
+        name: selectedPostForShare.name,
+        caption: selectedPostForShare.caption,
+      },
+      likes: 0,
+      comments: [],
+      shares: 0,
+      type: "share",
+    };
 
-  const syncDeletedPosts = async () => {
+    const existingPosts = await AsyncStorage.getItem("allPosts");
+    let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+    allPosts = [sharePost, ...allPosts];
+    
+    await AsyncStorage.setItem("allPosts", JSON.stringify(allPosts));
+    setFeedData(allPosts);
+
+    const userPosts = allPosts
+      .filter((p) => p.userId === currentUser.id)
+      .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+      .slice(0, 5);
+    setCurrentUserPosts(userPosts);
+
+    setShareModalVisible(false);
+    setSelectedPostForShare(null);
+    setShareMessage("");
+    Alert.alert("Success", "Post shared!");
+  };
+
+  // ─── Event handlers ──────────────────────────────────────
+  const loadTravelEvents = async () => {
     try {
-      const data = await AsyncStorage.getItem("userPosts");
-      if (!data) return;
-      const ids = JSON.parse(data).map((p) => p.id);
-      const synced = feedData.filter(
-        (p) => p.userId !== "current" || ids.includes(p.id),
-      );
-      if (synced.length !== feedData.length) {
-        setFeedData(synced);
-        await saveFeedPosts(synced);
-      }
+      const saved = await AsyncStorage.getItem("travelEvents");
+      if (saved) setTravelEvents(JSON.parse(saved));
     } catch (e) {
       console.log(e);
     }
   };
+
+  const saveTravelEvents = async (events) => {
+    try {
+      await AsyncStorage.setItem("travelEvents", JSON.stringify(events));
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const loadEnrolledEvents = async () => {
+    try {
+      const saved = await AsyncStorage.getItem("enrolledEvents");
+      if (saved) setEnrolledEvents(JSON.parse(saved));
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const saveEnrolledEvents = async (events) => {
+    try {
+      await AsyncStorage.setItem("enrolledEvents", JSON.stringify(events));
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const loadUserCreatedEvents = async () => {
+    try {
+      const saved = await AsyncStorage.getItem("userCreatedEvents");
+      if (saved) setUserCreatedEvents(JSON.parse(saved));
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const saveUserCreatedEvents = async (events) => {
+    try {
+      await AsyncStorage.setItem("userCreatedEvents", JSON.stringify(events));
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const pickEventImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 1,
+      });
+      if (!result.canceled)
+        setNewEvent({ ...newEvent, eventImage: result.assets[0].uri });
+    } catch (e) {
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const handleDeleteEvent = (eventId) => {
+    Alert.alert("Delete Event", "Are you sure you want to delete this event?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const updatedEvents = travelEvents.filter((e) => e.id !== eventId);
+          setTravelEvents(updatedEvents);
+          await saveTravelEvents(updatedEvents);
+          const updatedUserEvents = userCreatedEvents.filter(
+            (e) => e.id !== eventId
+          );
+          setUserCreatedEvents(updatedUserEvents);
+          await saveUserCreatedEvents(updatedUserEvents);
+          const updatedEnrolled = enrolledEvents.filter(
+            (e) => e.id !== eventId
+          );
+          setEnrolledEvents(updatedEnrolled);
+          await saveEnrolledEvents(updatedEnrolled);
+          Alert.alert("Success", "Event deleted successfully");
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteEnrollment = (eventId) => {
+    Alert.alert(
+      "Cancel Enrollment",
+      "Are you sure you want to cancel your enrollment?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Cancel Enrollment",
+          style: "destructive",
+          onPress: async () => {
+            const updatedEnrolled = enrolledEvents.filter(
+              (e) => e.id !== eventId
+            );
+            setEnrolledEvents(updatedEnrolled);
+            await saveEnrolledEvents(updatedEnrolled);
+            const updatedEvents = travelEvents.map((e) =>
+              e.id === eventId
+                ? { ...e, enrolled: Math.max(0, e.enrolled - 1) }
+                : e
+            );
+            setTravelEvents(updatedEvents);
+            await saveTravelEvents(updatedEvents);
+            Alert.alert("Success", "Enrollment cancelled");
+          },
+        },
+      ]
+    );
+  };
+
+  const shareEnrollmentPost = async (eventTitle) => {
+    try {
+      const enrollmentPost = {
+        id: Date.now(),
+        userId: currentUser.id,
+        name: currentUser.name,
+        username: currentUser.username,
+        avatar: currentUser.avatar,
+        location: currentUser.location,
+        timestamp: new Date().toISOString(),
+        image: null,
+        caption: `🎉 I just enrolled in "${eventTitle}"! ✈️\n\nCan't wait for this amazing travel experience! 🌍\n\n#TravelEnrollment #Excited #Tripzy`,
+        hashtags: ["#TravelEnrollment", "#Excited", "#Tripzy"],
+        likes: 0,
+        comments: [],
+        shares: 0,
+        type: "enrollment",
+        enrollmentEvent: eventTitle,
+      };
+
+      const existingPosts = await AsyncStorage.getItem("allPosts");
+      let allPosts = existingPosts ? JSON.parse(existingPosts) : [];
+      allPosts = [enrollmentPost, ...allPosts];
+      
+      await AsyncStorage.setItem("allPosts", JSON.stringify(allPosts));
+      setFeedData(allPosts);
+
+      const userPosts = allPosts
+        .filter((p) => p.userId === currentUser.id)
+        .filter((p) => p.image && p.type !== "feeling" && !p.feeling && p.type !== "enrollment")
+        .slice(0, 5);
+      setCurrentUserPosts(userPosts);
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const handleEnrollEvent = async (event) => {
+    if (enrolledEvents.some((e) => e.id === event.id)) {
+      Alert.alert(
+        "Already Enrolled",
+        "You have already enrolled in this event!"
+      );
+      return;
+    }
+    if (event.enrolled >= event.spots) {
+      Alert.alert(
+        "Event Full",
+        "Sorry, this event has reached maximum capacity."
+      );
+      return;
+    }
+    Alert.alert(
+      "Confirm Enrollment",
+      `Would you like to enroll in "${event.title}"?\n\nSpots remaining: ${event.spots - event.enrolled}\nPrice: ${event.price}`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Enroll",
+          onPress: async () => {
+            const updatedEnrolled = [
+              ...enrolledEvents,
+              { ...event, enrollmentDate: new Date().toISOString() },
+            ];
+            setEnrolledEvents(updatedEnrolled);
+            await saveEnrolledEvents(updatedEnrolled);
+            const updatedEvents = travelEvents.map((e) =>
+              e.id === event.id ? { ...e, enrolled: e.enrolled + 1 } : e
+            );
+            setTravelEvents(updatedEvents);
+            await saveTravelEvents(updatedEvents);
+            await shareEnrollmentPost(event.title);
+            Alert.alert(
+              "Success",
+              `Enrolled in ${event.title}! Shared to your feed.`
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCreateEvent = async () => {
+    if (
+      !newEvent.title.trim() ||
+      !newEvent.date.trim() ||
+      !newEvent.location.trim() ||
+      !newEvent.description.trim()
+    ) {
+      Alert.alert("Error", "Please fill in all required fields");
+      return;
+    }
+    const createdEvent = {
+      id: Date.now(),
+      title: newEvent.title,
+      date: newEvent.date,
+      location: newEvent.location,
+      description: newEvent.description,
+      spots: parseInt(newEvent.spots) || 50,
+      enrolled: 0,
+      price: newEvent.price,
+      category: newEvent.category,
+      image:
+        newEvent.eventImage ||
+        "https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=800",
+      isUserCreated: true,
+      createdBy: currentUser.name,
+      createdByUsername: currentUser.username,
+    };
+    const updatedEvents = [...travelEvents, createdEvent];
+    setTravelEvents(updatedEvents);
+    await saveTravelEvents(updatedEvents);
+    const updatedUserEvents = [...userCreatedEvents, createdEvent];
+    setUserCreatedEvents(updatedUserEvents);
+    await saveUserCreatedEvents(updatedUserEvents);
+    setNewEvent({
+      title: "",
+      date: "",
+      location: "",
+      description: "",
+      price: "Free",
+      category: "Workshop",
+      spots: 50,
+      eventImage: null,
+    });
+    setShowCreateEventModal(false);
+    Alert.alert("Success", "Event created successfully!");
+  };
+
+  const navigateToProfile = () => router.push("/app-pages/feedProfile");
+  const navigateToFeeling = () => router.push("/app-pages/feedFeeling");
 
   const openOptionsMenu = (post) => {
     setSelectedPostForOptions(post);
@@ -1176,7 +1074,13 @@ const feedPage = () => {
     setOptionsModalVisible(false);
   };
 
-  // ── Render helpers ────────────────────────────────────────────────────
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAllData();
+    setRefreshing(false);
+  };
+
+  // ─── Render helpers ────────────────────────────────────
   const renderActionBar = (item, isLiked, isCurrentUserPost) => {
     const reaction = userReactions[item.id];
     const reactionData = REACTIONS.find((r) => r.type === reaction);
@@ -1184,7 +1088,6 @@ const feedPage = () => {
 
     return (
       <View style={s.fbActionBar}>
-        {/* Like */}
         <TouchableOpacity
           style={s.fbActionBtn}
           onPress={() => handleLike(item.id, isCurrentUserPost)}
@@ -1219,7 +1122,6 @@ const feedPage = () => {
 
         <View style={s.fbActionDivider} />
 
-        {/* Comment */}
         <TouchableOpacity
           style={s.fbActionBtn}
           onPress={() => {
@@ -1234,7 +1136,6 @@ const feedPage = () => {
 
         <View style={s.fbActionDivider} />
 
-        {/* Share */}
         <TouchableOpacity
           style={s.fbActionBtn}
           onPress={() => {
@@ -1250,7 +1151,7 @@ const feedPage = () => {
     );
   };
 
-  const renderStatsBar = (item, isLiked) => {
+  const renderStatsBar = (item) => {
     const reaction = userReactions[item.id];
     const reactionData = REACTIONS.find((r) => r.type === reaction);
     const commentCount = item.comments?.length || 0;
@@ -1354,14 +1255,15 @@ const feedPage = () => {
     );
   };
 
+  // ─── MAIN RENDER FEED ITEM ──────────────────────────────
   const renderFeedItem = ({ item }) => {
     const isLiked = likedPosts.includes(item.id);
-    const isCurrentUserPost = item.userId === "current";
-    const isFeelingPost =
-      item.type === "feeling" || (!item.image && item.feeling);
+    const isCurrentUserPost = item.userId === currentUser.id;
+    const isFeelingPost = item.type === "feeling" || (!item.image && item.feeling);
     const isEnrollmentPost = item.type === "enrollment";
     const isSharePost = item.type === "share";
 
+    // Enrollment posts
     if (isEnrollmentPost) {
       return (
         <View style={s.enrollmentPostCard}>
@@ -1410,12 +1312,83 @@ const feedPage = () => {
             </View>
           </View>
 
-          {renderStatsBar(item, isLiked)}
+          {renderStatsBar(item)}
           {renderActionBar(item, isLiked, isCurrentUserPost)}
         </View>
       );
     }
 
+    // ─── FEELING POSTS ─────────────────────────────────────
+    if (isFeelingPost && item.feeling) {
+      return (
+        <View style={[s.feedItem, s.feelingPostCard]}>
+          <View style={s.postHeader}>
+            <Image source={{ uri: item.avatar }} style={s.avatar} />
+            <View style={s.postHeaderInfo}>
+              <Text style={s.postName}>{item.name}</Text>
+              <Text style={s.postUsername}>@{item.username}</Text>
+              <View style={s.locationTimeRow}>
+                <Text style={s.postLocation}>📍 {item.location}</Text>
+                <Text style={s.postTime}>
+                  {" "}
+                  · {formatDateTime(item.timestamp)}
+                </Text>
+              </View>
+            </View>
+            <View style={s.headerActions}>
+              {isCurrentUserPost && (
+                <TouchableOpacity
+                  style={s.fbDeleteBtn}
+                  onPress={() => handleDeletePost(item.id)}
+                >
+                  <Ionicons name="trash-outline" size={15} color="#ff4444" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={s.fbMoreBtn}
+                onPress={() => openOptionsMenu(item)}
+              >
+                <Ionicons name="ellipsis-horizontal" size={16} color="#65676b" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={s.feelingContentContainer}>
+            <View style={[s.feelingMainCard, { backgroundColor: item.feeling.bgColor || "#FFF9C4" }]}>
+              <View style={s.feelingCardContent}>
+                <Text style={s.feelingCardEmoji}>{item.feeling.emoji}</Text>
+                <View style={s.feelingCardTextContainer}>
+                  <Text style={s.feelingCardTitle}>
+                    Feeling {item.feeling.name}
+                  </Text>
+                  {item.feeling.subtitle && (
+                    <Text style={s.feelingCardSubtitle}>{item.feeling.subtitle}</Text>
+                  )}
+                  <View style={s.feelingCardCategory}>
+                    <Text style={s.feelingCardCategoryText}>
+                      {item.feeling.category || "Misc"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+            
+            {item.caption && (
+              <Text style={s.feelingCaption}>{item.caption}</Text>
+            )}
+            
+            {item.image && (
+              <Image source={{ uri: item.image }} style={s.postImage} />
+            )}
+          </View>
+
+          {renderStatsBar(item)}
+          {renderActionBar(item, isLiked, isCurrentUserPost)}
+        </View>
+      );
+    }
+
+    // ─── REGULAR POSTS ──────────────────────────────────────
     return (
       <View style={s.feedItem}>
         <View style={s.postHeader}>
@@ -1472,23 +1445,11 @@ const feedPage = () => {
           </View>
         )}
 
-        {!isFeelingPost && item.image && (
+        {item.image && (
           <Image source={{ uri: item.image }} style={s.postImage} />
         )}
 
-        {isFeelingPost && item.feeling && (
-          <View
-            style={[
-              s.feelingBadge,
-              { backgroundColor: item.feeling.bgColor || "#FFF9C4" },
-            ]}
-          >
-            <Text style={s.feelingBadgeEmoji}>{item.feeling.emoji}</Text>
-            <Text style={s.feelingBadgeText}>Feeling {item.feeling.name}</Text>
-          </View>
-        )}
-
-        {renderStatsBar(item, isLiked)}
+        {renderStatsBar(item)}
         {renderActionBar(item, isLiked, isCurrentUserPost)}
       </View>
     );
@@ -1729,7 +1690,7 @@ const feedPage = () => {
                   handleReaction(
                     reactionModal.postId,
                     r,
-                    reactionModal.isCurrentUserPost,
+                    reactionModal.isCurrentUserPost
                   )
                 }
               >
@@ -2156,7 +2117,6 @@ const feedPage = () => {
       <View style={s.header}>
         <View>
           <Text style={s.headerTitle}>Travel Feed</Text>
-          {/* ✅ NO @ symbol – shows first name only */}
           <Text style={s.headerSubtitle}>Welcome, {firstName}!</Text>
         </View>
         <View style={s.headerIcons}>
@@ -2175,6 +2135,9 @@ const feedPage = () => {
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderFeedItem}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
         ListHeaderComponent={
           <>
             {/* Create Post Card */}
@@ -2195,7 +2158,6 @@ const feedPage = () => {
               </View>
               <View style={s.createPostDivider} />
               <View style={s.createPostActions}>
-                {/* ✅ Calendar icon for Events */}
                 <TouchableOpacity
                   style={s.createPostAction}
                   onPress={() => setShowEventsModal(true)}
@@ -2228,7 +2190,7 @@ const feedPage = () => {
               </View>
             </View>
 
-            {/* Recent Stories */}
+            {/* Recent Stories - Only current user's posts */}
             {currentUserPosts.length > 0 && (
               <View style={s.recentStoriesSection}>
                 <View style={s.sectionHeader}>
@@ -2356,7 +2318,6 @@ const s = StyleSheet.create({
   headerIcon: { padding: 2 },
   profileIcon: { width: 35, height: 35, borderRadius: 17.5 },
 
-  // Create post card
   createPostCard: {
     backgroundColor: "#fff",
     marginBottom: 8,
@@ -2404,7 +2365,6 @@ const s = StyleSheet.create({
   createPostActionDivider: { width: 1, height: 22, backgroundColor: "#e4e6eb" },
   createPostActionText: { fontSize: 13.5, fontWeight: "600" },
 
-  // Stories
   recentStoriesSection: {
     backgroundColor: "#fff",
     marginBottom: 8,
@@ -2478,7 +2438,6 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
 
-  // Profile banner
   profileBanner: {
     backgroundColor: "#fff",
     marginBottom: 8,
@@ -2505,7 +2464,6 @@ const s = StyleSheet.create({
   },
   viewProfileButtonText: { color: "#fff", fontSize: 13, fontWeight: "600" },
 
-  // Feed title
   feedTitleContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2517,13 +2475,93 @@ const s = StyleSheet.create({
   },
   sortButton: { fontSize: 13, color: "#1877f2" },
 
-  // Feed posts
   feedItem: { backgroundColor: "#fff", marginBottom: 8 },
   enrollmentPostCard: {
     backgroundColor: "#fff",
     marginBottom: 8,
     borderLeftWidth: 4,
     borderLeftColor: "#28a745",
+  },
+
+  feelingPostCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF6B6B",
+    backgroundColor: "#fff",
+    marginBottom: 8,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+
+  feelingContentContainer: {
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+  },
+
+  feelingMainCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginVertical: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+
+  feelingCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+
+  feelingCardEmoji: {
+    fontSize: 48,
+    lineHeight: 52,
+  },
+
+  feelingCardTextContainer: {
+    flex: 1,
+  },
+
+  feelingCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1c1e21",
+    marginBottom: 2,
+  },
+
+  feelingCardSubtitle: {
+    fontSize: 14,
+    color: "#65676b",
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+
+  feelingCardCategory: {
+    backgroundColor: "rgba(0,0,0,0.08)",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+  },
+
+  feelingCardCategoryText: {
+    fontSize: 10,
+    color: "#65676b",
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  feelingCaption: {
+    fontSize: 14,
+    color: "#1c1e21",
+    marginTop: 10,
+    marginBottom: 4,
+    lineHeight: 20,
+    paddingHorizontal: 4,
   },
 
   postHeader: { flexDirection: "row", padding: 12, alignItems: "center" },
@@ -2537,7 +2575,6 @@ const s = StyleSheet.create({
 
   headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
 
-  // ✅ Facebook-style bordered trash icon
   fbDeleteBtn: {
     width: 32,
     height: 32,
@@ -2548,7 +2585,6 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // ✅ More (ellipsis) button with border
   fbMoreBtn: {
     width: 32,
     height: 32,
@@ -2584,20 +2620,7 @@ const s = StyleSheet.create({
   },
   sharedPostLabel: { fontSize: 12, color: "#1877f2", marginBottom: 4 },
   sharedPostCaption: { fontSize: 13, color: "#65676b" },
-  feelingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    marginHorizontal: 12,
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  feelingBadgeEmoji: { fontSize: 16, marginRight: 6 },
-  feelingBadgeText: { fontSize: 13, color: "#1c1e21", fontWeight: "500" },
 
-  // ✅ Stats bar (no double-counting)
   fbStatsBar: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2619,7 +2642,6 @@ const s = StyleSheet.create({
   },
   fbStatsText: { fontSize: 13, color: "#65676b" },
 
-  // ✅ Facebook-style action bar
   fbActionBar: { flexDirection: "row", borderTopWidth: 0, paddingVertical: 0 },
   fbActionBtn: {
     flex: 1,
@@ -2638,7 +2660,6 @@ const s = StyleSheet.create({
   fbActionText: { fontSize: 13.5, color: "#65676b", fontWeight: "600" },
   fbReactionIcon: { fontSize: 20 },
 
-  // Enrollment highlight
   enrollmentHighlight: {
     flexDirection: "row",
     backgroundColor: "#e8f5e9",
@@ -2660,7 +2681,6 @@ const s = StyleSheet.create({
   enrollmentBadgeText: { color: "#fff", fontSize: 10, fontWeight: "bold" },
   enrollmentMessage: { fontSize: 14, color: "#1c1e21", lineHeight: 20 },
 
-  // ✅ Reaction picker
   reactionOverlay: {
     flex: 1,
     justifyContent: "flex-end",
@@ -2689,7 +2709,6 @@ const s = StyleSheet.create({
   reactionEmoji: { fontSize: 32 },
   reactionLabel: { fontSize: 10, fontWeight: "700", marginTop: 3 },
 
-  // Modals
   optionsModalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
