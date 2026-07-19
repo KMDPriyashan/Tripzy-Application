@@ -22,7 +22,11 @@
         "googleMaps": {
           "apiKey": "AIzaSyATaHyVUefyJpWAOKlBAOONPWb4JiOpLlk"
         }
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "static"
@@ -55,6 +59,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "02324c99-a847-4e47-91c2-ed2bbb2d0132"
+      }
     }
   }
 }
