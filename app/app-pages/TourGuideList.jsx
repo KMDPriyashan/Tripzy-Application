@@ -1,18 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Dimensions,
-    FlatList,
-    Image,
-    Linking,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Linking,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { getCurrentUser, supabase } from '../../lib/supabase';
 
@@ -48,6 +49,14 @@ const TourGuideList = () => {
       }
     };
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser) {
+        loadProfiles();
+      }
+    }, [currentUser]),
+  );
 
   const loadBlockedUsersForUser = async (user) => {
     if (!user?.id) {
@@ -94,6 +103,22 @@ const TourGuideList = () => {
     }
   };
 
+  const loadLocalProfiles = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('tourGuideProfiles');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(profile => ({
+        ...profile,
+        image: validateImageUri(profile.image)
+      }));
+    } catch (error) {
+      console.error('Error loading local tour guide profiles:', error);
+      return [];
+    }
+  };
+
   const loadProfiles = async () => {
     setLoading(true);
     try {
@@ -102,32 +127,35 @@ const TourGuideList = () => {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
+      let profilesToUse = [];
       if (data && data.length > 0) {
-        const validatedProfiles = data.map(profile => ({
+        profilesToUse = data.map(profile => ({
           ...profile,
           image: validateImageUri(profile.image)
         }));
-        
-        setProfiles(validatedProfiles);
-        setFilteredProfiles(validatedProfiles);
-
-        if (currentUser) {
-          const userProfile = validatedProfiles.find(p => p.user_id === currentUser.id);
-          setHasOwnProfile(!!userProfile);
-          if (userProfile) {
-            setOwnProfileData(userProfile);
-          }
-        }
       } else {
-        setProfiles([]);
-        setFilteredProfiles([]);
+        profilesToUse = await loadLocalProfiles();
+      }
+
+      setProfiles(profilesToUse);
+      setFilteredProfiles(profilesToUse);
+
+      if (currentUser) {
+        const userProfile = profilesToUse.find(p => p.user_id === currentUser.id);
+        setHasOwnProfile(!!userProfile);
+        if (userProfile) {
+          setOwnProfileData(userProfile);
+        }
       }
     } catch (error) {
       console.error('Error loading profiles:', error);
-      setProfiles([]);
-      setFilteredProfiles([]);
+      const profilesToUse = await loadLocalProfiles();
+      setProfiles(profilesToUse);
+      setFilteredProfiles(profilesToUse);
     } finally {
       setLoading(false);
     }
@@ -223,7 +251,7 @@ const TourGuideList = () => {
   const handleCardPress = (profile) => {
     router.push({
       pathname: '/app-pages/TourGuideCard',
-      params: { profileId: profile.id }
+      params: { profileId: String(profile.id) }
     });
   };
 

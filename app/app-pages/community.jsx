@@ -22,7 +22,7 @@ import {
     GestureHandlerRootView,
     Swipeable,
 } from "react-native-gesture-handler";
-import { getCurrentUser } from "../../lib/supabase";
+import { getCurrentUser, supabase } from "../../lib/supabase";
 
 const CommunityPage = () => {
   const router = useRouter();

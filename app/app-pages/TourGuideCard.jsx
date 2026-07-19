@@ -17,6 +17,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -42,6 +43,49 @@ const TourGuideCard = () => {
   });
   const [sendingBooking, setSendingBooking] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+
+  const normalizeTourGuideProfile = (rawProfile) => {
+    if (!rawProfile) return null;
+
+    const parseArray = (value) => {
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        return value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+      return [];
+    };
+
+    return {
+      ...rawProfile,
+      id: rawProfile.id ?? rawProfile.userId,
+      userId: rawProfile.user_id ?? rawProfile.userId,
+      name: rawProfile.full_name ?? rawProfile.name,
+      email: rawProfile.user_email ?? rawProfile.email,
+      avatar: rawProfile.image ?? rawProfile.avatar,
+      rating: rawProfile.rating ?? 4.9,
+      totalTours: rawProfile.totalTours ?? rawProfile.total_tours ?? 0,
+      experience: rawProfile.experience ?? rawProfile.experience,
+      languages: parseArray(rawProfile.languages),
+      specialties: parseArray(rawProfile.specialties ?? rawProfile.travel_mode_tags),
+      bio: rawProfile.description ?? rawProfile.bio,
+      price: rawProfile.price ?? rawProfile.price ?? '$50/day',
+      availability: rawProfile.availability ?? rawProfile.availability ?? 'Available',
+      location: rawProfile.province ?? rawProfile.location,
+      whatsapp: rawProfile.whatsapp_number ?? rawProfile.whatsapp,
+      notes: Array.isArray(rawProfile.notes)
+        ? rawProfile.notes
+        : typeof rawProfile.notes === 'string'
+        ? rawProfile.notes.split(',').map((item) => item.trim()).filter(Boolean)
+        : Array.isArray(rawProfile.special_notes)
+        ? rawProfile.special_notes
+        : typeof rawProfile.special_notes === 'string'
+        ? rawProfile.special_notes.split(',').map((item) => item.trim()).filter(Boolean)
+        : [],
+    };
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -169,23 +213,35 @@ const TourGuideCard = () => {
     setLoading(true);
     try {
       const profileId = params.profileId;
-      
+
       if (!profileId) {
         setProfile(null);
         setLoading(false);
         return;
       }
-      
+
       const savedProfiles = await AsyncStorage.getItem('tourGuideProfiles');
       if (savedProfiles) {
         const profilesList = JSON.parse(savedProfiles);
         const foundProfile = profilesList.find(p => p.id == profileId || p.userId == profileId);
-        
+
         if (foundProfile) {
-          setProfile(foundProfile);
-        } else {
-          setProfile(null);
+          setProfile(normalizeTourGuideProfile(foundProfile));
+          return;
         }
+      }
+
+      const { data, error } = await supabase
+        .from('tour_guides')
+        .select('*')
+        .eq('id', profileId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Supabase error loading profile:', error);
+        setProfile(null);
+      } else if (data) {
+        setProfile(normalizeTourGuideProfile(data));
       } else {
         setProfile(null);
       }
@@ -538,7 +594,7 @@ Tripzy Team
         </View>
 
         {/* Languages */}
-        {profile.languages && profile.languages.length > 0 && (
+        {Array.isArray(profile.languages) && profile.languages.length > 0 && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Languages Spoken</Text>
             <View style={styles.languagesList}>
@@ -552,7 +608,7 @@ Tripzy Team
         )}
 
         {/* Specialties */}
-        {profile.specialties && profile.specialties.length > 0 && (
+        {Array.isArray(profile.specialties) && profile.specialties.length > 0 && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Specialties</Text>
             <View style={styles.tagsList}>
@@ -575,7 +631,7 @@ Tripzy Team
         )}
 
         {/* Notes */}
-        {profile.notes && profile.notes.length > 0 && (
+        {Array.isArray(profile.notes) && profile.notes.length > 0 && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Special Notes</Text>
             {profile.notes.map((note, index) => (

@@ -4,17 +4,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    Dimensions,
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Animated,
+  Dimensions,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { getCurrentUser, supabase } from '../../lib/supabase';
 
@@ -334,23 +334,25 @@ const TourGuideProfilePage = () => {
         result = await supabase
           .from('tour_guides')
           .update(profileData)
-          .eq('id', existingProfileId);
+          .eq('id', existingProfileId)
+          .select();
       } else {
+        profileData.created_at = new Date().toISOString();
         result = await supabase
           .from('tour_guides')
-          .insert([profileData]);
+          .insert([profileData])
+          .select();
       }
 
       if (result.error) throw result.error;
 
-      Alert.alert(
-        'Success! 🎉',
-        isEditing ? 'Your profile has been updated!' : 'Your profile has been created!',
-        [
-          { text: 'Go to Home', onPress: () => router.push('/') },
-          { text: 'View Profile', onPress: () => router.push('/app-pages/tour-guide-profile') }
-        ]
-      );
+      const savedProfile = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (savedProfile?.id && !existingProfileId) {
+        setExistingProfileId(savedProfile.id);
+        setIsEditing(true);
+      }
+
+      await router.replace('/app-pages/TourGuideList');
     } catch (error) {
       console.error('Error saving profile:', error);
       Alert.alert('Error', 'Failed to save profile. Please try again.');
