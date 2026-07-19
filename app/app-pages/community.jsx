@@ -4,25 +4,25 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
-  Animated,
-  FlatList,
-  Image,
-  Modal,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    Animated,
+    FlatList,
+    Image,
+    Modal,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import {
-  GestureHandlerRootView,
-  Swipeable,
+    GestureHandlerRootView,
+    Swipeable,
 } from "react-native-gesture-handler";
-import { supabase } from "../../lib/supabase";
+import { getCurrentUser } from "../../lib/supabase";
 
 const CommunityPage = () => {
   const router = useRouter();
@@ -96,12 +96,9 @@ const CommunityPage = () => {
 
   const loadCurrentUser = async () => {
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
 
-      if (user && !error) {
+      if (user) {
         const userName =
           user.user_metadata?.display_name ||
           user.user_metadata?.name ||

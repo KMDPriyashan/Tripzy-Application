@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
-import { supabase } from '../../lib/supabase';
+import { clearStaleAuthSession, supabase } from '../../lib/supabase';
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -49,6 +49,7 @@ export default function AuthCallback() {
         );
       }
     } catch (error) {
+      await clearStaleAuthSession(error)
       console.error('Email confirmation error:', error);
       Alert.alert(
         'Verification Error',

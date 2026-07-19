@@ -2,19 +2,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-  Alert,
-  Clipboard,
-  Linking,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Clipboard,
+    Linking,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import BottomNav from '../../components/BottomNav';
-import { supabase } from '../../lib/supabase';
+import { getCurrentUser, supabase } from '../../lib/supabase';
 
 const TourGuidePage = () => {
   const router = useRouter();
@@ -37,7 +37,7 @@ const TourGuidePage = () => {
 
   const loadCurrentUser = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
       setCurrentUser(user);
     } catch (error) {
       console.error('Error loading user:', error);

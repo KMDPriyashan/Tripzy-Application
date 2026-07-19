@@ -4,19 +4,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  Dimensions,
-  Image,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    Animated,
+    Dimensions,
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { supabase } from '../../lib/supabase';
+import { getCurrentUser, supabase } from '../../lib/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -105,12 +105,9 @@ const TourGuideProfilePage = () => {
 
   const loadCurrentUser = async () => {
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      
+      const user = await getCurrentUser();
       if (user && isMounted.current) {
         setCurrentUser(user);
-        // Set email from supabase user
         if (user.email) {
           setEmail(user.email);
         }

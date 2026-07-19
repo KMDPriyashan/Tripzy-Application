@@ -2,25 +2,25 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  FlatList,
-  Image,
-  Modal,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    FlatList,
+    Image,
+    Modal,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import BottomNav from "../../components/BottomNav";
-import { supabase } from "../../lib/supabase";
+import { getCurrentUser as fetchCurrentUser, supabase } from "../../lib/supabase";
 
 const { width } = Dimensions.get("window");
 
@@ -353,7 +353,7 @@ const HomePage = () => {
   const pillFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    getCurrentUser();
+    loadCurrentUser();
     loadUserProfile();
     checkTourGuideProfile();
     loadNotificationSettings();
@@ -399,11 +399,9 @@ const HomePage = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const getCurrentUser = async () => {
+  const loadCurrentUser = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await fetchCurrentUser();
       setUser(user);
     } catch (e) {
       console.error(e);

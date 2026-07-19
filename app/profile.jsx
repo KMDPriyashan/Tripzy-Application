@@ -3,21 +3,21 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated,
-  Dimensions,
-  Easing,
-  ImageBackground,
-  Modal,
-  Pressable,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    Easing,
+    ImageBackground,
+    Modal,
+    Pressable,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import BottomNav from "../components/BottomNav";
-import { supabase } from "../lib/supabase";
+import { getCurrentUser as fetchCurrentUser, supabase } from "../lib/supabase";
 
 const { width } = Dimensions.get("window");
 
@@ -254,7 +254,7 @@ const HomePage = () => {
   const pillFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    getCurrentUser();
+    loadCurrentUser();
     Animated.parallel([
       Animated.timing(heroFade, {
         toValue: 1,
@@ -294,11 +294,9 @@ const HomePage = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const getCurrentUser = async () => {
+  const loadCurrentUser = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await fetchCurrentUser();
       setUser(user);
     } catch (e) {
       console.error(e);
